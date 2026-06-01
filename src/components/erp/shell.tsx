@@ -2,7 +2,7 @@
 'use client';
 
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Icon } from "./icons";
 
 /* ============================================================
@@ -98,14 +98,66 @@ const NAV = [
   },
 ];
 
-const Sidebar = ({ route, navigate, company, onCompanyClick, badgeMap = {} }) => {
+const Sidebar = ({
+  route,
+  navigate,
+  company,
+  onCompanyClick,
+  badgeMap = {},
+  sidebarWidth,
+  setSidebarWidth,
+  isCollapsed,
+  setIsCollapsed,
+}) => {
   const [collapsed, setCollapsed] = useState({});
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const toggle = (id) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
   const toggleGroup = (id) => setCollapsedGroups((c) => ({ ...c, [id]: !c[id] }));
 
+  const isResizing = useRef(false);
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isResizing.current) return;
+      let newWidth = e.clientX;
+      if (newWidth < 200) newWidth = 200;
+      if (newWidth > 400) newWidth = 400;
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      if (isResizing.current) {
+        isResizing.current = false;
+        document.body.style.cursor = "default";
+        document.body.style.userSelect = "auto";
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [setSidebarWidth]);
+
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isCollapsed ? "collapsed" : ""}`}>
+      {/* Resizer Handle */}
+      {!isCollapsed && (
+        <div 
+          className="sidebar-resizer" 
+          onMouseDown={handleMouseDown} 
+          title="Drag to resize"
+        />
+      )}
       <div className="sb-brand" onClick={onCompanyClick} title="Switch company">
         <div className={`sb-brand-mark ${company.mark === "gold" ? "sec" : ""}`}>
           {company.mark === "gold" ? "M" : "S"}
@@ -121,6 +173,29 @@ const Sidebar = ({ route, navigate, company, onCompanyClick, badgeMap = {} }) =>
           <Icon name="switch" size={14} />
         </div>
       </div>
+      {/* Collapse Toggle */}
+      <button 
+        onClick={() => setIsCollapsed(!isCollapsed)} 
+        title="Toggle Sidebar"
+        style={{ 
+          position: "absolute",
+          right: -12,
+          top: 24,
+          zIndex: 110,
+          background: "var(--bg-elev)", 
+          border: "1px solid var(--border)", 
+          borderRadius: "50%", 
+          width: 24, 
+          height: 24, 
+          display: "grid", 
+          placeItems: "center",
+          cursor: "pointer",
+          color: "var(--fg)",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
+        }}
+      >
+        <Icon name={isCollapsed ? "chevRight" : "chevLeft"} size={14} />
+      </button>
 
       <div className="sb-search">
         <div className="sb-search-box">
@@ -149,7 +224,7 @@ const Sidebar = ({ route, navigate, company, onCompanyClick, badgeMap = {} }) =>
                       route === child.id ||
                       route?.startsWith(`${child.id}/`)
                   );
-                  const isGroupCollapsed = !!collapsedGroups[item.id] && !groupHasActiveChild;
+                  const isGroupCollapsed = !!collapsedGroups[item.id];
                   return (
                     <div key={item.id} className={`sb-item-group ${groupHasActiveChild ? "active" : ""}`}>
                       <div

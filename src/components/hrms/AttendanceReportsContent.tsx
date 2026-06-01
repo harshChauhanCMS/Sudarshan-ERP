@@ -627,18 +627,13 @@ export default function AttendanceReportsContent() {
 
   return (
     <div className="attendance-reports-page">
-      {usingDummy && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[13px] text-amber-900">
-          Showing sample data for preview. Live attendance will replace this when
-          punches are recorded in the system.
-        </div>
-      )}
+
 
       <PageHeader
         title="Reports"
         subtitle="Attendance — company-wise, in-office vs field, trends, compliance"
         actions={
-          <>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
             <Link href="/hrms/reports/late-early">
               <Button icon={<ClockCircleOutlined />}>Late / Early</Button>
             </Link>
@@ -656,12 +651,29 @@ export default function AttendanceReportsContent() {
             >
               Export
             </Button>
-          </>
+          </div>
         }
       />
 
-      <ReportSection title="Filters">
-        <div className="attendance-filters-grid">
+      <div className="attendance-summary-grid" style={{ marginBottom: "24px" }}>
+        <StatCard
+          icon={BankOutlined}
+          label="In-office attendance"
+          value={`${officeStats.inOfficePct}%`}
+          hint={`${officeStats.totalEmployees - officeStats.fieldEmployees} employees · ${officeStats.inOfficeDays} present days`}
+          hintTone="positive"
+        />
+        <StatCard
+          icon={EnvironmentOutlined}
+          label="Field attendance"
+          value={`${officeStats.fieldPct}%`}
+          hint={`${officeStats.fieldEmployees} field employees · ${officeStats.fieldDays} field days`}
+          hintTone="positive"
+        />
+      </div>
+
+      <div style={{ background: "#fff", border: "1px solid #e4e4e7", borderRadius: "8px", padding: "16px", marginBottom: "24px", boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "12px" }}>
           <div>
             <Typography.Text className="text-[11px] font-bold uppercase text-zinc-500 block mb-2">
               Unit
@@ -737,7 +749,7 @@ export default function AttendanceReportsContent() {
               />
             </div>
           )}
-          <div className="attendance-filters-grid__actions">
+          <div style={{ flex: "none" }}>
             <Button
               type="primary"
               block
@@ -761,24 +773,9 @@ export default function AttendanceReportsContent() {
             </Button>
           </div>
         </div>
-      </ReportSection>
-
-      <div className="attendance-summary-grid">
-        <StatCard
-          icon={BankOutlined}
-          label="In-office attendance"
-          value={`${officeStats.inOfficePct}%`}
-          hint={`${officeStats.totalEmployees - officeStats.fieldEmployees} employees · ${officeStats.inOfficeDays} present days`}
-          hintTone="positive"
-        />
-        <StatCard
-          icon={EnvironmentOutlined}
-          label="Field attendance"
-          value={`${officeStats.fieldPct}%`}
-          hint={`${officeStats.fieldEmployees} field employees · ${officeStats.fieldDays} field days`}
-          hintTone="positive"
-        />
       </div>
+
+
 
       <ReportSection
         title="Attendance summary"
