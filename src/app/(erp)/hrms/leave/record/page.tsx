@@ -2,12 +2,7 @@
 
 import { useState } from "react";
 import { Button, Select, Tag } from "antd";
-import {
-  PlusOutlined,
-  DownloadOutlined,
-  FilterOutlined,
-} from "@ant-design/icons";
-import Link from "next/link";
+import { DownloadOutlined, FilterOutlined } from "@ant-design/icons";
 
 import RepHeader from "@/components/hrms/RepHeader";
 import { HRMS_BACK } from "@/lib/hrms-nav";
@@ -125,14 +120,7 @@ export default function LeaveRecordPage() {
         {...HRMS_BACK.dashboard}
         title="Leave Record"
         subtitle="Leave balance, history and year-on-year ledger"
-        actions={
-          <>
-            <Button icon={<DownloadOutlined />}>Export</Button>
-            <Link href="/hrms/leave/apply">
-              <Button type="primary" icon={<PlusOutlined />}>Apply leave</Button>
-            </Link>
-          </>
-        }
+        actions={<Button icon={<DownloadOutlined />}>Export</Button>}
       />
 
       {/* Balance cards */}
@@ -188,12 +176,6 @@ export default function LeaveRecordPage() {
           <p className="lv-emp-card__meta">
             {emp.id} · {emp.department} · {emp.shift} · DOJ {emp.doj} · Confirmed {emp.confirmed}
           </p>
-        </div>
-        <div className="lv-emp-card__actions">
-          <Link href="/hrms/leave/apply">
-            <Button type="primary" icon={<PlusOutlined />}>Apply leave</Button>
-          </Link>
-          <Button icon={<DownloadOutlined />}>Export</Button>
         </div>
       </div>
 
