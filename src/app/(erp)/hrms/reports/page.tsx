@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import RepHeader from "@/components/hrms/RepHeader";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 import {
   BarChartOutlined,
   ClockCircleOutlined,
@@ -71,12 +73,11 @@ const CARDS: ReportCard[] = [
 export default function ReportsGatewayPage() {
   return (
     <div className="rg-page">
-      <div className="rg-header">
-        <h2 className="rg-title">Reports</h2>
-        <p className="rg-subtitle">
-          Select a report to view detailed data, apply filters, and export
-        </p>
-      </div>
+      <RepHeader
+        {...HRMS_BACK.dashboard}
+        title="Reports"
+        subtitle="Select a report to view detailed data, apply filters, and export"
+      />
 
       <div className="rg-grid">
         {CARDS.map((card) => (

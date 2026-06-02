@@ -108,6 +108,8 @@ const Sidebar = ({
   setSidebarWidth,
   isCollapsed,
   setIsCollapsed,
+  mobileOpen = false,
+  onMobileClose,
 }) => {
   const [collapsed, setCollapsed] = useState({});
   const [collapsedGroups, setCollapsedGroups] = useState({});
@@ -148,8 +150,13 @@ const Sidebar = ({
     document.body.style.userSelect = "none";
   };
 
+  const goTo = (path) => {
+    navigate(path);
+    onMobileClose?.();
+  };
+
   return (
-    <aside className={`sidebar ${isCollapsed ? "collapsed" : ""}`}>
+    <aside className={`sidebar ${isCollapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}>
       {/* Resizer Handle */}
       {!isCollapsed && (
         <div 
@@ -173,8 +180,9 @@ const Sidebar = ({
           <Icon name="switch" size={14} />
         </div>
       </div>
-      {/* Collapse Toggle */}
+      {/* Collapse Toggle — desktop only */}
       <button 
+        className="sb-collapse-toggle"
         onClick={() => setIsCollapsed(!isCollapsed)} 
         title="Toggle Sidebar"
         style={{ 
@@ -195,6 +203,16 @@ const Sidebar = ({
         }}
       >
         <Icon name={isCollapsed ? "chevRight" : "chevLeft"} size={14} />
+      </button>
+
+      <button
+        type="button"
+        className="sb-mobile-close"
+        onClick={onMobileClose}
+        title="Close menu"
+        aria-label="Close menu"
+      >
+        <Icon name="x" size={16} />
       </button>
 
       <div className="sb-search">
@@ -250,7 +268,7 @@ const Sidebar = ({
                               <div
                                 key={child.id}
                                 className={`sb-item sub ${isActive ? "active" : ""}`}
-                                onClick={() => navigate(child.id)}
+                                onClick={() => goTo(child.id)}
                               >
                                 <span className="sb-item-icon">
                                   <Icon name={child.icon} size={15} />
@@ -275,7 +293,7 @@ const Sidebar = ({
                   <div
                     key={item.id}
                     className={`sb-item ${isActive ? "active" : ""}`}
-                    onClick={() => navigate(item.id)}
+                    onClick={() => goTo(item.id)}
                   >
                     <span className="sb-item-icon">
                       <Icon name={item.icon} size={15} />
@@ -351,10 +369,21 @@ const breadcrumbsFor = (route) => {
   return map[route] || [route];
 };
 
-const Topbar = ({ route, onNotifClick, onMobileClick, onLogout }) => {
+const Topbar = ({ route, onNotifClick, onMobileClick, onLogout, onMenuClick, menuOpen }) => {
   const crumbs = breadcrumbsFor(route);
   return (
     <header className="topbar">
+      <button
+        type="button"
+        className="tb-menu-btn tb-iconbtn"
+        onClick={onMenuClick}
+        title={menuOpen ? "Close menu" : "Open menu"}
+        aria-label={menuOpen ? "Close menu" : "Open menu"}
+        aria-expanded={menuOpen}
+      >
+        <Icon name={menuOpen ? "x" : "menu"} size={18} />
+      </button>
+
       <div className="tb-bread">
         <span className="crumb"><Icon name="home" size={14} /></span>
         {crumbs.map((c, i) => (

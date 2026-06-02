@@ -12,6 +12,8 @@ import {
 } from "@ant-design/icons";
 
 import StatCard from "@/components/common/StatCard";
+import RepHeader from "@/components/hrms/RepHeader";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 import {
   getPayrollSheetDummy,
   getPayrollSheetKpi,
@@ -48,19 +50,13 @@ export default function SalaryIndexPage() {
 
   return (
     <div className="attendance-reports-page">
-      <div className="rep-header">
-        <div className="rep-header__left">
-          <h2 className="rep-title">Salary &amp; Payroll</h2>
-          <p className="rep-subtitle">
-            Salary sheets, statutory deductions, bank disbursement and payroll runs
-          </p>
-        </div>
-      </div>
+      <RepHeader
+        {...HRMS_BACK.dashboard}
+        title="Salary & Payroll"
+        subtitle="Salary sheets, statutory deductions, bank disbursement and payroll runs"
+      />
 
-      <div
-        className="attendance-kpi-grid"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}
-      >
+      <div className="attendance-kpi-grid attendance-kpi-grid--auto">
         <StatCard
           icon={TeamOutlined}
           label="Employees on sheet"

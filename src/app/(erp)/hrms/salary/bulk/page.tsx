@@ -13,6 +13,8 @@ import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 
 import RepHeader from "@/components/hrms/RepHeader";
+import { TableActionIcon } from "@/components/common/TableActionIcons";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 import ReportSection from "@/components/hrms/ReportSection";
 import StatCard from "@/components/common/StatCard";
 import {
@@ -194,17 +196,16 @@ export default function PayrollBulkPage() {
       key: "actions",
       width: 100,
       fixed: "right" as const,
-      render: () => <Button size="small">Edit</Button>,
+      render: () => <TableActionIcon label="Edit" onClick={() => {}} />,
     },
   ];
 
   return (
     <div className="attendance-reports-page">
       <RepHeader
+        {...HRMS_BACK.salary}
         title="Payroll Sheet — Bulk View"
         subtitle="Full salary register with bank details, statutory deductions and attendance columns"
-        backHref="/hrms/salary"
-        backLabel="Salary hub"
         actions={<Button icon={<DownloadOutlined />}>Export</Button>}
       />
 
@@ -241,10 +242,7 @@ export default function PayrollBulkPage() {
       </div>
 
       {/* KPI cards */}
-      <div
-        className="attendance-kpi-grid"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}
-      >
+      <div className="attendance-kpi-grid attendance-kpi-grid--auto">
         <StatCard
           icon={TeamOutlined}
           label="Employees"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, Segmented, Tag } from "antd";
+import { Button, Tag } from "antd";
 import {
   DownloadOutlined,
   UserOutlined,
@@ -15,26 +15,69 @@ import {
 import RepHeader from "@/components/hrms/RepHeader";
 import CommonTable, { type CommonTableColumn } from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
+import ReportChoiceChips, {
+  type ReportChipOption,
+} from "@/components/hrms/ReportChoiceChips";
 import AttendanceFilterPanel from "@/components/hrms/AttendanceFilterPanel";
 import { useAttendanceReport, type AttendanceSummaryRow } from "@/hooks/use-attendance-report";
 
 type ReportType = "monthly" | "absent" | "late" | "short" | "overtime";
 type GroupBy = "employee" | "department" | "shift" | "unit" | "empType";
 
-const REPORT_TYPES: { value: ReportType; label: string }[] = [
-  { value: "monthly", label: "Monthly summary" },
-  { value: "absent", label: "Absent" },
-  { value: "late", label: "Late coming" },
-  { value: "short", label: "Short hours" },
-  { value: "overtime", label: "Overtime" },
+const REPORT_TYPE_CHIPS: ReportChipOption<ReportType>[] = [
+  { value: "monthly", label: "Monthly summary", tone: "blue" },
+  { value: "absent", label: "Absent", tone: "red" },
+  { value: "late", label: "Late coming", tone: "amber" },
+  { value: "short", label: "Short hours", tone: "orange" },
+  { value: "overtime", label: "Overtime", tone: "emerald" },
 ];
 
-const GROUP_OPTIONS = [
-  { label: <span className="inline-flex items-center gap-1.5"><UserOutlined /> Employee</span>, value: "employee" },
-  { label: <span className="inline-flex items-center gap-1.5"><TeamOutlined /> Department</span>, value: "department" },
-  { label: <span className="inline-flex items-center gap-1.5"><ClockCircleOutlined /> Shift</span>, value: "shift" },
-  { label: <span className="inline-flex items-center gap-1.5"><BankOutlined /> Unit</span>, value: "unit" },
-  { label: <span className="inline-flex items-center gap-1.5"><IdcardOutlined /> Emp type</span>, value: "empType" },
+const GROUP_CHIPS: ReportChipOption<GroupBy>[] = [
+  {
+    value: "employee",
+    tone: "indigo",
+    label: (
+      <span className="report-chip__label">
+        <UserOutlined /> Employee
+      </span>
+    ),
+  },
+  {
+    value: "department",
+    tone: "violet",
+    label: (
+      <span className="report-chip__label">
+        <TeamOutlined /> Department
+      </span>
+    ),
+  },
+  {
+    value: "shift",
+    tone: "cyan",
+    label: (
+      <span className="report-chip__label">
+        <ClockCircleOutlined /> Shift
+      </span>
+    ),
+  },
+  {
+    value: "unit",
+    tone: "teal",
+    label: (
+      <span className="report-chip__label">
+        <BankOutlined /> Unit
+      </span>
+    ),
+  },
+  {
+    value: "empType",
+    tone: "rose",
+    label: (
+      <span className="report-chip__label">
+        <IdcardOutlined /> Emp type
+      </span>
+    ),
+  },
 ];
 
 export default function EmployeeReportPage() {
@@ -172,31 +215,24 @@ export default function EmployeeReportPage() {
       />
 
       <ReportSection title="Report type & grouping">
-        <div className="attendance-report-config">
-          <div>
-            <span className="text-[11px] font-bold uppercase text-zinc-500 block mb-2">
-              Report type
-            </span>
-            <div className="attendance-report-segmented-wrap">
-              <Segmented
-                options={REPORT_TYPES.map((t) => ({ label: t.label, value: t.value }))}
-                value={reportType}
-                onChange={(v) => setReportType(v as ReportType)}
-                className="attendance-report-segmented"
-              />
-            </div>
+        <div className="attendance-report-config attendance-report-config--split">
+          <div className="attendance-report-config__block">
+            <span className="attendance-report-config__label">Report type</span>
+            <ReportChoiceChips
+              aria-label="Report type"
+              options={REPORT_TYPE_CHIPS}
+              value={reportType}
+              onChange={setReportType}
+            />
           </div>
-          <div>
-            <span className="text-[11px] font-bold uppercase text-zinc-500 block mb-2">
-              Group by
-            </span>
-            <div className="attendance-report-segmented-wrap">
-              <Segmented
-                options={GROUP_OPTIONS}
-                value={groupBy}
-                onChange={(v) => setGroupBy(v as GroupBy)}
-              />
-            </div>
+          <div className="attendance-report-config__block">
+            <span className="attendance-report-config__label">Group by</span>
+            <ReportChoiceChips
+              aria-label="Group by"
+              options={GROUP_CHIPS}
+              value={groupBy}
+              onChange={setGroupBy}
+            />
           </div>
         </div>
       </ReportSection>

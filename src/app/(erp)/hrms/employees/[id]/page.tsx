@@ -19,7 +19,6 @@ import {
   Spin,
 } from "antd";
 import {
-  ArrowLeftOutlined,
   SaveOutlined,
   SecurityScanOutlined,
   CalculatorOutlined,
@@ -28,8 +27,8 @@ import {
   UserOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import Link from "next/link";
 import PageHeader from "@/components/common/PageHeader";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 
 const { Panel } = Collapse;
 
@@ -208,7 +207,7 @@ export default function EmployeeDetailsPage({
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Spin size="large" tip="Loading employee records..." />
+        <Spin size="large" description="Loading employee records..." />
       </div>
     );
   }
@@ -226,14 +225,9 @@ export default function EmployeeDetailsPage({
       <div className="flex flex-col gap-6 w-full pb-12">
         {/* Header */}
         <PageHeader
-          title={
-            <div className="flex items-center gap-2 text-zinc-950 font-bold">
-              <Link href="/hrms/employees" className="text-zinc-400 hover:text-zinc-900 transition-colors">
-                <ArrowLeftOutlined className="text-lg" />
-              </Link>
-              <span>Employee profile</span>
-            </div>
-          }
+          compact
+          {...HRMS_BACK.employees}
+          title="Employee profile"
           subtitle={`Detailed view and editing panel for employee ${id}`}
           actions={
             <Space>

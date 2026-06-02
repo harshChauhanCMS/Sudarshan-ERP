@@ -6,7 +6,6 @@ import {
   DatePicker,
   InputNumber,
   Select,
-  Segmented,
   Tag,
   Progress,
 } from "antd";
@@ -19,11 +18,16 @@ import {
   WarningOutlined,
   CheckCircleOutlined,
   UnorderedListOutlined,
+  UserOutlined,
+  LineChartOutlined,
 } from "@ant-design/icons";
 import Link from "next/link";
 import dayjs from "dayjs";
 
 import RepHeader from "@/components/hrms/RepHeader";
+import ReportChoiceChips, {
+  type ReportChipOption,
+} from "@/components/hrms/ReportChoiceChips";
 import StatCard from "@/components/common/StatCard";
 import CommonTable, {
   type CommonTableColumn,
@@ -37,6 +41,54 @@ import {
 } from "@/lib/late-early-report-dummy";
 
 type GroupBy = "employee" | "department" | "shift" | "unit" | "trend";
+
+const GROUP_CHIPS: ReportChipOption<GroupBy>[] = [
+  {
+    value: "employee",
+    tone: "indigo",
+    label: (
+      <span className="report-chip__label">
+        <UserOutlined /> Employee-wise
+      </span>
+    ),
+  },
+  {
+    value: "department",
+    tone: "violet",
+    label: (
+      <span className="report-chip__label">
+        <TeamOutlined /> Department-wise
+      </span>
+    ),
+  },
+  {
+    value: "shift",
+    tone: "cyan",
+    label: (
+      <span className="report-chip__label">
+        <ClockCircleOutlined /> Shift-wise
+      </span>
+    ),
+  },
+  {
+    value: "unit",
+    tone: "teal",
+    label: (
+      <span className="report-chip__label">
+        <BankOutlined /> Unit-wise
+      </span>
+    ),
+  },
+  {
+    value: "trend",
+    tone: "amber",
+    label: (
+      <span className="report-chip__label">
+        <LineChartOutlined /> Daily trend
+      </span>
+    ),
+  },
+];
 
 function ReportSection({
   title,
@@ -423,22 +475,17 @@ export default function LateEarlyReportPage() {
       </div>
 
       <ReportSection title="Group by">
-        <div className="attendance-report-segmented-wrap">
-          <Segmented
+        <div className="attendance-report-config__block">
+          <ReportChoiceChips
+            aria-label="Group by"
+            options={GROUP_CHIPS}
             value={groupBy}
-            onChange={(v) => setGroupBy(v as GroupBy)}
-            options={[
-              { label: "Employee-wise", value: "employee" },
-              { label: "Department-wise", value: "department" },
-              { label: "Shift-wise", value: "shift" },
-              { label: "Unit-wise", value: "unit" },
-              { label: "Daily trend", value: "trend" },
-            ]}
+            onChange={setGroupBy}
           />
         </div>
       </ReportSection>
 
-      <div className="attendance-kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+      <div className="attendance-kpi-grid attendance-kpi-grid--4">
         <StatCard
           icon={ClockCircleOutlined}
           label="Late punches"

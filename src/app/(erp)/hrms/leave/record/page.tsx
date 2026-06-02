@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 
 import RepHeader from "@/components/hrms/RepHeader";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 import CommonTable, { type CommonTableColumn } from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
 import { getLeaveDummy, type LeaveHistoryRow, type LeaveLedgerRow } from "@/lib/leave-dummy";
@@ -126,10 +127,9 @@ export default function LeaveRecordPage() {
       </div>
 
       <RepHeader
+        {...HRMS_BACK.dashboard}
         title="Leave Record"
         subtitle="Leave balance, history and year-on-year ledger"
-        backHref="/hrms/leave"
-        backLabel="Leave hub"
         actions={
           <>
             <Button icon={<DownloadOutlined />}>Export</Button>

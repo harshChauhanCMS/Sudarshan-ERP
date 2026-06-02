@@ -13,6 +13,7 @@ import {
 } from "@ant-design/icons";
 
 import RepHeader from "@/components/hrms/RepHeader";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 import ReportSection from "@/components/hrms/ReportSection";
 import StatCard from "@/components/common/StatCard";
 import {
@@ -139,10 +140,9 @@ export default function DailyWagePayrollPage() {
   return (
     <div className="attendance-reports-page daily-wage-page">
       <RepHeader
+        {...HRMS_BACK.salary}
         title="Daily Wage Payroll"
         subtitle="Wage labour register — daily rate × days worked + overtime, separate from monthly CTC"
-        backHref="/hrms/salary"
-        backLabel="Salary hub"
         actions={
           <>
             <Button icon={<DownloadOutlined />} onClick={() => message.info("Export Excel — preview")}>

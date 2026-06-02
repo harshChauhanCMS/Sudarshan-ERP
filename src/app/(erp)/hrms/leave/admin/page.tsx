@@ -5,6 +5,7 @@ import { Tabs, Table, Tag } from "antd";
 import { CheckCircleFilled, CloseCircleFilled } from "@ant-design/icons";
 
 import RepHeader from "@/components/hrms/RepHeader";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 import ReportSection from "@/components/hrms/ReportSection";
 import { getLeaveDummy, leaveTypeColor } from "@/lib/leave-dummy";
 
@@ -109,10 +110,9 @@ export default function LeaveAdminPage() {
   return (
     <div className="attendance-reports-page">
       <RepHeader
+        {...HRMS_BACK.leave}
         title="Leave Admin"
         subtitle="Leave types, policy rules, holiday calendar and approval workflow"
-        backHref="/hrms/leave"
-        backLabel="Leave hub"
       />
 
       <div className="attendance-report-section">

@@ -13,6 +13,8 @@ import {
   MinusCircleFilled,
 } from "@ant-design/icons";
 import Link from "next/link";
+import HrmsBackLink from "@/components/hrms/HrmsBackLink";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 import dayjs from "dayjs";
 
 import { useErpData } from "@/context/erp-data-provider";
@@ -116,6 +118,10 @@ export default function AttendancePunchPage() {
   return (
     <div className="ap-page">
       <div className="ap-inner">
+        <HrmsBackLink
+          href={HRMS_BACK.dashboard.backHref}
+          label={HRMS_BACK.dashboard.backLabel}
+        />
         <div className="ap-header">
           <div className="ap-header__left">
             <div className="ap-header__title">
