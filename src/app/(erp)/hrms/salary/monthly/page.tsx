@@ -6,6 +6,7 @@ import {
   ThunderboltOutlined,
   CheckOutlined,
   ReloadOutlined,
+  FilterOutlined,
   TeamOutlined,
   CheckCircleOutlined,
   DollarOutlined,
@@ -249,52 +250,65 @@ export default function MonthlySalaryPage() {
         subtitle={`${cycleLabel} · CTC breakdown, leave deductions & net payable`}
       />
 
-      {/* Toolbar */}
-      <div className="sl-toolbar">
-        <div className="sl-toolbar__controls">
-          <div className="sl-toolbar__field">
-            <span className="sl-toolbar__label">Pay cycle</span>
-            <DatePicker.RangePicker
-              value={range}
-              onChange={(v) => {
-                if (v && v[0] && v[1]) setRange([v[0], v[1]]);
-              }}
-              allowClear={false}
-              format="DD MMM YYYY"
-            />
-          </div>
+      <div className="arf-panel ap-filters-panel">
+        <div className="arf-head">
+          <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
+          <span className="arf-head-title">Filters</span>
         </div>
-        <div className="sl-toolbar__actions">
-          <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
-            Refresh
-          </Button>
-          <Button
-            icon={<ThunderboltOutlined />}
-            onClick={generate}
-            loading={generating}
-            style={{ background: "#7c3aed", borderColor: "#7c3aed", color: "#fff" }}
-          >
-            Generate
-          </Button>
-          <Button
-            icon={<CheckOutlined />}
-            onClick={bulkApprove}
-            loading={approving}
-            type="primary"
-            style={{ background: "#059669", borderColor: "#059669" }}
-          >
-            {selectedRowKeys.length > 0
-              ? `Approve (${selectedRowKeys.length})`
-              : "Approve All"}
-          </Button>
-          <Button
-            icon={<DownloadOutlined />}
-            onClick={() =>
-              window.open(`/api/hrms/salary/export.csv?cycle=${cycleKey}`, "_blank")
-            }
-          >
-            Export CSV
-          </Button>
+        <div className="arf-body">
+          <div className="arf-controls ap-filters-controls ap-filters-controls--toolbar-inline">
+            <div className="arf-item ap-filters-toolbar-field">
+              <span className="arf-label">Pay cycle</span>
+              <DatePicker.RangePicker
+                className="w-full"
+                value={range}
+                onChange={(v) => {
+                  if (v && v[0] && v[1]) setRange([v[0], v[1]]);
+                }}
+                allowClear={false}
+                format="DD MMM YYYY"
+              />
+            </div>
+            <div className="ap-filters-toolbar-actions">
+              <Button
+                type="primary"
+                icon={<FilterOutlined />}
+                onClick={() => void load()}
+                loading={loading}
+              >
+                Apply filters
+              </Button>
+              <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
+                Refresh
+              </Button>
+              <Button
+                icon={<ThunderboltOutlined />}
+                onClick={generate}
+                loading={generating}
+                style={{ background: "#7c3aed", borderColor: "#7c3aed", color: "#fff" }}
+              >
+                Generate
+              </Button>
+              <Button
+                icon={<CheckOutlined />}
+                onClick={bulkApprove}
+                loading={approving}
+                style={{ background: "#059669", borderColor: "#059669", color: "#fff" }}
+              >
+                {selectedRowKeys.length > 0
+                  ? `Approve (${selectedRowKeys.length})`
+                  : "Approve All"}
+              </Button>
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={() =>
+                  window.open(`/api/hrms/salary/export.csv?cycle=${cycleKey}`, "_blank")
+                }
+              >
+                Export CSV
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { Table, Button, Tag, Select, DatePicker } from "antd";
 import {
   DownloadOutlined,
   ReloadOutlined,
+  FilterOutlined,
   TeamOutlined,
   DollarOutlined,
   MinusCircleOutlined,
@@ -209,35 +210,44 @@ export default function PayrollBulkPage() {
         actions={<Button icon={<DownloadOutlined />}>Export</Button>}
       />
 
-      {/* Toolbar */}
-      <div className="sl-toolbar">
-        <div className="sl-toolbar__controls">
-          <div className="sl-toolbar__field">
-            <span className="sl-toolbar__label">Month</span>
-            <DatePicker
-              picker="month"
-              value={month}
-              onChange={(d) => d && setMonth(d)}
-              allowClear={false}
-            />
-          </div>
-          <div className="sl-toolbar__field">
-            <span className="sl-toolbar__label">Status</span>
-            <Select
-              value={statusFilter}
-              onChange={setStatusFilter}
-              style={{ width: 160 }}
-              options={[
-                { value: "all", label: "All statuses" },
-                { value: "draft", label: "Draft" },
-                { value: "approved", label: "Approved" },
-                { value: "disbursed", label: "Disbursed" },
-              ]}
-            />
-          </div>
+      <div className="arf-panel ap-filters-panel">
+        <div className="arf-head">
+          <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
+          <span className="arf-head-title">Filters</span>
         </div>
-        <div className="sl-toolbar__actions">
-          <Button icon={<ReloadOutlined />}>Refresh</Button>
+        <div className="arf-body">
+          <div className="arf-controls ap-filters-controls">
+            <div className="arf-item">
+              <span className="arf-label">Month</span>
+              <DatePicker
+                className="w-full"
+                picker="month"
+                value={month}
+                onChange={(d) => d && setMonth(d)}
+                allowClear={false}
+              />
+            </div>
+            <div className="arf-item">
+              <span className="arf-label">Status</span>
+              <Select
+                className="w-full"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={[
+                  { value: "all", label: "All statuses" },
+                  { value: "draft", label: "Draft" },
+                  { value: "approved", label: "Approved" },
+                  { value: "disbursed", label: "Disbursed" },
+                ]}
+              />
+            </div>
+            <div className="arf-item ap-filters-actions ap-filters-actions--multi">
+              <Button type="primary" icon={<FilterOutlined />}>
+                Apply filters
+              </Button>
+              <Button icon={<ReloadOutlined />}>Refresh</Button>
+            </div>
+          </div>
         </div>
       </div>
 

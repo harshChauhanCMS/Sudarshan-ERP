@@ -30,6 +30,7 @@ export default function CommonTable<RecordType extends AnyObject>({
   size = "middle",
   bordered = true,
   scroll,
+  className,
   ...rest
 }: CommonTableProps<RecordType>) {
   const resolvedRowKey = useMemo<TableProps<RecordType>["rowKey"]>(() => {
@@ -49,6 +50,7 @@ export default function CommonTable<RecordType extends AnyObject>({
 
   return (
     <Table<RecordType>
+      className={["attendance-report-table", className].filter(Boolean).join(" ")}
       columns={columns}
       dataSource={dataSource as RecordType[]}
       rowKey={resolvedRowKey}

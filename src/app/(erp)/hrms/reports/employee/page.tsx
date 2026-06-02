@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, Tag } from "antd";
+import { Button } from "antd";
 import {
   DownloadOutlined,
   UserOutlined,
@@ -9,17 +9,21 @@ import {
   ClockCircleOutlined,
   BankOutlined,
   IdcardOutlined,
-  ExperimentOutlined,
 } from "@ant-design/icons";
 
 import RepHeader from "@/components/hrms/RepHeader";
-import CommonTable, { type CommonTableColumn } from "@/components/common/CommonTable";
+import CommonTable, {
+  type CommonTableColumn,
+} from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
 import ReportChoiceChips, {
   type ReportChipOption,
 } from "@/components/hrms/ReportChoiceChips";
 import AttendanceFilterPanel from "@/components/hrms/AttendanceFilterPanel";
-import { useAttendanceReport, type AttendanceSummaryRow } from "@/hooks/use-attendance-report";
+import {
+  useAttendanceReport,
+  type AttendanceSummaryRow,
+} from "@/hooks/use-attendance-report";
 
 type ReportType = "monthly" | "absent" | "late" | "short" | "overtime";
 type GroupBy = "employee" | "department" | "shift" | "unit" | "empType";
@@ -92,42 +96,18 @@ export default function EmployeeReportPage() {
 
   const filtered = useMemo<AttendanceSummaryRow[]>(() => {
     switch (reportType) {
-      case "absent":   return r.summary.filter((s) => s.absentDays > 0);
-      case "late":     return r.summary.filter((s) => s.lateDays > 0);
-      case "short":    return r.summary.filter((s) => s.totalShortfall > 0);
-      case "overtime": return r.summary.filter((s) => s.totalOvertime > 0);
-      default:         return r.summary;
+      case "absent":
+        return r.summary.filter((s) => s.absentDays > 0);
+      case "late":
+        return r.summary.filter((s) => s.lateDays > 0);
+      case "short":
+        return r.summary.filter((s) => s.totalShortfall > 0);
+      case "overtime":
+        return r.summary.filter((s) => s.totalOvertime > 0);
+      default:
+        return r.summary;
     }
   }, [r.summary, reportType]);
-
-  const deptColumns: CommonTableColumn<(typeof r.deptCompliance)[0]>[] = [
-    { title: "Department", dataIndex: "department", key: "dept" },
-    {
-      title: "Present %",
-      dataIndex: "presentPct",
-      key: "presentPct",
-      render: (v: number) => <span className="font-bold text-emerald-600">{v}%</span>,
-    },
-    {
-      title: "Absent %",
-      dataIndex: "absentPct",
-      key: "absentPct",
-      render: (v: number) => <span className="font-bold text-red-600">{v}%</span>,
-    },
-    {
-      title: "Late",
-      dataIndex: "late",
-      key: "late",
-      render: (v: number) => <span className="font-bold text-amber-600">{v}</span>,
-    },
-    {
-      title: "Compliance",
-      key: "compliance",
-      render: (_: unknown, row: (typeof r.deptCompliance)[0]) => (
-        <Tag color={row.color}>{row.text}</Tag>
-      ),
-    },
-  ];
 
   const empColumns: CommonTableColumn<AttendanceSummaryRow>[] = [
     {
@@ -135,8 +115,12 @@ export default function EmployeeReportPage() {
       key: "emp",
       render: (_: unknown, row: AttendanceSummaryRow) => (
         <span>
-          <span className="font-semibold text-zinc-900">{row.employeeName}</span>
-          <span className="ml-2 text-[12px] text-zinc-500">{row.employeeId}</span>
+          <span className="font-semibold text-zinc-900">
+            {row.employeeName}
+          </span>
+          <span className="ml-2 text-[12px] text-zinc-500">
+            {row.employeeId}
+          </span>
         </span>
       ),
     },
@@ -146,31 +130,41 @@ export default function EmployeeReportPage() {
       title: "Present",
       dataIndex: "presentDays",
       key: "present",
-      render: (v: number) => <span className="font-bold text-emerald-600">{v}</span>,
+      render: (v: number) => (
+        <span className="font-bold text-emerald-600">{v}</span>
+      ),
     },
     {
       title: "Absent",
       dataIndex: "absentDays",
       key: "absent",
-      render: (v: number) => <span className="font-bold text-red-600">{v}</span>,
+      render: (v: number) => (
+        <span className="font-bold text-red-600">{v}</span>
+      ),
     },
     {
       title: "Late",
       dataIndex: "lateDays",
       key: "late",
-      render: (v: number) => <span className="font-bold text-amber-600">{v}</span>,
+      render: (v: number) => (
+        <span className="font-bold text-amber-600">{v}</span>
+      ),
     },
     {
       title: "Overtime (h)",
       dataIndex: "totalOvertime",
       key: "ot",
-      render: (v: number) => <span className="font-semibold text-emerald-600">{v.toFixed(1)}</span>,
+      render: (v: number) => (
+        <span className="font-semibold text-emerald-600">{v.toFixed(1)}</span>
+      ),
     },
     {
       title: "Short (h)",
       dataIndex: "totalShortfall",
       key: "short",
-      render: (v: number) => <span className="text-zinc-500">{v.toFixed(1)}</span>,
+      render: (v: number) => (
+        <span className="text-zinc-500">{v.toFixed(1)}</span>
+      ),
     },
   ];
 
@@ -182,13 +176,6 @@ export default function EmployeeReportPage() {
 
   return (
     <div className="attendance-reports-page">
-      {r.usingDummy && (
-        <div className="rep-demo-banner">
-          <ExperimentOutlined />
-          Sample data — connect live punch records to replace these figures.
-        </div>
-      )}
-
       <RepHeader
         title="Employee Report"
         subtitle={`${r.rangeLabel} · monthly summary, absent, late, short hours & overtime`}
@@ -196,7 +183,10 @@ export default function EmployeeReportPage() {
           <Button
             icon={<DownloadOutlined />}
             onClick={() =>
-              window.open(`/api/hrms/attendance/report.csv?${r.buildCsvUrl()}`, "_blank")
+              window.open(
+                `/api/hrms/attendance/report.csv?${r.buildCsvUrl()}`,
+                "_blank",
+              )
             }
           >
             Export
@@ -205,13 +195,20 @@ export default function EmployeeReportPage() {
       />
 
       <AttendanceFilterPanel
-        range={r.range} setRange={r.setRange}
-        dept={r.dept} setDept={r.setDept}
-        shift={r.shift} setShift={r.setShift}
-        unit={r.unit} setUnit={r.setUnit}
-        period={r.period} setPeriod={r.setPeriod}
-        departments={r.departments} units={r.units}
-        loading={r.loading} onApply={r.handleApply}
+        range={r.range}
+        setRange={r.setRange}
+        dept={r.dept}
+        setDept={r.setDept}
+        shift={r.shift}
+        setShift={r.setShift}
+        unit={r.unit}
+        setUnit={r.setUnit}
+        period={r.period}
+        setPeriod={r.setPeriod}
+        departments={r.departments}
+        units={r.units}
+        loading={r.loading}
+        onApply={r.handleApply}
       />
 
       <ReportSection title="Report type & grouping">
@@ -249,22 +246,6 @@ export default function EmployeeReportPage() {
           rowKey="employeeId"
           loading={r.loading}
           pagination={{ pageSize: 15, showSizeChanger: true }}
-        />
-      </ReportSection>
-
-      <ReportSection
-        title="Department compliance"
-        meta={r.rangeLabel}
-        footer="Good = 95%+ present · Review = 85–95% · Poor = below 85%"
-        flush
-      >
-        <CommonTable
-          {...tableProps}
-          columns={deptColumns}
-          dataSource={r.deptCompliance}
-          rowKey="department"
-          loading={r.loading}
-          pagination={false}
         />
       </ReportSection>
     </div>

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { Button } from "antd";
-import { DownloadOutlined, BankOutlined, EnvironmentOutlined, ExperimentOutlined } from "@ant-design/icons";
+import { DownloadOutlined, BankOutlined, EnvironmentOutlined } from "@ant-design/icons";
 
 import RepHeader from "@/components/hrms/RepHeader";
 import StatCard from "@/components/common/StatCard";
@@ -76,13 +76,6 @@ export default function FieldAttendancePage() {
 
   return (
     <div className="attendance-reports-page">
-      {r.usingDummy && (
-        <div className="rep-demo-banner">
-          <ExperimentOutlined />
-          Sample data — connect live punch records to replace these figures.
-        </div>
-      )}
-
       <RepHeader
         title="Field Attendance"
         subtitle={`${r.rangeLabel} · GPS-verified field vs in-office breakdown`}

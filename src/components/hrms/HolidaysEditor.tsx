@@ -1,145 +1,345 @@
 "use client";
 
-import { Table, Button, Modal, Form, Input, Select, DatePicker, message, Tag } from "antd";
-import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Table,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Select,
+  DatePicker,
+  message,
+  Tag,
+  Popconfirm,
+  Space,
+} from "antd";
+import { PlusOutlined, DeleteOutlined, FilePdfOutlined } from "@ant-design/icons";
+import dayjs, { type Dayjs } from "dayjs";
 
-const TYPE_COLOR: Record<string, string> = { national: "red", regional: "blue", optional: "default" };
+import ReportSection from "@/components/hrms/ReportSection";
+import { ViewEditActions } from "@/components/common/TableActionIcons";
+import { downloadHolidayCalendarPdf } from "@/lib/holiday-calendar-pdf";
 
-export function HolidaysEditor() {
-  const [holidays, setHolidays] = useState<any[]>([]);
+export type HolidayRecord = {
+  _id: string;
+  name: string;
+  date: string;
+  type: "national" | "regional" | "optional";
+  description?: string;
+  year?: number;
+};
+
+const TYPE_COLOR: Record<string, string> = {
+  national: "red",
+  regional: "blue",
+  optional: "default",
+};
+
+const YEAR_OPTIONS = [2024, 2025, 2026, 2027, 2028];
+
+type HolidayFormValues = {
+  name: string;
+  date: Dayjs;
+  type: "national" | "regional" | "optional";
+  description?: string;
+};
+
+type HolidaysEditorProps = {
+  companyName?: string;
+};
+
+export function HolidaysEditor({ companyName = "Sudarshan Group" }: HolidaysEditorProps) {
+  const [holidays, setHolidays] = useState<HolidayRecord[]>([]);
   const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<HolidayRecord | null>(null);
   const [year, setYear] = useState(new Date().getFullYear());
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<HolidayFormValues>();
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/hrms/holidays?year=${year}`);
       const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to load");
       setHolidays(json.data || []);
-    } catch { message.error("Failed to load holidays"); }
-    finally { setLoading(false); }
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Failed to load holidays");
+      setHolidays([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [year]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const openAdd = () => {
+    setEditing(null);
+    form.resetFields();
+    form.setFieldsValue({ type: "national" });
+    setModalOpen(true);
   };
 
-  useEffect(() => { void load(); }, [year]);
+  const openEdit = (row: HolidayRecord) => {
+    setEditing(row);
+    form.setFieldsValue({
+      name: row.name,
+      date: dayjs(row.date),
+      type: row.type,
+      description: row.description ?? "",
+    });
+    setModalOpen(true);
+  };
 
-  const addHoliday = async (values: any) => {
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditing(null);
+    form.resetFields();
+  };
+
+  const saveHoliday = async (values: HolidayFormValues) => {
+    const payload = {
+      name: values.name,
+      date: values.date.format("YYYY-MM-DD"),
+      type: values.type,
+      description: values.description ?? "",
+    };
+
     try {
-      const res = await fetch("/api/hrms/holidays", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...values, date: values.date.format("YYYY-MM-DD") }),
-      });
+      const res = await fetch(
+        editing ? `/api/hrms/holidays/${editing._id}` : "/api/hrms/holidays",
+        {
+          method: editing ? "PATCH" : "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Failed");
-      message.success("Holiday added");
-      setOpen(false);
-      form.resetFields();
+      if (!res.ok) throw new Error(json?.error || "Failed to save");
+      message.success(editing ? "Holiday updated" : "Holiday added");
+      closeModal();
       void load();
-    } catch (e) { message.error(e instanceof Error ? e.message : "Failed"); }
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Failed to save");
+    }
+  };
+
+  const exportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      downloadHolidayCalendarPdf(holidays, year, companyName);
+      message.success(`Holiday calendar ${year} PDF downloaded`);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Failed to export PDF");
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   const deleteHoliday = async (id: string) => {
     try {
       const res = await fetch(`/api/hrms/holidays/${id}`, { method: "DELETE" });
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Failed");
-      message.success("Deleted");
+      if (!res.ok) throw new Error(json?.error || "Failed to delete");
+      message.success("Holiday removed");
       void load();
-    } catch (e) { message.error(e instanceof Error ? e.message : "Failed"); }
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Failed to delete");
+    }
   };
 
   const columns = [
     {
-      title: "Date", dataIndex: "date", key: "date", width: 120,
-      render: (v: string) => <strong>{dayjs(v).format("DD MMM YYYY")}</strong>,
-      sorter: (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+      title: "Date",
+      dataIndex: "date",
+      key: "date",
+      width: 130,
+      render: (v: string) => (
+        <span className="font-semibold">{dayjs(v).format("DD MMM YYYY")}</span>
+      ),
+      sorter: (a: HolidayRecord, b: HolidayRecord) =>
+        new Date(a.date).getTime() - new Date(b.date).getTime(),
     },
-    { title: "Day", dataIndex: "date", key: "dow", width: 90, render: (v: string) => dayjs(v).format("ddd") },
-    { title: "Holiday Name", dataIndex: "name", key: "name", render: (v: string) => <span style={{ fontWeight: 600 }}>{v}</span> },
     {
-      title: "Type", dataIndex: "type", key: "type", width: 110,
-      render: (v: string) => <Tag color={TYPE_COLOR[v] || "default"} style={{ borderRadius: 20, border: 0, textTransform: "capitalize" }}>{v}</Tag>,
+      title: "Day",
+      dataIndex: "date",
+      key: "dow",
+      width: 80,
+      render: (v: string) => dayjs(v).format("ddd"),
     },
-    { title: "Description", dataIndex: "description", key: "desc", ellipsis: true },
     {
-      title: "", key: "actions", width: 60,
-      render: (_: any, row: any) => (
-        <Button size="small" danger icon={<DeleteOutlined />} onClick={() => deleteHoliday(row._id)} />
+      title: "Holiday",
+      dataIndex: "name",
+      key: "name",
+      render: (v: string) => <span className="font-semibold text-zinc-900">{v}</span>,
+    },
+    {
+      title: "Type",
+      dataIndex: "type",
+      key: "type",
+      width: 120,
+      render: (v: string) => (
+        <Tag color={TYPE_COLOR[v] || "default"} className="capitalize">
+          {v}
+        </Tag>
+      ),
+    },
+    {
+      title: "Description",
+      dataIndex: "description",
+      key: "desc",
+      ellipsis: true,
+      render: (v: string) => v || "—",
+    },
+    {
+      title: "",
+      key: "actions",
+      width: 100,
+      align: "right" as const,
+      render: (_: unknown, row: HolidayRecord) => (
+        <Space size={2}>
+          <ViewEditActions
+            showView={false}
+            onEdit={() => openEdit(row)}
+            editLabel="Edit holiday"
+          />
+          <Popconfirm
+            title="Remove this holiday?"
+            description="Employees will no longer see it on the calendar."
+            onConfirm={() => deleteHoliday(row._id)}
+            okText="Remove"
+            okButtonProps={{ danger: true }}
+          >
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              aria-label="Delete holiday"
+              className="hrms-table-actions__btn"
+            />
+          </Popconfirm>
+        </Space>
       ),
     },
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#09090b", margin: 0 }}>Holiday Calendar</h1>
-          <p style={{ color: "#71717a", fontSize: 13, margin: "6px 0 0" }}>Manage national, regional and optional holidays</p>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <Select value={year} onChange={setYear} style={{ width: 100 }}>
-            {[2024, 2025, 2026, 2027].map((y) => <Select.Option key={y} value={y}>{y}</Select.Option>)}
-          </Select>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>Add Holiday</Button>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-        {[
-          { label: "National", color: "#e11d48", bg: "#ffe4e6", count: holidays.filter((h) => h.type === "national").length },
-          { label: "Regional", color: "#2563eb", bg: "#dbeafe", count: holidays.filter((h) => h.type === "regional").length },
-          { label: "Optional", color: "#71717a", bg: "#f4f4f5", count: holidays.filter((h) => h.type === "optional").length },
-        ].map((c) => (
-          <div key={c.label} style={{ background: "#fff", border: "1px solid #e4e4e7", borderLeft: `4px solid ${c.color}`, borderRadius: 10, padding: "12px 16px" }}>
-            <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#a1a1aa", margin: "0 0 4px" }}>{c.label}</p>
-            <p style={{ fontSize: 28, fontWeight: 800, color: c.color, margin: 0 }}>{c.count}</p>
+    <>
+      <div className="arf-panel ap-filters-panel" style={{ marginBottom: 0 }}>
+        <div className="arf-body" style={{ paddingTop: 14, paddingBottom: 14 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 12,
+            }}
+          >
+            <div className="arf-item" style={{ maxWidth: 160, margin: 0 }}>
+              <span className="arf-label">Calendar year</span>
+              <Select
+                className="w-full"
+                value={year}
+                onChange={setYear}
+                options={YEAR_OPTIONS.map((y) => ({ value: y, label: String(y) }))}
+              />
+            </div>
+            <Space wrap>
+              <Button
+                icon={<FilePdfOutlined />}
+                loading={exportingPdf}
+                onClick={() => void exportPdf()}
+              >
+                Export PDF
+              </Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
+                Add holiday
+              </Button>
+            </Space>
           </div>
-        ))}
+        </div>
       </div>
 
-      <div style={{ background: "#fff", border: "1px solid #e4e4e7", borderRadius: 12, overflow: "hidden" }}>
+      <ReportSection
+        title="Company holiday calendar"
+        meta={`${holidays.length} holidays in ${year}`}
+        flush
+      >
         <Table
           loading={loading}
           dataSource={holidays}
-          columns={columns as any}
+          columns={columns}
           rowKey="_id"
           size="middle"
-          pagination={{ pageSize: 20, showTotal: (n) => `${n} holidays` }}
-          locale={{ emptyText: <div style={{ padding: "32px 0", textAlign: "center", color: "#a1a1aa" }}>No holidays for {year}</div> }}
+          bordered
+          className="attendance-report-table"
+          pagination={{
+            pageSize: 20,
+            showSizeChanger: true,
+            showTotal: (n) => `${n} holidays`,
+          }}
+          locale={{
+            emptyText: `No holidays for ${year}. Click “Add holiday” to create one.`,
+          }}
         />
-      </div>
+      </ReportSection>
 
-      <Modal title="Add Holiday" open={open} onCancel={() => { setOpen(false); form.resetFields(); }} footer={null} width={420}>
-        <Form form={form} layout="vertical" onFinish={addHoliday} style={{ marginTop: 16 }}>
-          <Form.Item name="name" label="Holiday Name" rules={[{ required: true }]}>
-            <Input placeholder="e.g. Republic Day" />
+      <Modal
+        title={editing ? "Edit holiday" : "Add holiday"}
+        open={modalOpen}
+        onCancel={closeModal}
+        footer={null}
+        width={440}
+        destroyOnClose
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={saveHoliday}
+          style={{ marginTop: 16 }}
+        >
+          <Form.Item
+            name="name"
+            label="Holiday name"
+            rules={[{ required: true, message: "Enter a name" }]}
+          >
+            <Input placeholder="e.g. Independence Day" />
           </Form.Item>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Form.Item name="date" label="Date" rules={[{ required: true }]}>
-              <DatePicker style={{ width: "100%" }} />
+            <Form.Item
+              name="date"
+              label="Date"
+              rules={[{ required: true, message: "Pick a date" }]}
+            >
+              <DatePicker className="w-full" format="DD MMM YYYY" />
             </Form.Item>
-            <Form.Item name="type" label="Type" initialValue="national">
-              <Select>
-                <Select.Option value="national">National</Select.Option>
-                <Select.Option value="regional">Regional</Select.Option>
-                <Select.Option value="optional">Optional</Select.Option>
-              </Select>
+            <Form.Item name="type" label="Type" rules={[{ required: true }]}>
+              <Select
+                options={[
+                  { value: "national", label: "National" },
+                  { value: "regional", label: "Regional" },
+                  { value: "optional", label: "Optional" },
+                ]}
+              />
             </Form.Item>
           </div>
-          <Form.Item name="description" label="Description">
-            <Input />
+          <Form.Item name="description" label="Description (optional)">
+            <Input placeholder="Notes for HR or employees" />
           </Form.Item>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <Button onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="primary" htmlType="submit">Add</Button>
+            <Button onClick={closeModal}>Cancel</Button>
+            <Button type="primary" htmlType="submit">
+              {editing ? "Save changes" : "Add holiday"}
+            </Button>
           </div>
         </Form>
       </Modal>
-    </div>
+    </>
   );
 }

@@ -11,12 +11,13 @@ import {
   FilterOutlined,
   ReloadOutlined,
   CheckCircleOutlined,
-  ExperimentOutlined,
 } from "@ant-design/icons";
 
 import RepHeader from "@/components/hrms/RepHeader";
 import StatCard from "@/components/common/StatCard";
-import CommonTable, { type CommonTableColumn } from "@/components/common/CommonTable";
+import CommonTable, {
+  type CommonTableColumn,
+} from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
 import AttendanceFilterPanel from "@/components/hrms/AttendanceFilterPanel";
 import {
@@ -45,26 +46,34 @@ export default function AttendanceOverviewPage() {
       title: "Present days",
       dataIndex: "present",
       key: "present",
-      render: (v: number) => <span className="font-bold text-emerald-600">{v}</span>,
+      render: (v: number) => (
+        <span className="font-bold text-emerald-600">{v}</span>
+      ),
     },
     {
       title: "Absent",
       dataIndex: "absent",
       key: "absent",
-      render: (v: number) => <span className="font-bold text-red-600">{v}</span>,
+      render: (v: number) => (
+        <span className="font-bold text-red-600">{v}</span>
+      ),
     },
     {
       title: "Late",
       dataIndex: "late",
       key: "late",
-      render: (v: number) => <span className="font-bold text-amber-600">{v}</span>,
+      render: (v: number) => (
+        <span className="font-bold text-amber-600">{v}</span>
+      ),
     },
     { title: "In office", dataIndex: "inOffice", key: "inOffice" },
     {
       title: "Field days",
       dataIndex: "fieldDays",
       key: "field",
-      render: (v: number) => <span className="font-bold text-emerald-600">{v}</span>,
+      render: (v: number) => (
+        <span className="font-bold text-emerald-600">{v}</span>
+      ),
     },
     {
       title: "Compliance",
@@ -80,19 +89,25 @@ export default function AttendanceOverviewPage() {
       title: "Present %",
       dataIndex: "presentPct",
       key: "presentPct",
-      render: (v: number) => <span className="font-bold text-emerald-600">{v}%</span>,
+      render: (v: number) => (
+        <span className="font-bold text-emerald-600">{v}%</span>
+      ),
     },
     {
       title: "Absent %",
       dataIndex: "absentPct",
       key: "absentPct",
-      render: (v: number) => <span className="font-bold text-red-600">{v}%</span>,
+      render: (v: number) => (
+        <span className="font-bold text-red-600">{v}%</span>
+      ),
     },
     {
       title: "Late (count)",
       dataIndex: "late",
       key: "late",
-      render: (v: number) => <span className="font-bold text-amber-600">{v}</span>,
+      render: (v: number) => (
+        <span className="font-bold text-amber-600">{v}</span>
+      ),
     },
     {
       title: "Compliance",
@@ -111,13 +126,6 @@ export default function AttendanceOverviewPage() {
 
   return (
     <div className="attendance-reports-page">
-      {r.usingDummy && (
-        <div className="rep-demo-banner">
-          <ExperimentOutlined />
-          Sample data — connect live punch records to replace these figures.
-        </div>
-      )}
-
       <RepHeader
         title="Attendance Overview"
         subtitle={`${r.rangeLabel} · KPIs, weekly trends & department compliance`}
@@ -125,22 +133,15 @@ export default function AttendanceOverviewPage() {
           <Button
             icon={<DownloadOutlined />}
             onClick={() =>
-              window.open(`/api/hrms/attendance/report.csv?${r.buildCsvUrl()}`, "_blank")
+              window.open(
+                `/api/hrms/attendance/report.csv?${r.buildCsvUrl()}`,
+                "_blank",
+              )
             }
           >
             Export
           </Button>
         }
-      />
-
-      <AttendanceFilterPanel
-        range={r.range} setRange={r.setRange}
-        dept={r.dept} setDept={r.setDept}
-        shift={r.shift} setShift={r.setShift}
-        unit={r.unit} setUnit={r.setUnit}
-        period={r.period} setPeriod={r.setPeriod}
-        departments={r.departments} units={r.units}
-        loading={r.loading} onApply={r.handleApply}
       />
 
       <div className="attendance-kpi-grid">
@@ -196,6 +197,23 @@ export default function AttendanceOverviewPage() {
         />
       </div>
 
+      <AttendanceFilterPanel
+        range={r.range}
+        setRange={r.setRange}
+        dept={r.dept}
+        setDept={r.setDept}
+        shift={r.shift}
+        setShift={r.setShift}
+        unit={r.unit}
+        setUnit={r.setUnit}
+        period={r.period}
+        setPeriod={r.setPeriod}
+        departments={r.departments}
+        units={r.units}
+        loading={r.loading}
+        onApply={r.handleApply}
+      />
+
       <ReportSection
         title="Attendance summary by unit"
         meta={`${r.rangeLabel} · company / unit breakdown`}
@@ -218,7 +236,10 @@ export default function AttendanceOverviewPage() {
         >
           <AttendanceTrendChart data={r.weeklyTrend} />
         </ReportSection>
-        <ReportSection title="Department breakdown" meta="Present % by department">
+        <ReportSection
+          title="Department breakdown"
+          meta="Present % by department"
+        >
           <DepartmentBreakdownChart data={r.deptBreakdown} />
         </ReportSection>
       </div>
@@ -238,19 +259,6 @@ export default function AttendanceOverviewPage() {
           pagination={false}
         />
       </ReportSection>
-
-      {r.gpsSummary && (
-        <div className="attendance-gps-banner">
-          <p className="attendance-gps-banner__title">
-            GPS punch summary ({r.rangeLabel})
-          </p>
-          <p className="attendance-gps-banner__text">
-            {r.gpsSummary.gpsPunches.toLocaleString()} punches via GPS ·{" "}
-            {r.gpsSummary.biometricPunches.toLocaleString()} via biometric —{" "}
-            {r.gpsSummary.gpsPercent}% GPS
-          </p>
-        </div>
-      )}
     </div>
   );
 }

@@ -7,12 +7,10 @@ import {
   LogoutOutlined,
   EnvironmentOutlined,
   ClockCircleOutlined,
-  TeamOutlined,
-  BarChartOutlined,
   CheckCircleFilled,
   MinusCircleFilled,
+  FilterOutlined,
 } from "@ant-design/icons";
-import Link from "next/link";
 import HrmsBackLink from "@/components/hrms/HrmsBackLink";
 import { HRMS_BACK } from "@/lib/hrms-nav";
 import dayjs from "dayjs";
@@ -38,14 +36,26 @@ export default function AttendancePunchPage() {
   const [now, setNow] = useState(dayjs());
   const [companyId, setCompanyId] = useState<string>("");
   const [workSite, setWorkSite] = useState<WorkSite>("office");
+  const [draftCompanyId, setDraftCompanyId] = useState<string>("");
+  const [draftWorkSite, setDraftWorkSite] = useState<WorkSite>("office");
   const [myRow, setMyRow] = useState<TodayRow | null>(null);
   const [loading, setLoading] = useState(true);
 
   const companies = data.COMPANIES;
 
   useEffect(() => {
-    if (!companyId && companies[0]) setCompanyId(companies[0].id);
+    if (!companyId && companies[0]) {
+      const id = companies[0].id;
+      setCompanyId(id);
+      setDraftCompanyId(id);
+    }
   }, [companies, companyId]);
+
+  const handleApplyFilters = () => {
+    setCompanyId(draftCompanyId);
+    setWorkSite(draftWorkSite);
+    void loadToday();
+  };
 
   useEffect(() => {
     const t = setInterval(() => setNow(dayjs()), 1000);
@@ -79,8 +89,7 @@ export default function AttendancePunchPage() {
     const ins = myRow.punchLog
       .filter((p) => p.type === "in")
       .sort(
-        (a, b) =>
-          new Date(a.isoTime).getTime() - new Date(b.isoTime).getTime()
+        (a, b) => new Date(a.isoTime).getTime() - new Date(b.isoTime).getTime(),
       );
     return ins[0] ? dayjs(ins[0].isoTime) : null;
   }, [myRow]);
@@ -90,8 +99,7 @@ export default function AttendancePunchPage() {
     const outs = myRow.punchLog
       .filter((p) => p.type === "out")
       .sort(
-        (a, b) =>
-          new Date(b.isoTime).getTime() - new Date(a.isoTime).getTime()
+        (a, b) => new Date(b.isoTime).getTime() - new Date(a.isoTime).getTime(),
       );
     return outs[0] ? dayjs(outs[0].isoTime) : null;
   }, [myRow]);
@@ -113,7 +121,11 @@ export default function AttendancePunchPage() {
         ? "Punched Out"
         : "Not Started";
   const statusBadge: "success" | "processing" | "default" =
-    myRow?.status === "In" ? "success" : punchOutTime ? "processing" : "default";
+    myRow?.status === "In"
+      ? "success"
+      : punchOutTime
+        ? "processing"
+        : "default";
 
   return (
     <div className="ap-page">
@@ -128,15 +140,9 @@ export default function AttendancePunchPage() {
               <ClockCircleOutlined className="ap-header__icon" />
               Attendance
             </div>
-            <div className="ap-header__sub">GPS/location-based punch in and out</div>
-          </div>
-          <div className="ap-header__actions">
-            <Link href="/hrms/reports">
-              <Button icon={<BarChartOutlined />}>Reports</Button>
-            </Link>
-            <Link href="/hrms/employees">
-              <Button icon={<TeamOutlined />}>Employees</Button>
-            </Link>
+            <div className="ap-header__sub">
+              GPS/location-based punch in and out
+            </div>
           </div>
         </div>
 
@@ -151,30 +157,48 @@ export default function AttendancePunchPage() {
         </div>
 
         {/* Filters */}
-        <div className="ap-filters">
-          <div className="ap-filter-item">
-            <label className="ap-filter-label">Company / Unit</label>
-            <Select
-              className="w-full"
-              value={companyId || undefined}
-              onChange={setCompanyId}
-              options={companies.map((c) => ({
-                value: c.id,
-                label: `${c.name} (${c.plant})`,
-              }))}
-            />
+        <div className="arf-panel ap-filters-panel">
+          <div className="arf-head">
+            <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
+            <span className="arf-head-title">Filters</span>
           </div>
-          <div className="ap-filter-item">
-            <label className="ap-filter-label">Work Site</label>
-            <Select
-              className="w-full"
-              value={workSite}
-              onChange={setWorkSite}
-              options={[
-                { value: "office", label: "In office / plant" },
-                { value: "field", label: "Field" },
-              ]}
-            />
+          <div className="arf-body">
+            <div className="arf-controls ap-filters-controls">
+              <div className="arf-item">
+                <span className="arf-label">Company / unit</span>
+                <Select
+                  className="w-full"
+                  value={draftCompanyId || undefined}
+                  onChange={setDraftCompanyId}
+                  options={companies.map((c) => ({
+                    value: c.id,
+                    label: `${c.name} (${c.plant})`,
+                  }))}
+                />
+              </div>
+              <div className="arf-item">
+                <span className="arf-label">Work site</span>
+                <Select
+                  className="w-full"
+                  value={draftWorkSite}
+                  onChange={setDraftWorkSite}
+                  options={[
+                    { value: "office", label: "In office / plant" },
+                    { value: "field", label: "Field" },
+                  ]}
+                />
+              </div>
+              <div className="arf-item ap-filters-actions">
+                <Button
+                  type="primary"
+                  icon={<FilterOutlined />}
+                  loading={loading}
+                  onClick={handleApplyFilters}
+                >
+                  Apply filters
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
 

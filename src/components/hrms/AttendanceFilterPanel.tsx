@@ -33,14 +33,14 @@ export default function AttendanceFilterPanel({
   showShift = true,
 }: Props) {
   return (
-    <div className="arf-panel">
+    <div className="arf-panel ap-filters-panel">
       <div className="arf-head">
         <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
         <span className="arf-head-title">Filters</span>
       </div>
 
       <div className="arf-body">
-        <div className="arf-controls">
+        <div className="arf-controls ap-filters-controls">
           <div className="arf-item">
             <span className="arf-label">Time period</span>
             <Select
@@ -112,18 +112,18 @@ export default function AttendanceFilterPanel({
               />
             </div>
           )}
-        </div>
-      </div>
 
-      <div className="arf-footer">
-        <Button
-          type="primary"
-          icon={<FilterOutlined />}
-          loading={loading}
-          onClick={onApply}
-        >
-          Apply filters
-        </Button>
+          <div className="arf-item ap-filters-actions">
+            <Button
+              type="primary"
+              icon={<FilterOutlined />}
+              loading={loading}
+              onClick={onApply}
+            >
+              Apply filters
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -121,11 +121,6 @@ export default function LeaveRecordPage() {
 
   return (
     <div className="attendance-reports-page">
-      <div className="rep-demo-banner">
-        <FilterOutlined />
-        Sample leave record — connect live data to replace these figures.
-      </div>
-
       <RepHeader
         {...HRMS_BACK.dashboard}
         title="Leave Record"
@@ -140,14 +135,28 @@ export default function LeaveRecordPage() {
         }
       />
 
+      {/* Balance cards */}
+      <div className="lv-balance-grid">
+        {demo.balances.map((b) => (
+          <div key={b.code} className="lv-balance-card">
+            <p className="lv-balance-card__name">{b.name}</p>
+            <p className="lv-balance-card__value" style={{ color: b.color }}>{b.balance}</p>
+            <p className="lv-balance-card__detail">{b.detail}</p>
+            <div className="lv-balance-bar">
+              <div className="lv-balance-bar__fill" style={{ width: `${b.progress}%`, background: b.color }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Filters */}
-      <div className="arf-panel">
+      <div className="arf-panel ap-filters-panel">
         <div className="arf-head">
           <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
           <span className="arf-head-title">Filters</span>
         </div>
         <div className="arf-body">
-          <div className="arf-controls">
+          <div className="arf-controls ap-filters-controls">
             <div className="arf-item">
               <span className="arf-label">Company / unit</span>
               <Select className="w-full" value={company} onChange={setCompany} options={demo.companies} />
@@ -160,10 +169,12 @@ export default function LeaveRecordPage() {
               <span className="arf-label">Leave year</span>
               <Select className="w-full" value={year} onChange={setYear} options={demo.leaveYears} />
             </div>
+            <div className="arf-item ap-filters-actions">
+              <Button type="primary" icon={<FilterOutlined />}>
+                Apply filters
+              </Button>
+            </div>
           </div>
-        </div>
-        <div className="arf-footer">
-          <Button type="primary" icon={<FilterOutlined />}>Apply filters</Button>
         </div>
       </div>
 
@@ -184,20 +195,6 @@ export default function LeaveRecordPage() {
           </Link>
           <Button icon={<DownloadOutlined />}>Export</Button>
         </div>
-      </div>
-
-      {/* Balance cards */}
-      <div className="lv-balance-grid">
-        {demo.balances.map((b) => (
-          <div key={b.code} className="lv-balance-card">
-            <p className="lv-balance-card__name">{b.name}</p>
-            <p className="lv-balance-card__value" style={{ color: b.color }}>{b.balance}</p>
-            <p className="lv-balance-card__detail">{b.detail}</p>
-            <div className="lv-balance-bar">
-              <div className="lv-balance-bar__fill" style={{ width: `${b.progress}%`, background: b.color }} />
-            </div>
-          </div>
-        ))}
       </div>
 
       {/* Leave history */}

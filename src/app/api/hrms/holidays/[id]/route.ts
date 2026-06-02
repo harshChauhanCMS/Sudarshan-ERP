@@ -26,7 +26,19 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json().catch(() => null);
     if (!body) return fail("Invalid body", 400);
-    const h = await Holiday.findByIdAndUpdate(id, { $set: body }, { new: true });
+
+    const updates: Record<string, unknown> = {};
+    if (body.name != null) updates.name = body.name;
+    if (body.type != null) updates.type = body.type;
+    if (body.description != null) updates.description = body.description;
+    if (body.date != null) {
+      const date = new Date(body.date);
+      if (Number.isNaN(date.getTime())) return fail("Invalid date", 400);
+      updates.date = date;
+      updates.year = date.getFullYear();
+    }
+
+    const h = await Holiday.findByIdAndUpdate(id, { $set: updates }, { new: true });
     if (!h) return fail("Holiday not found", 404);
     return ok({ holiday: h });
   } catch (e) {

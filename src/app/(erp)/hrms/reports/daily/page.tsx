@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { Button, Tag } from "antd";
-import { DownloadOutlined, ExperimentOutlined } from "@ant-design/icons";
+import { DownloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
 import RepHeader from "@/components/hrms/RepHeader";
@@ -107,13 +107,6 @@ export default function DailyAttendancePage() {
 
   return (
     <div className="attendance-reports-page">
-      {r.usingDummy && (
-        <div className="rep-demo-banner">
-          <ExperimentOutlined />
-          Sample data — connect live punch records to replace these figures.
-        </div>
-      )}
-
       <RepHeader
         title="Daily Attendance"
         subtitle={`${r.rangeLabel} · in/out times, worked hours & status per day`}
