@@ -12,7 +12,7 @@ import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { nextEmployeeId } from "@/lib/id-generators";
 import { useEffect, useCallback } from "react";
 import { Button, Drawer, Checkbox, Spin, Tag, message, Tooltip, Divider } from "antd";
-import { LockOutlined, EditOutlined, CheckCircleFilled, MinusCircleFilled, SafetyCertificateOutlined, CrownOutlined, EyeOutlined, PlusCircleOutlined, ExportOutlined, FileDoneOutlined, IdcardOutlined } from "@ant-design/icons";
+import { LockOutlined, CheckCircleFilled, MinusCircleFilled, SafetyCertificateOutlined, CrownOutlined, EyeOutlined, IdcardOutlined } from "@ant-design/icons";
 import StatCard from "@/components/common/StatCard";
 /* ============================================================
    ADMIN — Users, Permissions, Design System, Placeholders
@@ -66,14 +66,6 @@ const MODULE_GROUPS = [
 ] as const;
 
 const PERM_ACTIONS: PermAction[] = ["view", "add", "edit", "approve", "export"];
-
-const PERM_ACTION_ICONS: { key: PermAction; icon: React.ReactNode; title: string }[] = [
-  { key: "view", icon: <EyeOutlined />, title: "View" },
-  { key: "add", icon: <PlusCircleOutlined />, title: "Add" },
-  { key: "edit", icon: <EditOutlined />, title: "Edit" },
-  { key: "approve", icon: <FileDoneOutlined />, title: "Approve" },
-  { key: "export", icon: <ExportOutlined />, title: "Export" },
-];
 
 type ModulePerm = { view: boolean; add: boolean; edit: boolean; approve: boolean; export: boolean };
 type PermissionsMap = Record<ModuleKey, ModulePerm>;
@@ -213,8 +205,7 @@ const UserManagement = () => {
                         </span>
                       </Tooltip>
                     </div>
-                    <p className="text-zinc-500 text-[12px] leading-relaxed line-clamp-2 mb-3" style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 12 }}>{role.description}</p>
-                    <div className="flex items-center justify-between pt-3 border-t border-zinc-100" style={{ display: "flex", justifyContent: "space-between", paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+                    <div className="flex items-center justify-between pt-3 border-t border-zinc-100" style={{ display: "flex", justifyContent: "space-between", paddingTop: 12, marginTop: 12, borderTop: "1px solid var(--border)" }}>
                       <div className="text-[11px] text-zinc-400" style={{ fontSize: 11, color: "var(--fg-muted)" }}>
                         <span className="font-bold text-zinc-700" style={{ fontWeight: 700, color: "var(--fg)" }}>{permCount}</span> permissions granted
                       </div>
@@ -265,10 +256,6 @@ const UserManagement = () => {
                 <div className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-1" style={{ fontSize: 11, fontWeight: 600, color: "var(--fg-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Role label</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: "var(--fg)" }}>{viewingRole.label}</div>
               </div>
-              <div>
-                <div className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-1" style={{ fontSize: 11, fontWeight: 600, color: "var(--fg-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Description</div>
-                <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.5 }}>{viewingRole.description || "—"}</div>
-              </div>
               <Tag color={viewingRole.isSystem ? "blue" : "default"} style={{ alignSelf: "flex-start" }}>
                 {viewingRole.isSystem ? "System role" : "Custom role"}
               </Tag>
@@ -279,17 +266,6 @@ const UserManagement = () => {
                 <LockOutlined style={{ color: "var(--fg-muted)", fontSize: 14 }} />
                 <span className="font-bold text-zinc-800 text-sm" style={{ fontWeight: 700, fontSize: 14 }}>Permission matrix</span>
                 <span style={{ fontSize: 11, color: "var(--fg-muted)", fontWeight: 500 }}>(read-only)</span>
-              </div>
-
-              <div className="grid grid-cols-[1fr_40px_40px_40px_40px_40px] gap-0 mb-1 px-1" style={{ display: "grid", gridTemplateColumns: "1fr 40px 40px 40px 40px 40px", gap: 0, marginBottom: 4, padding: "0 4px" }}>
-                <div />
-                {PERM_ACTION_ICONS.map(({ key, icon, title }) => (
-                  <Tooltip key={key} title={title} placement="top">
-                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", fontSize: 13, color: "var(--fg-muted)" }}>
-                      {icon}
-                    </div>
-                  </Tooltip>
-                ))}
               </div>
 
               {MODULE_GROUPS.map((group) => (
@@ -324,14 +300,6 @@ const UserManagement = () => {
                 </div>
               ))}
 
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, fontSize: 11, color: "var(--fg-muted)", marginTop: 12, padding: "0 4px" }}>
-                {PERM_ACTION_ICONS.map(({ key, icon, title }) => (
-                  <span key={key} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ fontSize: 12 }}>{icon}</span>
-                    <span>{title}</span>
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
         )}
