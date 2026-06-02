@@ -1,29 +1,31 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
-import { ArrowLeftOutlined } from "@ant-design/icons";
+import HrmsBackLink from "@/components/hrms/HrmsBackLink";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 
 interface RepHeaderProps {
   title: string;
   subtitle?: string;
   backLabel?: string;
   backHref?: string;
+  /** Hide back link (e.g. top-level hub only when needed) */
+  hideBack?: boolean;
   actions?: ReactNode;
 }
 
 export default function RepHeader({
   title,
   subtitle,
-  backLabel = "All reports",
-  backHref = "/hrms/reports",
+  backLabel = HRMS_BACK.reports.backLabel,
+  backHref = HRMS_BACK.reports.backHref,
+  hideBack = false,
   actions,
 }: RepHeaderProps) {
   return (
     <div className="rep-header">
       <div className="rep-header__left">
-        <Link href={backHref} className="rep-breadcrumb">
-          <ArrowLeftOutlined className="rep-breadcrumb__icon" />
-          {backLabel}
-        </Link>
+        {!hideBack && backHref && backLabel && (
+          <HrmsBackLink href={backHref} label={backLabel} />
+        )}
         <h2 className="rep-title">{title}</h2>
         {subtitle && <p className="rep-subtitle">{subtitle}</p>}
       </div>

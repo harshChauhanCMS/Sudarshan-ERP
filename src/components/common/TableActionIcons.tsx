@@ -1,0 +1,106 @@
+"use client";
+
+import Link from "next/link";
+import { Button, Space, Tooltip } from "antd";
+import type { ReactNode } from "react";
+import { EditOutlined, EyeOutlined } from "@ant-design/icons";
+
+function ActionIconButton({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick?: () => void;
+}) {
+  return (
+    <Button
+      type="text"
+      size="small"
+      icon={icon}
+      onClick={onClick}
+      aria-label={label}
+      className="hrms-table-actions__btn"
+    />
+  );
+}
+
+type ViewEditActionsProps = {
+  viewHref?: string;
+  editHref?: string;
+  onView?: () => void;
+  onEdit?: () => void;
+  viewLabel?: string;
+  editLabel?: string;
+  showView?: boolean;
+  showEdit?: boolean;
+};
+
+/** Icon-only View + Edit actions for HRMS / ERP tables */
+export function ViewEditActions({
+  viewHref,
+  editHref,
+  onView,
+  onEdit,
+  viewLabel = "View",
+  editLabel = "Edit",
+  showView = true,
+  showEdit = true,
+}: ViewEditActionsProps) {
+  const wrap = (href: string | undefined, node: ReactNode) =>
+    href ? <Link href={href}>{node}</Link> : node;
+
+  return (
+    <Space size={2} className="hrms-table-actions">
+      {showView && (viewHref || onView) && (
+        <Tooltip title={viewLabel}>
+          {wrap(
+            viewHref,
+            <ActionIconButton
+              icon={<EyeOutlined />}
+              label={viewLabel}
+              onClick={viewHref ? undefined : onView}
+            />
+          )}
+        </Tooltip>
+      )}
+      {showEdit && (editHref || onEdit) && (
+        <Tooltip title={editLabel}>
+          {wrap(
+            editHref,
+            <ActionIconButton
+              icon={<EditOutlined />}
+              label={editLabel}
+              onClick={editHref ? undefined : onEdit}
+            />
+          )}
+        </Tooltip>
+      )}
+    </Space>
+  );
+}
+
+type SingleActionProps = {
+  href?: string;
+  onClick?: () => void;
+  label?: string;
+  icon?: ReactNode;
+};
+
+export function TableActionIcon({
+  href,
+  onClick,
+  label = "Edit",
+  icon = <EditOutlined />,
+}: SingleActionProps) {
+  const btn = (
+    <ActionIconButton icon={icon} label={label} onClick={href ? undefined : onClick} />
+  );
+
+  return (
+    <Space size={2} className="hrms-table-actions">
+      <Tooltip title={label}>{href ? <Link href={href}>{btn}</Link> : btn}</Tooltip>
+    </Space>
+  );
+}

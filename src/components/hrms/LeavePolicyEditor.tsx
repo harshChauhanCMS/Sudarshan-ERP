@@ -1,6 +1,6 @@
 "use client";
 
-import { Table, Button, Modal, Form, Input, InputNumber, Switch, Select, message, Tag } from "antd";
+import { Table, Button, Modal, Form, Input, InputNumber, Switch, Select, message, Tag, Tooltip } from "antd";
 import { PlusOutlined, EditOutlined } from "@ant-design/icons";
 import { useEffect, useState } from "react";
 
@@ -76,7 +76,15 @@ export function LeavePolicyEditor() {
     {
       title: "", key: "actions", width: 80,
       render: (_: any, row: any) => (
-        <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)}>Edit</Button>
+        <Tooltip title="Edit">
+          <Button
+            type="text"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => openEdit(row)}
+            aria-label="Edit"
+          />
+        </Tooltip>
       ),
     },
   ];

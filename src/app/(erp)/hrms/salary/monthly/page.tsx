@@ -15,6 +15,7 @@ import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 
 import RepHeader from "@/components/hrms/RepHeader";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 import StatCard from "@/components/common/StatCard";
 import ReportSection from "@/components/hrms/ReportSection";
 
@@ -243,10 +244,9 @@ export default function MonthlySalaryPage() {
   return (
     <div className="attendance-reports-page">
       <RepHeader
+        {...HRMS_BACK.salary}
         title="Monthly Salary"
         subtitle={`${cycleLabel} · CTC breakdown, leave deductions & net payable`}
-        backHref="/hrms/salary"
-        backLabel="Salary hub"
       />
 
       {/* Toolbar */}
@@ -299,7 +299,7 @@ export default function MonthlySalaryPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="attendance-kpi-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+      <div className="attendance-kpi-grid attendance-kpi-grid--auto">
         <StatCard
           icon={TeamOutlined}
           label="Total employees"

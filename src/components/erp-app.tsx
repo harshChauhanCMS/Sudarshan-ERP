@@ -173,10 +173,40 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   } | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(248);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
 
   const navigate = (path: string) => {
     router.push(path.startsWith("/") ? path : `/${path}`);
   };
+
+  const handleNavigate = (path: string) => {
+    navigate(path);
+    setMobileSidebarOpen(false);
+  };
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const update = () => setIsMobileViewport(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileSidebarOpen) {
+      document.body.style.overflow = "";
+      return;
+    }
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileSidebarOpen]);
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -253,17 +283,30 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   }
 
   return (
-    <div className="app" style={{ "--sidebar-w": isSidebarCollapsed ? "72px" : `${sidebarWidth}px` } as any}>
+    <div
+      className={`app${mobileSidebarOpen ? " sidebar-mobile-open" : ""}`}
+      style={{ "--sidebar-w": isSidebarCollapsed ? "72px" : `${sidebarWidth}px` } as any}
+    >
+      <div
+        className={`sidebar-backdrop${mobileSidebarOpen ? " visible" : ""}`}
+        onClick={() => setMobileSidebarOpen(false)}
+        aria-hidden={!mobileSidebarOpen}
+      />
       <Sidebar
         route={route}
-        navigate={navigate}
+        navigate={handleNavigate}
         company={activeCo}
-        onCompanyClick={() => navigate("/select-company")}
+        onCompanyClick={() => {
+          navigate("/select-company");
+          setMobileSidebarOpen(false);
+        }}
         badgeMap={badgeMap}
         sidebarWidth={sidebarWidth}
         setSidebarWidth={setSidebarWidth}
-        isCollapsed={isSidebarCollapsed}
+        isCollapsed={isMobileViewport ? false : isSidebarCollapsed}
         setIsCollapsed={setIsSidebarCollapsed}
+        mobileOpen={mobileSidebarOpen}
+        onMobileClose={() => setMobileSidebarOpen(false)}
       />
       <div className="main">
         <Topbar
@@ -271,6 +314,8 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
           onNotifClick={() => setNotifsOpen((v) => !v)}
           onMobileClick={() => window.open("/mobile", "_blank")}
           onLogout={handleLogout}
+          onMenuClick={() => setMobileSidebarOpen((v) => !v)}
+          menuOpen={mobileSidebarOpen}
         />
         <div className="content">
           <PageShell loading={loading} error={error} meta={meta}>

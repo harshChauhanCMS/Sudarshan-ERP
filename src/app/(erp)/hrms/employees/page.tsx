@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Avatar, Button, Select, Space, Tag } from "antd";
+import { Avatar, Button, Space, Tag } from "antd";
 import {
   CheckCircleOutlined,
   TeamOutlined,
@@ -9,15 +9,20 @@ import {
   WarningOutlined,
   PlusOutlined,
   DownloadOutlined,
-  FilterOutlined,
 } from "@ant-design/icons";
 import Link from "next/link";
 
 import CommonTable, {
   type CommonTableColumn,
 } from "@/components/common/CommonTable";
+import { ViewEditActions } from "@/components/common/TableActionIcons";
 import PageHeader from "@/components/common/PageHeader";
 import StatCard from "@/components/common/StatCard";
+import ReportSection from "@/components/hrms/ReportSection";
+import EmployeeFilterPanel, {
+  type EmployeeFilterValues,
+} from "@/components/hrms/EmployeeFilterPanel";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 
 type EmploymentStatus = "Active" | "Inactive";
 type AttendanceStatus = "Present" | "Late" | "On leave" | "Absent";
@@ -39,16 +44,7 @@ interface Employee {
   primaryShiftRaw: string;
 }
 
-interface EmployeeFilters {
-  department: string;
-  role: string;
-  shift: string;
-  location: string;
-  empType: string;
-  status: string;
-}
-
-const DEFAULT_FILTERS: EmployeeFilters = {
+const DEFAULT_FILTERS: EmployeeFilterValues = {
   department: "all",
   role: "all",
   shift: "all",
@@ -110,9 +106,9 @@ function isDateInRange(date: Date, from: Date, to: Date) {
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<EmployeeFilters>(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState<EmployeeFilterValues>(DEFAULT_FILTERS);
   const [appliedFilters, setAppliedFilters] =
-    useState<EmployeeFilters>(DEFAULT_FILTERS);
+    useState<EmployeeFilterValues>(DEFAULT_FILTERS);
   const [stats, setStats] = useState({
     presentToday: 0,
     onLeave: 0,
@@ -354,14 +350,15 @@ export default function EmployeesPage() {
       dataIndex: "id",
       key: "id",
       render: (id: string) => (
-        <span className="font-bold text-zinc-800 text-[13px]">{id}</span>
+        <span className="font-semibold text-zinc-800">{id}</span>
       ),
-      width: "10%",
     },
     {
       title: "Name",
       dataIndex: "name",
       key: "name",
+      width: 260,
+      ellipsis: true,
       render: (_, record: Employee) => (
         <div className="flex items-center gap-3">
           <Avatar
@@ -375,113 +372,86 @@ export default function EmployeesPage() {
           >
             {record.initials}
           </Avatar>
-          <span className="font-bold text-zinc-900 text-[13.5px]">
-            {record.name}
-          </span>
+          <span className="font-semibold text-zinc-900">{record.name}</span>
         </div>
       ),
-      width: "14%",
     },
     {
       title: "Department",
       dataIndex: "department",
       key: "department",
-      render: (dept: string) => (
-        <span className="text-zinc-600 font-normal text-[13px]">{dept}</span>
-      ),
-      width: "10%",
     },
     {
       title: "Role",
       dataIndex: "role",
       key: "role",
-      render: (role: string) => (
-        <span className="text-zinc-500 font-medium text-[13px]">{role}</span>
-      ),
-      width: "10%",
     },
     {
       title: "Shift",
       dataIndex: "shift",
       key: "shift",
-      render: (shift: string) => (
-        <span className="text-zinc-500 font-normal text-[13px]">{shift}</span>
-      ),
-      width: "8%",
     },
     {
       title: "Location / Unit",
       dataIndex: "locationUnit",
       key: "locationUnit",
-      render: (loc: string) => (
-        <span className="text-zinc-500 font-normal text-[13px]">{loc}</span>
-      ),
-      width: "12%",
+      width: 220,
+      ellipsis: true,
     },
     {
       title: "Emp. Type",
       dataIndex: "empType",
       key: "empType",
-      render: (type: string) => (
-        <span className="text-zinc-600 font-normal text-[13px]">{type}</span>
-      ),
-      width: "8%",
     },
     {
       title: "Phone",
       dataIndex: "phone",
       key: "phone",
-      render: (phone: string) => (
-        <span className="text-zinc-500 font-normal text-[13px]">{phone}</span>
-      ),
-      width: "9%",
     },
     {
-      title: "Attendance Status",
+      title: "Attendance",
       dataIndex: "attendanceStatus",
       key: "attendanceStatus",
       render: (status: AttendanceStatus) => (
         <Tag color={ATTENDANCE_TAG_COLORS[status]}>{status}</Tag>
       ),
-      width: "10%",
     },
     {
-      title: "Employment Status",
+      title: "Status",
       dataIndex: "employmentStatus",
       key: "employmentStatus",
       render: (status: EmploymentStatus) => (
         <Tag color={EMPLOYMENT_TAG_COLORS[status]}>{status}</Tag>
       ),
-      width: "10%",
     },
     {
       title: "Actions",
       key: "action",
+      fixed: "right",
+      width: 88,
       render: (_, record: Employee) => (
-        <Space size="middle">
-          <Link href={`/hrms/employees/${record.id}`}>
-            <span className="text-[#374d95] hover:text-[#2a3c74] font-medium text-[12.5px] cursor-pointer">
-              View
-            </span>
-          </Link>
-          <Link href={`/hrms/employees/${record.id}`}>
-            <span className="text-zinc-600 hover:text-zinc-900 font-medium text-[12.5px] cursor-pointer">
-              Edit
-            </span>
-          </Link>
-        </Space>
+        <ViewEditActions
+          viewHref={`/hrms/employees/${record.id}`}
+          editHref={`/hrms/employees/${record.id}`}
+        />
       ),
-      width: "9%",
       align: "right" as const,
     },
   ];
 
+  const tableProps = {
+    bordered: true as const,
+    size: "middle" as const,
+    className: "attendance-report-table",
+  };
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="attendance-reports-page">
       <PageHeader
+        compact
+        {...HRMS_BACK.dashboard}
         title="Employees"
         subtitle="HR master across both companies"
-        date="May 21, 2026 - Thu"
         actions={
           <Space>
             <Button icon={<DownloadOutlined />} onClick={handleExport}>
@@ -500,16 +470,7 @@ export default function EmployeesPage() {
         }
       />
 
-      <div
-        className="grid grid-4"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "16px",
-          marginTop: "24px",
-          marginBottom: "20px",
-        }}
-      >
+      <div className="attendance-kpi-grid attendance-kpi-grid--4">
         <StatCard
           icon={TeamOutlined}
           label="Total employees"
@@ -534,84 +495,40 @@ export default function EmployeesPage() {
         />
       </div>
 
-      <div
-        className="rounded-lg border border-zinc-200 bg-white"
-        style={{ marginTop: "24px" }}
-      >
-        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-4 py-3">
-          <Select
-            value={filters.department}
-            onChange={(val) =>
-              setFilters((f) => ({ ...f, department: val }))
-            }
-            style={{ width: 150 }}
-            options={[
-              { value: "all", label: "All departments" },
-              ...filterOptions.departments,
-            ]}
-          />
-          <Select
-            value={filters.role}
-            onChange={(val) => setFilters((f) => ({ ...f, role: val }))}
-            style={{ width: 130 }}
-            options={[
-              { value: "all", label: "All roles" },
-              ...filterOptions.roles,
-            ]}
-          />
-          <Select
-            value={filters.shift}
-            onChange={(val) => setFilters((f) => ({ ...f, shift: val }))}
-            style={{ width: 130 }}
-            options={[
-              { value: "all", label: "All shifts" },
-              ...filterOptions.shifts,
-            ]}
-          />
-          <Select
-            value={filters.location}
-            onChange={(val) => setFilters((f) => ({ ...f, location: val }))}
-            style={{ width: 170 }}
-            options={[
-              { value: "all", label: "All locations / units" },
-              ...filterOptions.locations,
-            ]}
-          />
-          <Select
-            value={filters.empType}
-            onChange={(val) => setFilters((f) => ({ ...f, empType: val }))}
-            style={{ width: 140 }}
-            options={[
-              { value: "all", label: "All emp. types" },
-              ...filterOptions.empTypes,
-            ]}
-          />
-          <Select
-            value={filters.status}
-            onChange={(val) => setFilters((f) => ({ ...f, status: val }))}
-            style={{ width: 130 }}
-            options={[
-              { value: "all", label: "All status" },
-              ...filterOptions.statuses,
-            ]}
-          />
-          <Button
-            icon={<FilterOutlined />}
-            onClick={() => setAppliedFilters({ ...filters })}
-          >
-            Filter
-          </Button>
-        </div>
+      <EmployeeFilterPanel
+        filters={filters}
+        setFilters={setFilters}
+        options={filterOptions}
+        loading={loading}
+        onApply={() => setAppliedFilters({ ...filters })}
+      />
 
+      <ReportSection
+        title="Employee directory"
+        meta={`${dataSource.length} of ${employees.length} employees`}
+        flush
+      >
         <CommonTable<Employee>
+          {...tableProps}
           columns={columns}
           dataSource={dataSource}
           rowKey="id"
-          bordered={false}
           loading={loading}
-          pagination={{ pageSize: 8, showSizeChanger: false }}
+          scroll={{ x: 1520 }}
+          pagination={{
+            pageSize: 15,
+            showSizeChanger: true,
+            showTotal: (total) => `${total} employees`,
+          }}
+          locale={{
+            emptyText: (
+              <div className="py-8 text-center text-zinc-400 font-medium">
+                No employees match the selected filters
+              </div>
+            ),
+          }}
         />
-      </div>
+      </ReportSection>
     </div>
   );
 }

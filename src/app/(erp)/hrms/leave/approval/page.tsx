@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import RepHeader from "@/components/hrms/RepHeader";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 import StatCard from "@/components/common/StatCard";
 import EmployeeSelect from "@/components/erp/EmployeeSelect";
 import { getLeaveDummy, leaveTypeColor } from "@/lib/leave-dummy";
@@ -251,10 +252,9 @@ export default function LeaveApprovalPage() {
   return (
     <div className="attendance-reports-page">
       <RepHeader
+        {...HRMS_BACK.leave}
         title="Leave Approval"
         subtitle="Approve, reject and manage leave requests"
-        backHref="/hrms/leave"
-        backLabel="Leave hub"
         actions={
           <>
             {selectedRowKeys.length > 0 && (
@@ -278,7 +278,7 @@ export default function LeaveApprovalPage() {
       />
 
       {/* KPI cards */}
-      <div className="attendance-kpi-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}>
+      <div className="attendance-kpi-grid attendance-kpi-grid--auto">
         <StatCard icon={ReloadOutlined}     label="Pending approval"     value={String(kpi.pending)}       hint={`${kpi.pendingSla} SLA breach (>2 days)`}                    hintTone="warning"  />
         <StatCard icon={CheckOutlined}      label="Approved this month"  value={String(kpi.approvedMonth)} hint={`${kpi.approvedDays} days · ${kpi.approvedEmployees} employees`} hintTone="positive" />
         <StatCard icon={CloseOutlined}      label="Rejected this month"  value={String(kpi.rejectedMonth)} hint="Balance or overlap"                                                               />

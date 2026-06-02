@@ -1,5 +1,6 @@
 "use client";
 
+import { Spin } from "antd";
 import type { ReactNode } from "react";
 import type { BootstrapMeta } from "@/lib/bootstrap-meta";
 
@@ -50,8 +51,6 @@ function DataBanner({ meta }: { meta: BootstrapMeta }) {
   );
 }
 
-import { Spin } from "antd";
-
 export function PageShell({ children, loading, error, meta }: PageShellProps) {
   if (loading) {
     return (
@@ -62,7 +61,7 @@ export function PageShell({ children, loading, error, meta }: PageShellProps) {
           minHeight: 240,
         }}
       >
-        <Spin size="large" tip="Loading data..." />
+        <Spin size="large" description="Loading data..." />
       </div>
     );
   }

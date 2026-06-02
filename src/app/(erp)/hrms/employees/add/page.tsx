@@ -16,7 +16,6 @@ import {
   Steps,
 } from "antd";
 import {
-  LeftOutlined,
   SaveOutlined,
   SecurityScanOutlined,
   CalculatorOutlined,
@@ -26,6 +25,7 @@ import dayjs from "dayjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/common/PageHeader";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 
 const DRAFT_KEY = "hrms_employee_draft";
 
@@ -554,14 +554,9 @@ export default function AddEmployeePage() {
       {contextHolder}
       <div className="flex flex-col gap-4 w-full pb-12">
         <PageHeader
-          title={
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <Link href="/hrms/employees" className="text-zinc-400 hover:text-zinc-900 transition-colors" style={{ display: "flex", alignItems: "center" }}>
-                <LeftOutlined style={{ fontSize: "13px" }} />
-              </Link>
-              <span className="font-semibold text-zinc-800" style={{ fontSize: "20px", lineHeight: "1" }}>Add employee</span>
-            </div>
-          }
+          compact
+          {...HRMS_BACK.employees}
+          title="Add employee"
           subtitle="Register a new employee workspace across companies"
         />
 

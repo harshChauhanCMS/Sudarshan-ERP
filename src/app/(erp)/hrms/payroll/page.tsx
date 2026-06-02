@@ -1,12 +1,15 @@
 "use client";
 
 import { Card, Typography, Table, Badge, Button, Progress } from "antd";
+import RepHeader from "@/components/hrms/RepHeader";
+import { TableActionIcon } from "@/components/common/TableActionIcons";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 import {
   WalletOutlined,
   CheckCircleOutlined,
   DollarOutlined,
   HistoryOutlined,
-  ArrowRightOutlined,
+  EyeOutlined,
 } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
@@ -37,43 +40,37 @@ export default function PayrollPage() {
     {
       title: "",
       key: "action",
-      render: () => (
-        <span className="text-[#374d95] hover:text-[#2a3c74] font-medium cursor-pointer flex items-center gap-1">
-          <span>Details</span>
-          <ArrowRightOutlined className="text-[10px]" />
-        </span>
-      ),
+      width: 56,
       align: "right" as const,
+      render: () => (
+        <TableActionIcon label="View details" icon={<EyeOutlined />} onClick={() => {}} />
+      ),
     },
   ];
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-[26px] font-bold tracking-tight text-zinc-950 leading-none">
-            Payroll Management
-          </h1>
-          <p className="text-zinc-500 text-sm font-normal mt-2 leading-none">
-            Employee compensation, benefits, and salary cycles
-          </p>
-        </div>
-        <Button
-          type="primary"
-          style={{
-            height: 38,
-            borderRadius: 6,
-            background: "#374d95",
-            border: "none",
-            fontWeight: 600,
-            fontSize: 13,
-          }}
-          className="hover:bg-[#2a3c74] active:bg-[#1e2a54]"
-        >
-          Process Payroll
-        </Button>
-      </div>
+      <RepHeader
+        {...HRMS_BACK.dashboard}
+        title="Payroll Management"
+        subtitle="Employee compensation, benefits, and salary cycles"
+        actions={
+          <Button
+            type="primary"
+            style={{
+              height: 38,
+              borderRadius: 6,
+              background: "#374d95",
+              border: "none",
+              fontWeight: 600,
+              fontSize: 13,
+            }}
+            className="hover:bg-[#2a3c74] active:bg-[#1e2a54]"
+          >
+            Process Payroll
+          </Button>
+        }
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">

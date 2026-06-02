@@ -8,11 +8,11 @@ import {
   SendOutlined,
   SaveOutlined,
   UploadOutlined,
-  LeftOutlined,
   WalletOutlined,
   CalendarOutlined,
 } from "@ant-design/icons";
-import Link from "next/link";
+import HrmsBackLink from "@/components/hrms/HrmsBackLink";
+import { HRMS_BACK } from "@/lib/hrms-nav";
 import dayjs from "dayjs";
 
 import { getLeaveDummy } from "@/lib/leave-dummy";
@@ -35,10 +35,10 @@ export default function LeaveApplyPage() {
     <div className="leave-apply-mobile">
       {/* ── Sticky header ── */}
       <header className="lv-mob-header">
-        <Link href="/hrms/leave/record" className="lv-mob-back">
-          <LeftOutlined style={{ fontSize: 13 }} />
-          Back
-        </Link>
+        <HrmsBackLink
+          href={HRMS_BACK.leave.backHref}
+          label={HRMS_BACK.leave.backLabel}
+        />
         <h1 className="lv-mob-title">Apply Leave</h1>
         <Button
           type="primary"

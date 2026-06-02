@@ -57,7 +57,7 @@ const Employees = () => {
     { title: "Joined", dataIndex: "since", key: "since", render: (text) => <span className="muted">{text}</span> },
     { title: "Reporting to", key: "reporting", render: (_, __, i) => <span className="muted">{i === 0 ? "—" : i < 3 ? "Rajiv Mehta" : "Priya Sharma"}</span> },
     { title: "Status", key: "status", render: () => <AntBadge status="success" text="Active" /> },
-    { title: "", key: "action", render: () => <AntButton type="link" size="small" icon={<RightOutlined />}>View</AntButton> },
+    { title: "", key: "action", width: 48, render: () => <AntButton type="text" size="small" icon={<EyeOutlined />} aria-label="View" title="View" /> },
   ];
 
   return (
@@ -315,7 +315,7 @@ const Payroll = () => {
     { title: "PF", dataIndex: "pf", key: "pf", align: "right", render: (v) => <span className="num" style={{ color: "var(--fg-muted)" }}>−{fmtINRFull(v)}</span> },
     { title: "TDS", dataIndex: "tds", key: "tds", align: "right", render: (v) => <span className="num" style={{ color: "var(--fg-muted)" }}>−{fmtINRFull(v)}</span> },
     { title: "Net pay", dataIndex: "net", key: "net", align: "right", render: (v) => <span className="num strong" style={{ fontWeight: 600 }}>{fmtINRFull(v)}</span> },
-    { title: "", key: "action", render: () => <AntButton type="text" size="small" icon={<EyeOutlined />}>Slip</AntButton> },
+    { title: "", key: "action", width: 48, render: () => <AntButton type="text" size="small" icon={<EyeOutlined />} aria-label="View payslip" title="View payslip" /> },
   ];
 
   return (
