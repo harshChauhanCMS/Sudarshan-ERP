@@ -3,6 +3,7 @@
 
 
 import React, { useState, useEffect, useRef } from "react";
+import { isGroupBrandRoute } from "@/lib/group-brand-routes";
 import { Icon } from "./icons";
 
 /* ============================================================
@@ -127,6 +128,7 @@ const Sidebar = ({
   route,
   navigate,
   company,
+  companies = [],
   onCompanyClick,
   badgeMap = {},
   sidebarWidth,
@@ -155,6 +157,14 @@ const Sidebar = ({
       route?.startsWith("/hrms/payroll/")
     ) {
       setCollapsedGroups((c) => ({ ...c, "people/hr-reports": false }));
+    }
+    if (
+      route === "/hrms/attendance" ||
+      route?.startsWith("/hrms/attendance/") ||
+      route === "/hrms/salary" ||
+      route?.startsWith("/hrms/salary/")
+    ) {
+      setCollapsedGroups((c) => ({ ...c, "people/hr-management": false }));
     }
   }, [route]);
 
@@ -209,6 +219,8 @@ const Sidebar = ({
     return route === item.id || (route && route.startsWith(`${item.id}/`));
   };
 
+  const showGroupBrand = companies.length >= 2 && isGroupBrandRoute(route);
+
   const renderNavItem = (item, depth = 0) => {
     const isGroup = item && typeof item === "object" && Array.isArray(item.items);
     if (isGroup) {
@@ -221,7 +233,10 @@ const Sidebar = ({
         >
           <div
             className={`sb-item ${depth > 0 ? "sub" : ""} ${groupActive ? "active" : ""}`}
-            onClick={() => toggleGroup(item.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleGroup(item.id);
+            }}
           >
             <span className="sb-item-icon">
               <Icon name={item.icon || "user"} size={15} />
@@ -246,7 +261,10 @@ const Sidebar = ({
       <div
         key={item.id}
         className={`sb-item ${depth > 0 ? "sub" : ""} ${isActive ? "active" : ""}`}
-        onClick={() => goTo(item.id)}
+        onClick={(e) => {
+          e.stopPropagation();
+          goTo(item.id);
+        }}
       >
         <span className="sb-item-icon">
           <Icon name={item.icon} size={15} />
@@ -270,12 +288,47 @@ const Sidebar = ({
           title="Drag to resize"
         />
       )}
-      <div className="sb-brand" onClick={onCompanyClick} title="Switch company">
-        <div className={`sb-brand-mark ${company.mark === "gold" ? "sec" : ""}`}>
-          {company.mark === "gold" ? "M" : "S"}
-        </div>
+      <div
+        className="sb-brand"
+        onClick={(e) => {
+          e.stopPropagation();
+          onCompanyClick?.();
+        }}
+        title={
+          showGroupBrand
+            ? `${companies.map((c) => c.name).join(" · ")} — click to switch company`
+            : `${company.name} — click to switch company`
+        }
+      >
+        {showGroupBrand ? (
+          <div className="sb-brand-marks">
+            <div className="sb-brand-mark">S</div>
+            <div className="sb-brand-mark sec">M</div>
+          </div>
+        ) : (
+          <div className={`sb-brand-mark ${company.mark === "gold" ? "sec" : ""}`}>
+            {company.mark === "gold" ? "M" : "S"}
+          </div>
+        )}
         <div className="sb-brand-text">
-          <div className="sb-brand-name">{company.name}</div>
+          {showGroupBrand ? (
+            <div className="sb-brand-name sb-brand-name--group">
+              {companies.map((c, i) => (
+                <React.Fragment key={c.id}>
+                  {i > 0 ? <span className="sb-brand-name-sep">·</span> : null}
+                  <span
+                    className={
+                      c.id === company.id ? "sb-brand-name-active" : undefined
+                    }
+                  >
+                    {c.id === "smic" ? "Sudarshan Microns" : c.short || c.name}
+                  </span>
+                </React.Fragment>
+              ))}
+            </div>
+          ) : (
+            <div className="sb-brand-name">{company.short || company.name}</div>
+          )}
           <div className="sb-brand-sub">
             <span className="dot success" style={{ width: 5, height: 5 }}></span>
             {company.plant}
@@ -329,9 +382,6 @@ const Sidebar = ({
             <span className="kbd">K</span>
           </div>
         </div>
-      </div>
-
-      <div className="sb-nav-toolbar">
         <button
           type="button"
           className="sb-collapse-all-btn"
@@ -339,7 +389,7 @@ const Sidebar = ({
           title="Collapse all sections"
           aria-label="Collapse all sections"
         >
-          <Icon name="chevUp" size={13} />
+          <Icon name="collapseAll" size={14} />
         </button>
       </div>
 

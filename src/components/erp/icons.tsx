@@ -36,6 +36,7 @@ const ICONS = {
   chevRight:     <><path d="m9 6 6 6-6 6" /></>,
   chevLeft:      <><path d="m15 6-6 6 6 6" /></>,
   chevUp:        <><path d="m6 15 6-6 6 6" /></>,
+  collapseAll:   <><path d="M8 6h12M8 10h10M8 14h8" /><path d="M5 19V11M2 16l3-3 3 3" /></>,
   menu:          <><path d="M4 6h16M4 12h16M4 18h16" /></>,
   arrowRight:    <><path d="M5 12h14M13 5l7 7-7 7" /></>,
   arrowUp:       <><path d="M12 19V5M5 12l7-7 7 7" /></>,

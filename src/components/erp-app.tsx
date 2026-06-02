@@ -1,8 +1,9 @@
 // @ts-nocheck
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { message } from "antd";
 import { ErpDataProvider, useErpData } from "@/context/erp-data-provider";
 import type { ErpData } from "@/lib/seed-data";
 import { Login, Forgot, CompanySelect } from "@/components/erp/auth";
@@ -13,6 +14,10 @@ import { renderErpRoute } from "@/components/erp/render-route";
 import { ERP_ROUTES, pathToRoute } from "@/lib/erp-routes";
 import { PageShell } from "@/components/layout/page-shell";
 import { sidebarBadges } from "@/lib/erp-stats";
+import {
+  GROUP_BRAND_TOAST_MESSAGE,
+  isGroupBrandRoute,
+} from "@/lib/group-brand-routes";
 
 type Company = ErpData["COMPANIES"][number] & { group?: boolean };
 
@@ -175,6 +180,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const prevRouteRef = useRef<string | null>(null);
 
   const navigate = (path: string) => {
     router.push(path.startsWith("/") ? path : `/${path}`);
@@ -223,6 +229,27 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
       setCompany(data.COMPANIES[0]);
     }
   }, [route, company, data.COMPANIES]);
+
+  useEffect(() => {
+    if (["/login", "/select-company", "/forgot"].includes(route)) {
+      prevRouteRef.current = route;
+      return;
+    }
+    if (data.COMPANIES.length < 2) {
+      prevRouteRef.current = route;
+      return;
+    }
+
+    const prev = prevRouteRef.current;
+    const enteringGroup =
+      isGroupBrandRoute(route) && !isGroupBrandRoute(prev ?? "");
+
+    prevRouteRef.current = route;
+
+    if (enteringGroup) {
+      message.info(GROUP_BRAND_TOAST_MESSAGE, 4);
+    }
+  }, [route, data.COMPANIES.length]);
 
   const handleLogin = async (email: string, password: string) => {
     const res = await fetch("/api/auth/login", {
@@ -296,6 +323,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
         route={route}
         navigate={handleNavigate}
         company={activeCo}
+        companies={data.COMPANIES}
         onCompanyClick={() => {
           navigate("/select-company");
           setMobileSidebarOpen(false);

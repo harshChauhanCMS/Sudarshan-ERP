@@ -144,23 +144,6 @@ export default function AttendanceOverviewPage() {
         }
       />
 
-      <AttendanceFilterPanel
-        range={r.range}
-        setRange={r.setRange}
-        dept={r.dept}
-        setDept={r.setDept}
-        shift={r.shift}
-        setShift={r.setShift}
-        unit={r.unit}
-        setUnit={r.setUnit}
-        period={r.period}
-        setPeriod={r.setPeriod}
-        departments={r.departments}
-        units={r.units}
-        loading={r.loading}
-        onApply={r.handleApply}
-      />
-
       <div className="attendance-kpi-grid">
         <StatCard
           icon={CheckCircleOutlined}
@@ -213,6 +196,23 @@ export default function AttendanceOverviewPage() {
           hintTone="positive"
         />
       </div>
+
+      <AttendanceFilterPanel
+        range={r.range}
+        setRange={r.setRange}
+        dept={r.dept}
+        setDept={r.setDept}
+        shift={r.shift}
+        setShift={r.setShift}
+        unit={r.unit}
+        setUnit={r.setUnit}
+        period={r.period}
+        setPeriod={r.setPeriod}
+        departments={r.departments}
+        units={r.units}
+        loading={r.loading}
+        onApply={r.handleApply}
+      />
 
       <ReportSection
         title="Attendance summary by unit"
