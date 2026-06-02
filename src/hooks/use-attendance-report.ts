@@ -31,6 +31,7 @@ export function useAttendanceReport() {
     dayjs().endOf("month"),
   ]);
   const [dept, setDept] = useState("all");
+  const [employeeId, setEmployeeId] = useState<string | undefined>(undefined);
   const [shift, setShift] = useState("all");
   const [unit, setUnit] = useState("all");
   const [period, setPeriod] = useState("month");
@@ -60,13 +61,19 @@ export function useAttendanceReport() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const applyDummy = (month?: string) => {
+  const filterDailyByEmployee = (
+    rows: AttendanceDailyRow[],
+    empId?: string
+  ) => (empId ? rows.filter((r) => r.employeeId === empId) : rows);
+
+  const applyDummy = (month?: string, empId?: string) => {
     const demo = getAttendanceReportDummy(month);
+    const dailyRows = filterDailyByEmployee(demo.daily, empId);
     setKpi(demo.kpi);
     setWorkingDays(demo.workingDays);
     setGpsSummary(demo.gpsSummary);
     setSummary(demo.summary);
-    setDaily(demo.daily);
+    setDaily(dailyRows);
     setDepartments(demo.departments);
     setWeeklyTrend(demo.weeklyTrend);
     setDeptBreakdown(demo.deptBreakdown);
@@ -77,6 +84,7 @@ export function useAttendanceReport() {
     dept: string;
     shift: string;
     unit: string;
+    employeeId?: string;
     range: [dayjs.Dayjs, dayjs.Dayjs];
   }) => {
     setLoading(true);
@@ -87,6 +95,7 @@ export function useAttendanceReport() {
       });
       if (opts.dept !== "all") params.set("department", opts.dept);
       if (opts.shift !== "all") params.set("shift", opts.shift);
+      if (opts.employeeId) params.set("employeeId", opts.employeeId);
 
       const res = await fetch(`/api/hrms/attendance/report/extended?${params}`);
       const json = await res.json();
@@ -98,20 +107,23 @@ export function useAttendanceReport() {
       }
 
       if (isAttendanceReportEmpty(rows) || rows.length < 3) {
-        applyDummy(opts.range[0].format("YYYY-MM"));
+        applyDummy(opts.range[0].format("YYYY-MM"), opts.employeeId);
         return;
       }
+
+      let dailyRows: AttendanceDailyRow[] = json.data.daily ?? [];
+      dailyRows = filterDailyByEmployee(dailyRows, opts.employeeId);
 
       setKpi(json.data.kpi);
       setWorkingDays(json.data.workingDays ?? 20);
       setGpsSummary(json.data.gpsSummary ?? null);
       setSummary(rows);
-      setDaily(json.data.daily ?? []);
+      setDaily(dailyRows);
       setWeeklyTrend(json.data.weeklyTrend ?? []);
       setDeptBreakdown(json.data.deptBreakdown ?? []);
       setUsingDummy(false);
     } catch {
-      applyDummy(opts.range[0].format("YYYY-MM"));
+      applyDummy(opts.range[0].format("YYYY-MM"), opts.employeeId);
       message.warning("Showing demo data — live report could not be loaded");
     } finally {
       setLoading(false);
@@ -128,7 +140,7 @@ export function useAttendanceReport() {
       newRange = [dayjs().startOf("month"), dayjs().endOf("month")];
       setRange(newRange);
     }
-    void load({ dept, shift, unit, range: newRange });
+    void load({ dept, shift, unit, employeeId, range: newRange });
   };
 
   const buildCsvUrl = () => {
@@ -138,6 +150,7 @@ export function useAttendanceReport() {
     });
     if (dept !== "all") params.set("department", dept);
     if (shift !== "all") params.set("shift", shift);
+    if (employeeId) params.set("employeeId", employeeId);
     return params;
   };
 
@@ -216,6 +229,7 @@ export function useAttendanceReport() {
   return {
     range, setRange,
     dept, setDept,
+    employeeId, setEmployeeId,
     shift, setShift,
     unit, setUnit,
     period, setPeriod,

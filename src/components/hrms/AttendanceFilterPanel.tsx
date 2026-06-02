@@ -3,6 +3,7 @@
 import { Button, DatePicker, Select } from "antd";
 import { FilterOutlined } from "@ant-design/icons";
 import type dayjs from "dayjs";
+import EmployeeSelect from "@/components/erp/EmployeeSelect";
 
 interface Props {
   range: [dayjs.Dayjs, dayjs.Dayjs];
@@ -20,6 +21,10 @@ interface Props {
   loading: boolean;
   onApply: () => void;
   showShift?: boolean;
+  showEmployee?: boolean;
+  employeeId?: string;
+  setEmployeeId?: (v: string | undefined) => void;
+  splitApplyRow?: boolean;
 }
 
 export default function AttendanceFilterPanel({
@@ -31,7 +36,15 @@ export default function AttendanceFilterPanel({
   departments, units,
   loading, onApply,
   showShift = true,
+  showEmployee = false,
+  employeeId,
+  setEmployeeId,
+  splitApplyRow = false,
 }: Props) {
+  const controlsClass = splitApplyRow
+    ? "arf-controls ap-filters-controls ap-filters-controls--split-apply"
+    : "arf-controls ap-filters-controls";
+
   return (
     <div className="arf-panel ap-filters-panel">
       <div className="arf-head">
@@ -40,7 +53,7 @@ export default function AttendanceFilterPanel({
       </div>
 
       <div className="arf-body">
-        <div className="arf-controls ap-filters-controls">
+        <div className={controlsClass}>
           <div className="arf-item">
             <span className="arf-label">Time period</span>
             <Select
@@ -112,6 +125,20 @@ export default function AttendanceFilterPanel({
               />
             </div>
           )}
+
+          {showEmployee && setEmployeeId && (
+            <div className="arf-item">
+              <span className="arf-label">Employee</span>
+              <EmployeeSelect
+                value={employeeId}
+                onChange={(id) => setEmployeeId(id)}
+                placeholder="All employees"
+                allowClear
+              />
+            </div>
+          )}
+
+          {splitApplyRow && <div className="ap-filters-row-break" aria-hidden="true" />}
 
           <div className="arf-item ap-filters-actions">
             <Button
