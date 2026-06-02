@@ -171,6 +171,8 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
     email: string;
     name: string;
   } | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(248);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const navigate = (path: string) => {
     router.push(path.startsWith("/") ? path : `/${path}`);
@@ -251,13 +253,17 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   }
 
   return (
-    <div className="app">
+    <div className="app" style={{ "--sidebar-w": isSidebarCollapsed ? "72px" : `${sidebarWidth}px` } as any}>
       <Sidebar
         route={route}
         navigate={navigate}
         company={activeCo}
         onCompanyClick={() => navigate("/select-company")}
         badgeMap={badgeMap}
+        sidebarWidth={sidebarWidth}
+        setSidebarWidth={setSidebarWidth}
+        isCollapsed={isSidebarCollapsed}
+        setIsCollapsed={setIsSidebarCollapsed}
       />
       <div className="main">
         <Topbar

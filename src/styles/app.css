@@ -21,8 +21,61 @@
   display: flex;
   flex-direction: column;
   font-size: var(--fs-base);
-  overflow: hidden;
+  overflow: visible; /* changed from hidden to allow resizer overflow */
+  z-index: 50;
 }
+
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 100;
+  transition: background-color 0.2s ease;
+}
+.sidebar-resizer:hover,
+.sidebar-resizer:active {
+  background-color: var(--primary);
+}
+
+.sidebar.collapsed .sb-brand-text,
+.sidebar.collapsed .sb-brand-switch,
+.sidebar.collapsed .sb-search-box span,
+.sidebar.collapsed .kbd-group,
+.sidebar.collapsed .sb-section-label span,
+.sidebar.collapsed .sb-item-label,
+.sidebar.collapsed .sb-item-right,
+.sidebar.collapsed .sb-subitems,
+.sidebar.collapsed .sb-foot-info,
+.sidebar.collapsed .sb-foot-btn,
+.sidebar.collapsed .sb-item-badge {
+  display: none !important;
+}
+
+.sidebar.collapsed .sb-search-box {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar.collapsed .sb-item {
+  justify-content: center;
+  padding: 10px;
+}
+
+.sidebar.collapsed .sb-item-icon {
+  margin: 0;
+}
+
+.sidebar.collapsed .sb-foot {
+  justify-content: center;
+}
+
+.sidebar.collapsed .sb-brand {
+  justify-content: center;
+}
+
 
 .sb-brand {
   padding: 16px 16px 12px;
@@ -123,6 +176,7 @@
 .sb-nav {
   flex: 1;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 8px 0 16px;
 }
 
@@ -194,6 +248,41 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.sb-subitems {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  position: relative;
+  margin-left: 18px; /* Aligns with the center of the parent icon */
+  padding-left: 14px;
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+.sb-subitems::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -8px; /* Starts just below the parent item */
+  bottom: 16px; /* Stops at the vertical center of the last child item */
+  width: 1px;
+  background: var(--border);
+}
+
+.sb-item.sub {
+  position: relative;
+}
+
+.sb-item.sub::before {
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  width: 14px;
+  height: 1px;
+  background: var(--border);
 }
 
 @media (max-width: 768px) {
