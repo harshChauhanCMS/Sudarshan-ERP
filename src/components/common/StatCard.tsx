@@ -1,21 +1,28 @@
 "use client";
 
-import { Card, Typography, theme } from "antd";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType } from "react";
 
 export interface StatCardProps {
   icon: ComponentType;
   label: string;
-  value: ReactNode;
-  hint?: ReactNode;
+  value: React.ReactNode;
+  hint?: React.ReactNode;
   hintTone?: "default" | "positive" | "negative" | "warning";
+  accent?: string;
 }
 
 const HINT_COLORS: Record<NonNullable<StatCardProps["hintTone"]>, string> = {
-  default: "#71717a",
-  positive: "#16a34a",
-  negative: "#dc2626",
-  warning: "#d97706",
+  default:  "var(--fg-subtle)",
+  positive: "var(--success)",
+  negative: "var(--danger)",
+  warning:  "var(--warning)",
+};
+
+const ICON_COLORS: Record<NonNullable<StatCardProps["hintTone"]>, { bg: string; color: string }> = {
+  default:  { bg: "var(--primary-soft)",  color: "var(--primary)" },
+  positive: { bg: "var(--success-soft)",  color: "var(--success)" },
+  negative: { bg: "var(--danger-soft)",   color: "var(--danger)"  },
+  warning:  { bg: "var(--warning-soft)",  color: "var(--warning)" },
 };
 
 export default function StatCard({
@@ -25,32 +32,22 @@ export default function StatCard({
   hint,
   hintTone = "default",
 }: StatCardProps) {
-  const { token } = theme.useToken();
+  const ic = ICON_COLORS[hintTone];
 
   return (
-    <Card
-      size="small"
-      styles={{ body: { padding: 16 } }}
-      style={{ borderColor: token.colorBorderSecondary }}
-    >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#71717a' }}>
-            <Icon />
-            <Typography.Text type="secondary" style={{ fontSize: '13px', fontWeight: 600 }}>
-              {label}
-            </Typography.Text>
-          </div>
-          {hint !== undefined && (
-            <div
-              style={{ fontSize: '12px', color: HINT_COLORS[hintTone] }}
-            >
-              {hint}
-            </div>
-          )}
-        </div>
-        <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#18181b', lineHeight: 1 }}>{value}</div>
+    <div className="sc-card">
+      <div className="sc-top">
+        <span className="sc-icon" style={{ background: ic.bg, color: ic.color }}>
+          <Icon />
+        </span>
+        <span className="sc-label">{label}</span>
       </div>
-    </Card>
+      <div className="sc-value">{value}</div>
+      {hint !== undefined && (
+        <div className="sc-hint" style={{ color: HINT_COLORS[hintTone] }}>
+          {hint}
+        </div>
+      )}
+    </div>
   );
 }

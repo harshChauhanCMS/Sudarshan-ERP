@@ -1,22 +1,19 @@
 "use client";
 
-import { Table, Tag, Button, Select, Modal, Form, Input, DatePicker, InputNumber, message, Tabs, Popconfirm } from "antd";
 import {
-  PlusOutlined,
-  CheckOutlined,
-  CloseOutlined,
-  RollbackOutlined,
-  ReloadOutlined,
-  DownloadOutlined,
-  ThunderboltOutlined,
-  EyeOutlined,
+  Table, Tag, Button, Select, Modal, Form, Input, DatePicker, message, Tabs, Tooltip,
+} from "antd";
+import {
+  PlusOutlined, CheckOutlined, CloseOutlined, RollbackOutlined,
+  ReloadOutlined, DownloadOutlined, ThunderboltOutlined, EyeOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import EmployeeSelect from "@/components/erp/EmployeeSelect";
-import PageHeader from "@/components/common/PageHeader";
+
+import RepHeader from "@/components/hrms/RepHeader";
 import StatCard from "@/components/common/StatCard";
+import EmployeeSelect from "@/components/erp/EmployeeSelect";
 import { getLeaveDummy, leaveTypeColor } from "@/lib/leave-dummy";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -31,7 +28,7 @@ const LEAVE_TYPE_LABEL: Record<string, string> = {
   casual: "Casual", sick: "Sick", earned: "Earned", unpaid: "Unpaid",
 };
 
-function formatLeaveDate(v: unknown): string {
+function formatDate(v: unknown): string {
   if (v == null || v === "") return "—";
   const s = String(v);
   if (s.includes("→") || /[A-Za-z]{3}-\d{4}/.test(s)) return s;
@@ -41,26 +38,24 @@ function formatLeaveDate(v: unknown): string {
 
 export default function LeaveApprovalPage() {
   const demo = getLeaveDummy();
-  const kpi = demo.approvalKpi;
-  const [leaves, setLeaves] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [applyOpen, setApplyOpen] = useState(false);
-  const [rollbackOpen, setRollbackOpen] = useState(false);
-  const [rollbackId, setRollbackId] = useState<string | null>(null);
-  const [rejectOpen, setRejectOpen] = useState(false);
-  const [rejectId, setRejectId] = useState<string | null>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
-  const [applyForm] = Form.useForm();
-  const [rollbackForm] = Form.useForm();
-  const [rejectForm] = Form.useForm();
-  const [activeTab, setActiveTab] = useState("pending");
-  const [viewOpen, setViewOpen] = useState(false);
-  const [viewRow, setViewRow] = useState<Record<string, unknown> | null>(null);
+  const kpi  = demo.approvalKpi;
 
-  const openView = (row: Record<string, unknown>) => {
-    setViewRow(row);
-    setViewOpen(true);
-  };
+  const [leaves, setLeaves]               = useState<Record<string, unknown>[]>([]);
+  const [loading, setLoading]             = useState(false);
+  const [applyOpen, setApplyOpen]         = useState(false);
+  const [rollbackOpen, setRollbackOpen]   = useState(false);
+  const [rollbackId, setRollbackId]       = useState<string | null>(null);
+  const [rejectOpen, setRejectOpen]       = useState(false);
+  const [rejectId, setRejectId]           = useState<string | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+  const [applyForm]    = Form.useForm();
+  const [rollbackForm] = Form.useForm();
+  const [rejectForm]   = Form.useForm();
+  const [activeTab, setActiveTab] = useState("pending");
+  const [viewOpen, setViewOpen]   = useState(false);
+  const [viewRow, setViewRow]     = useState<Record<string, unknown> | null>(null);
+
+  const openView = (row: Record<string, unknown>) => { setViewRow(row); setViewOpen(true); };
 
   const load = async (status?: string) => {
     setLoading(true);
@@ -68,11 +63,17 @@ export default function LeaveApprovalPage() {
       const params = new URLSearchParams();
       if (status && status !== "all") params.set("status", status);
       const res = await fetch(`/api/hrms/leave?${params}`);
+      // Guard against HTML responses (auth redirect, 404 page, etc.)
+      if (!res.headers.get("content-type")?.includes("application/json")) {
+        setLeaves([]);
+        return;
+      }
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed");
       setLeaves(json.data || []);
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Failed to load");
+      setLeaves([]);
     } finally {
       setLoading(false);
     }
@@ -83,6 +84,7 @@ export default function LeaveApprovalPage() {
   const approve = async (id: string) => {
     try {
       const res = await fetch(`/api/hrms/leave/${id}/approve`, { method: "PATCH" });
+      if (!res.headers.get("content-type")?.includes("application/json")) throw new Error("Server error");
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed");
       message.success("Approved");
@@ -93,7 +95,7 @@ export default function LeaveApprovalPage() {
   const handleReject = async (values: { reason: string }) => {
     if (!rejectId) return;
     try {
-      const res = await fetch(`/api/hrms/leave/${rejectId}/reject`, {
+      const res  = await fetch(`/api/hrms/leave/${rejectId}/reject`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ reason: values.reason }),
@@ -110,7 +112,7 @@ export default function LeaveApprovalPage() {
   const handleRollback = async (values: { reason: string }) => {
     if (!rollbackId) return;
     try {
-      const res = await fetch(`/api/hrms/leave/${rollbackId}/rollback`, {
+      const res  = await fetch(`/api/hrms/leave/${rollbackId}/rollback`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ reason: values.reason }),
@@ -127,7 +129,7 @@ export default function LeaveApprovalPage() {
   const bulkAction = async (action: "approve" | "reject") => {
     if (selectedRowKeys.length === 0) { message.warning("Select at least one row"); return; }
     try {
-      const res = await fetch("/api/hrms/leave/bulk-action", {
+      const res  = await fetch("/api/hrms/leave/bulk-action", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ids: selectedRowKeys, action }),
@@ -140,12 +142,13 @@ export default function LeaveApprovalPage() {
     } catch (e) { message.error(e instanceof Error ? e.message : "Failed"); }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const applyLeave = async (values: any) => {
     try {
       const fromDate = values.fromDate.format("YYYY-MM-DD");
       const toDate   = values.toDate.format("YYYY-MM-DD");
-      const days = values.toDate.diff(values.fromDate, "day") + 1;
-      const res = await fetch("/api/hrms/leave", {
+      const days     = values.toDate.diff(values.fromDate, "day") + 1;
+      const res  = await fetch("/api/hrms/leave", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...values, fromDate, toDate, days }),
@@ -160,87 +163,130 @@ export default function LeaveApprovalPage() {
   };
 
   const columns = [
-    { title: "Emp ID", dataIndex: "employeeId", key: "eid", width: 100, render: (v: string) => <span style={{ fontFamily: "monospace", fontWeight: 600, fontSize: 12 }}>{v}</span> },
-    { title: "Name", dataIndex: "employeeName", key: "name", render: (v: string) => <span style={{ fontWeight: 600 }}>{v}</span> },
-    { title: "Dept", dataIndex: "department", key: "dept", width: 120 },
-    { title: "Type", dataIndex: "leaveType", key: "type", width: 90, render: (v: string) => LEAVE_TYPE_LABEL[v] || v },
-    { title: "From", dataIndex: "fromDate", key: "from", width: 100, render: (v: string) => dayjs(v).format("DD MMM YY") },
-    { title: "To", dataIndex: "toDate", key: "to", width: 100, render: (v: string) => dayjs(v).format("DD MMM YY") },
-    { title: "Days", dataIndex: "days", key: "days", width: 60 },
-    { title: "Reason", dataIndex: "reason", key: "reason", ellipsis: true },
+    {
+      title: "Emp ID", dataIndex: "employeeId", key: "eid", width: 100,
+      render: (v: string) => <span className="font-mono text-[12px] font-semibold">{v}</span>,
+    },
+    { title: "Name",   dataIndex: "employeeName", key: "name",  render: (v: string) => <span className="font-semibold">{v}</span> },
+    { title: "Dept",   dataIndex: "department",   key: "dept",  width: 120 },
+    { title: "Type",   dataIndex: "leaveType",    key: "type",  width: 90,  render: (v: string) => LEAVE_TYPE_LABEL[v] || v },
+    { title: "From",   dataIndex: "fromDate",     key: "from",  width: 105, render: (v: string) => dayjs(v).format("DD MMM YY") },
+    { title: "To",     dataIndex: "toDate",       key: "to",    width: 105, render: (v: string) => dayjs(v).format("DD MMM YY") },
+    { title: "Days",   dataIndex: "days",         key: "days",  width: 60 },
+    { title: "Reason", dataIndex: "reason",       key: "reason", ellipsis: true },
     {
       title: "Status", dataIndex: "status", key: "status", width: 130,
-      render: (v: string) => <Tag color={STATUS_COLOR[v] || "default"} style={{ borderRadius: 20, border: 0, fontWeight: 600 }}>{STATUS_LABEL[v] || v}</Tag>,
+      render: (v: string) => (
+        <Tag color={STATUS_COLOR[v] || "default"} style={{ borderRadius: 20, border: 0, fontWeight: 600 }}>
+          {STATUS_LABEL[v] || v}
+        </Tag>
+      ),
     },
     {
-      title: "Actions", key: "actions", width: 260,
+      title: "Actions", key: "actions", width: 110, fixed: "right" as const,
       render: (_: unknown, row: Record<string, unknown>) => (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <Button size="small" icon={<EyeOutlined />} onClick={() => openView(row)}>
-            View
-          </Button>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <Tooltip title="View details">
+            <Button
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => openView(row)}
+            />
+          </Tooltip>
           {row.status === "pending" && (
-            <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => approve(String(row._id))} style={{ background: "#059669", borderColor: "#059669" }}>
-              Approve
-            </Button>
+            <Tooltip title="Approve">
+              <Button
+                size="small"
+                icon={<CheckOutlined />}
+                style={{ background: "#059669", borderColor: "#059669", color: "#fff" }}
+                onClick={() => approve(String(row._id))}
+              />
+            </Tooltip>
           )}
           {row.status === "pending" && (
-            <Button size="small" danger icon={<CloseOutlined />} onClick={() => { setRejectId(String(row._id)); setRejectOpen(true); }}>
-              Reject
-            </Button>
+            <Tooltip title="Reject">
+              <Button
+                size="small"
+                danger
+                icon={<CloseOutlined />}
+                onClick={() => { setRejectId(String(row._id)); setRejectOpen(true); }}
+              />
+            </Tooltip>
           )}
           {row.status === "approved" && (
-            <Button size="small" icon={<RollbackOutlined />} onClick={() => { setRollbackId(String(row._id)); setRollbackOpen(true); }}>
-              Rollback
-            </Button>
+            <Tooltip title="Rollback approval">
+              <Button
+                size="small"
+                icon={<RollbackOutlined />}
+                onClick={() => { setRollbackId(String(row._id)); setRollbackOpen(true); }}
+              />
+            </Tooltip>
           )}
         </div>
       ),
     },
   ];
 
+  const pendingDemoData = demo.pendingApprovals.map((r) => ({
+    _id: r.id, employeeId: r.employeeId, employeeName: r.employeeName,
+    department: r.department, leaveType: r.type, fromDate: r.fromDate,
+    toDate: r.toDate, days: r.days, reason: r.reason,
+    description: r.description ?? r.reason, status: "pending",
+    balanceAfter: r.balanceAfter, appliedOn: r.applied, contact: r.contact,
+    sla: r.sla, slaTone: r.slaTone,
+  }));
+
+  const tableData =
+    activeTab === "pending" && !loading && leaves.length === 0
+      ? pendingDemoData
+      : leaves;
+
   const tabItems = [
-    { key: "all", label: "All" },
-    { key: "pending", label: `Pending (${kpi.pending})` },
+    { key: "all",      label: "All" },
+    { key: "pending",  label: `Pending (${kpi.pending})` },
     { key: "approved", label: "Approved" },
     { key: "rejected", label: "Rejected" },
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#09090b", margin: 0, lineHeight: 1 }}>Leave approval</h1>
-          <p style={{ color: "#71717a", fontSize: 13, margin: "6px 0 0" }}>Approve, reject and manage pending leave requests</p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {selectedRowKeys.length > 0 && (
-            <>
-              <Button icon={<CheckOutlined />} type="primary" onClick={() => bulkAction("approve")} style={{ background: "#059669", borderColor: "#059669" }}>
-                Bulk Approve ({selectedRowKeys.length})
-              </Button>
-              <Button icon={<CloseOutlined />} danger onClick={() => bulkAction("reject")}>
-                Bulk Reject
-              </Button>
-            </>
-          )}
-          <Link href="/hrms/leave/record"><Button>Leave record</Button></Link>
-          <Button icon={<DownloadOutlined />}>Export</Button>
-          <Button icon={<ReloadOutlined />} onClick={() => load(activeTab)} loading={loading}>Refresh</Button>
-          <Link href="/hrms/leave/apply"><Button type="primary" icon={<PlusOutlined />}>Apply leave</Button></Link>
-        </div>
+    <div className="attendance-reports-page">
+      <RepHeader
+        title="Leave Approval"
+        subtitle="Approve, reject and manage leave requests"
+        backHref="/hrms/leave"
+        backLabel="Leave hub"
+        actions={
+          <>
+            {selectedRowKeys.length > 0 && (
+              <>
+                <Button icon={<CheckOutlined />} type="primary"
+                  style={{ background: "#059669", borderColor: "#059669" }}
+                  onClick={() => bulkAction("approve")}>
+                  Approve ({selectedRowKeys.length})
+                </Button>
+                <Button icon={<CloseOutlined />} danger onClick={() => bulkAction("reject")}>
+                  Reject ({selectedRowKeys.length})
+                </Button>
+              </>
+            )}
+            <Link href="/hrms/leave/record"><Button>Leave record</Button></Link>
+            <Button icon={<ReloadOutlined />} onClick={() => load(activeTab)} loading={loading}>Refresh</Button>
+            <Button icon={<DownloadOutlined />}>Export</Button>
+            <Button icon={<PlusOutlined />} type="primary" onClick={() => setApplyOpen(true)}>Apply leave</Button>
+          </>
+        }
+      />
+
+      {/* KPI cards */}
+      <div className="attendance-kpi-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}>
+        <StatCard icon={ReloadOutlined}     label="Pending approval"     value={String(kpi.pending)}       hint={`${kpi.pendingSla} SLA breach (>2 days)`}                    hintTone="warning"  />
+        <StatCard icon={CheckOutlined}      label="Approved this month"  value={String(kpi.approvedMonth)} hint={`${kpi.approvedDays} days · ${kpi.approvedEmployees} employees`} hintTone="positive" />
+        <StatCard icon={CloseOutlined}      label="Rejected this month"  value={String(kpi.rejectedMonth)} hint="Balance or overlap"                                                               />
+        <StatCard icon={ThunderboltOutlined} label="On leave today"      value={String(kpi.onLeaveToday)}  hint={kpi.onLeaveBreakdown}                                                            />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
-        <StatCard icon={ReloadOutlined} label="Pending approval" value={String(kpi.pending)} hint={`${kpi.pendingSla} SLA breach (>2 days)`} hintTone="warning" />
-        <StatCard icon={CheckOutlined} label="Approved this month" value={String(kpi.approvedMonth)} hint={`${kpi.approvedDays} days · ${kpi.approvedEmployees} employees`} hintTone="positive" />
-        <StatCard icon={CloseOutlined} label="Rejected this month" value={String(kpi.rejectedMonth)} hint="Balance / overlap" />
-        <StatCard icon={ThunderboltOutlined} label="On leave today" value={String(kpi.onLeaveToday)} hint={kpi.onLeaveBreakdown} />
-      </div>
-
-      {/* Table */}
-      <div style={{ background: "#fff", border: "1px solid #e4e4e7", borderRadius: 12, overflow: "hidden" }}>
+      {/* Leave table */}
+      <div className="attendance-report-section">
         <Tabs
           activeKey={activeTab}
           onChange={(k) => { setActiveTab(k); setSelectedRowKeys([]); }}
@@ -252,35 +298,22 @@ export default function LeaveApprovalPage() {
               <div style={{ paddingBottom: 16 }}>
                 <Table
                   loading={loading}
-                  dataSource={
-                    activeTab === "pending" && !loading && leaves.length === 0
-                      ? demo.pendingApprovals.map((r) => ({
-                          _id: r.id,
-                          employeeId: r.employeeId,
-                          employeeName: r.employeeName,
-                          department: r.department,
-                          leaveType: r.type,
-                          fromDate: r.fromDate,
-                          toDate: r.toDate,
-                          days: r.days,
-                          reason: r.reason,
-                          description: r.description ?? r.reason,
-                          status: "pending",
-                          balanceAfter: r.balanceAfter,
-                          appliedOn: r.applied,
-                          contact: r.contact,
-                          sla: r.sla,
-                          slaTone: r.slaTone,
-                        }))
-                      : leaves
-                  }
+                  dataSource={tableData}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   columns={columns as any}
                   rowKey="_id"
                   size="middle"
+                  className="attendance-report-table"
                   rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys as string[]) }}
                   pagination={{ pageSize: 15, showSizeChanger: true, showTotal: (n) => `${n} records` }}
-                  scroll={{ x: 1100 }}
-                  locale={{ emptyText: <div style={{ padding: "32px 0", textAlign: "center", color: "#a1a1aa" }}>No leave requests</div> }}
+                  scroll={{ x: 1200 }}
+                  locale={{
+                    emptyText: (
+                      <div className="py-8 text-center text-zinc-400 font-medium">
+                        No leave requests
+                      </div>
+                    ),
+                  }}
                 />
               </div>
             ),
@@ -288,36 +321,24 @@ export default function LeaveApprovalPage() {
         />
       </div>
 
-      {/* View leave detail */}
+      {/* View detail modal */}
       <Modal
         title="Leave request details"
         open={viewOpen}
         onCancel={() => { setViewOpen(false); setViewRow(null); }}
+        width={520}
         footer={
           viewRow?.status === "pending" ? (
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <div className="flex justify-end gap-2">
               <Button onClick={() => setViewOpen(false)}>Close</Button>
-              <Button
-                danger
-                icon={<CloseOutlined />}
-                onClick={() => {
-                  setRejectId(String(viewRow._id));
-                  setViewOpen(false);
-                  setRejectOpen(true);
-                }}
-              >
-                Reject
-              </Button>
-              <Button
-                type="primary"
-                icon={<CheckOutlined />}
+              <Button danger icon={<CloseOutlined />} onClick={() => {
+                setRejectId(String(viewRow._id));
+                setViewOpen(false);
+                setRejectOpen(true);
+              }}>Reject</Button>
+              <Button type="primary" icon={<CheckOutlined />}
                 style={{ background: "#059669", borderColor: "#059669" }}
-                onClick={() => {
-                  void approve(String(viewRow._id));
-                  setViewOpen(false);
-                  setViewRow(null);
-                }}
-              >
+                onClick={() => { void approve(String(viewRow._id)); setViewOpen(false); setViewRow(null); }}>
                 Approve
               </Button>
             </div>
@@ -325,122 +346,111 @@ export default function LeaveApprovalPage() {
             <Button onClick={() => { setViewOpen(false); setViewRow(null); }}>Close</Button>
           )
         }
-        width={520}
       >
         {viewRow && (
           <dl className="leave-view-detail">
             <div className="leave-view-detail__row">
               <dt>Employee</dt>
-              <dd>
-                <strong>{String(viewRow.employeeName ?? "—")}</strong>
-                <span className="leave-view-detail__muted"> · {String(viewRow.employeeId ?? "")}</span>
-              </dd>
+              <dd><strong>{String(viewRow.employeeName ?? "—")}</strong><span className="leave-view-detail__muted"> · {String(viewRow.employeeId ?? "")}</span></dd>
             </div>
             <div className="leave-view-detail__row">
-              <dt>Department</dt>
-              <dd>{String(viewRow.department ?? "—")}</dd>
+              <dt>Department</dt><dd>{String(viewRow.department ?? "—")}</dd>
             </div>
             <div className="leave-view-detail__row">
               <dt>Leave type</dt>
-              <dd>
-                <Tag color={leaveTypeColor(String(viewRow.leaveType ?? ""))}>
-                  {LEAVE_TYPE_LABEL[String(viewRow.leaveType)] || String(viewRow.leaveType ?? "—")}
-                </Tag>
-              </dd>
+              <dd><Tag color={leaveTypeColor(String(viewRow.leaveType ?? ""))}>{LEAVE_TYPE_LABEL[String(viewRow.leaveType)] || String(viewRow.leaveType ?? "—")}</Tag></dd>
             </div>
             <div className="leave-view-detail__row">
-              <dt>Dates</dt>
-              <dd>
-                {formatLeaveDate(viewRow.fromDate)} → {formatLeaveDate(viewRow.toDate)}
-              </dd>
+              <dt>Dates</dt><dd>{formatDate(viewRow.fromDate)} → {formatDate(viewRow.toDate)}</dd>
             </div>
             <div className="leave-view-detail__row">
-              <dt>Days</dt>
-              <dd>{String(viewRow.days ?? "—")}</dd>
+              <dt>Days</dt><dd>{String(viewRow.days ?? "—")}</dd>
             </div>
             <div className="leave-view-detail__row">
-              <dt>Reason</dt>
-              <dd>{String(viewRow.description ?? viewRow.reason ?? "—")}</dd>
+              <dt>Reason</dt><dd>{String(viewRow.description ?? viewRow.reason ?? "—")}</dd>
             </div>
             {viewRow.balanceAfter != null && (
               <div className="leave-view-detail__row">
-                <dt>Balance after</dt>
-                <dd>{String(viewRow.balanceAfter)}</dd>
+                <dt>Balance after</dt><dd>{String(viewRow.balanceAfter)}</dd>
               </div>
             )}
             <div className="leave-view-detail__row">
-              <dt>Applied on</dt>
-              <dd>{formatLeaveDate(viewRow.appliedOn ?? viewRow.createdAt)}</dd>
+              <dt>Applied on</dt><dd>{formatDate(viewRow.appliedOn ?? viewRow.createdAt)}</dd>
             </div>
             {viewRow.contact != null && String(viewRow.contact) !== "" && (
               <div className="leave-view-detail__row">
-                <dt>Contact</dt>
-                <dd>{String(viewRow.contact)}</dd>
+                <dt>Contact</dt><dd>{String(viewRow.contact)}</dd>
               </div>
             )}
             <div className="leave-view-detail__row">
               <dt>Status</dt>
-              <dd>
-                <Tag color={STATUS_COLOR[String(viewRow.status)] || "default"} style={{ borderRadius: 20, border: 0 }}>
-                  {STATUS_LABEL[String(viewRow.status)] || String(viewRow.status)}
-                </Tag>
-              </dd>
+              <dd><Tag color={STATUS_COLOR[String(viewRow.status)] || "default"} style={{ borderRadius: 20, border: 0 }}>{STATUS_LABEL[String(viewRow.status)] || String(viewRow.status)}</Tag></dd>
             </div>
           </dl>
         )}
       </Modal>
 
-      {/* Apply Leave Modal */}
-      <Modal title="Apply for Leave" open={applyOpen} onCancel={() => { setApplyOpen(false); applyForm.resetFields(); }} footer={null} width={480}>
+      {/* Apply leave modal */}
+      <Modal title="Apply for leave" open={applyOpen}
+        onCancel={() => { setApplyOpen(false); applyForm.resetFields(); }}
+        footer={null} width={480}>
         <Form form={applyForm} layout="vertical" onFinish={applyLeave} style={{ marginTop: 16 }}>
-          <Form.Item name="employeeId" label="Employee" rules={[{ required: true, message: "Please select an employee" }]}>
+          <Form.Item name="employeeId" label="Employee" rules={[{ required: true, message: "Select an employee" }]}>
             <EmployeeSelect placeholder="Search by name or ID" allowClear={false} />
           </Form.Item>
-          <Form.Item name="leaveType" label="Leave Type" rules={[{ required: true }]}>
+          <Form.Item name="leaveType" label="Leave type" rules={[{ required: true }]}>
             <Select>
-              {Object.entries(LEAVE_TYPE_LABEL).map(([k, v]) => <Select.Option key={k} value={k}>{v}</Select.Option>)}
+              {Object.entries(LEAVE_TYPE_LABEL).map(([k, v]) => (
+                <Select.Option key={k} value={k}>{v}</Select.Option>
+              ))}
             </Select>
           </Form.Item>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Form.Item name="fromDate" label="From Date" rules={[{ required: true }]}>
-              <DatePicker style={{ width: "100%" }} />
+          <div className="grid grid-cols-2 gap-3">
+            <Form.Item name="fromDate" label="From date" rules={[{ required: true }]}>
+              <DatePicker className="w-full" />
             </Form.Item>
-            <Form.Item name="toDate" label="To Date" rules={[{ required: true }]}>
-              <DatePicker style={{ width: "100%" }} />
+            <Form.Item name="toDate" label="To date" rules={[{ required: true }]}>
+              <DatePicker className="w-full" />
             </Form.Item>
           </div>
           <Form.Item name="reason" label="Reason">
             <Input.TextArea rows={3} placeholder="Reason for leave" />
           </Form.Item>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <div className="flex justify-end gap-2">
             <Button onClick={() => { setApplyOpen(false); applyForm.resetFields(); }}>Cancel</Button>
             <Button type="primary" htmlType="submit">Submit</Button>
           </div>
         </Form>
       </Modal>
 
-      {/* Reject Modal */}
-      <Modal title="Reject Leave" open={rejectOpen} onCancel={() => { setRejectOpen(false); rejectForm.resetFields(); }} footer={null} width={400}>
+      {/* Reject modal */}
+      <Modal title="Reject leave" open={rejectOpen}
+        onCancel={() => { setRejectOpen(false); rejectForm.resetFields(); }}
+        footer={null} width={400}>
         <Form form={rejectForm} layout="vertical" onFinish={handleReject} style={{ marginTop: 16 }}>
-          <Form.Item name="reason" label="Rejection Reason" rules={[{ required: true, message: "Reason is required" }]}>
+          <Form.Item name="reason" label="Rejection reason" rules={[{ required: true, message: "Reason is required" }]}>
             <Input.TextArea rows={3} />
           </Form.Item>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <div className="flex justify-end gap-2">
             <Button onClick={() => { setRejectOpen(false); rejectForm.resetFields(); }}>Cancel</Button>
             <Button danger htmlType="submit">Reject</Button>
           </div>
         </Form>
       </Modal>
 
-      {/* Rollback Modal */}
-      <Modal title="Rollback Approved Leave" open={rollbackOpen} onCancel={() => { setRollbackOpen(false); rollbackForm.resetFields(); }} footer={null} width={400}>
+      {/* Rollback modal */}
+      <Modal title="Rollback approved leave" open={rollbackOpen}
+        onCancel={() => { setRollbackOpen(false); rollbackForm.resetFields(); }}
+        footer={null} width={400}>
         <Form form={rollbackForm} layout="vertical" onFinish={handleRollback} style={{ marginTop: 16 }}>
-          <Form.Item name="reason" label="Rollback Reason" rules={[{ required: true, message: "Reason is required" }]}>
+          <Form.Item name="reason" label="Rollback reason" rules={[{ required: true, message: "Reason is required" }]}>
             <Input.TextArea rows={3} />
           </Form.Item>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <div className="flex justify-end gap-2">
             <Button onClick={() => { setRollbackOpen(false); rollbackForm.resetFields(); }}>Cancel</Button>
-            <Button htmlType="submit" style={{ background: "#7c3aed", borderColor: "#7c3aed", color: "#fff" }}>Rollback</Button>
+            <Button htmlType="submit" style={{ background: "#7c3aed", borderColor: "#7c3aed", color: "#fff" }}>
+              Rollback
+            </Button>
           </div>
         </Form>
       </Modal>

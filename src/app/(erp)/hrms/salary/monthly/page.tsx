@@ -1,31 +1,47 @@
 "use client";
 
 import { Table, Button, Tag, message, Tooltip, DatePicker } from "antd";
-import { DownloadOutlined, ThunderboltOutlined, CheckOutlined, ReloadOutlined } from "@ant-design/icons";
+import {
+  DownloadOutlined,
+  ThunderboltOutlined,
+  CheckOutlined,
+  ReloadOutlined,
+  TeamOutlined,
+  CheckCircleOutlined,
+  DollarOutlined,
+  WalletOutlined,
+} from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import PageHeader from "@/components/common/PageHeader";
 
-const STATUS_COLOR: Record<string, string> = { draft: "orange", approved: "green", disbursed: "blue" };
-const fmt = (n: number) => `₹${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 0 })}`;
+import RepHeader from "@/components/hrms/RepHeader";
+import StatCard from "@/components/common/StatCard";
+import ReportSection from "@/components/hrms/ReportSection";
+
+const STATUS_COLOR: Record<string, string> = {
+  draft: "orange",
+  approved: "green",
+  disbursed: "blue",
+};
+const fmt = (n: number) =>
+  `₹${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 0 })}`;
 
 export default function MonthlySalaryPage() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [sheets, setSheets] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [approving, setApproving] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
-
   const [range, setRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs().startOf("month"),
     dayjs().endOf("month"),
   ]);
 
-  const cycleLabel = range[0].format("MMM YYYY") === range[1].format("MMM YYYY")
-    ? range[0].format("MMMM YYYY")
-    : `${range[0].format("DD MMM")} – ${range[1].format("DD MMM YYYY")}`;
-
+  const cycleLabel =
+    range[0].format("MMM YYYY") === range[1].format("MMM YYYY")
+      ? range[0].format("MMMM YYYY")
+      : `${range[0].format("DD MMM")} – ${range[1].format("DD MMM YYYY")}`;
   const cycleKey = range[0].format("YYYY-MM");
 
   const load = async () => {
@@ -42,7 +58,10 @@ export default function MonthlySalaryPage() {
     }
   };
 
-  useEffect(() => { void load(); }, [cycleKey]);
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cycleKey]);
 
   const generate = async () => {
     setGenerating(true);
@@ -58,7 +77,7 @@ export default function MonthlySalaryPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed");
       message.success(
-        `Generated ${json.data.generated} sheets for ${cycleLabel} (${json.data.workingDays} working days)`
+        `Generated ${json.data.generated} sheets for ${cycleLabel}`
       );
       void load();
     } catch (e) {
@@ -71,10 +90,10 @@ export default function MonthlySalaryPage() {
   const bulkApprove = async () => {
     setApproving(true);
     try {
-      const body = selectedRowKeys.length > 0
-        ? { ids: selectedRowKeys }
-        : { cycle: cycleKey };
-
+      const body =
+        selectedRowKeys.length > 0
+          ? { ids: selectedRowKeys }
+          : { cycle: cycleKey };
       const res = await fetch("/api/hrms/salary/bulk-approve", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -95,43 +114,71 @@ export default function MonthlySalaryPage() {
   const summary = {
     total: sheets.length,
     approved: sheets.filter((s) => s.status === "approved").length,
-    totalNet: sheets.reduce((a, s) => a + (s.netPayable || 0), 0),
-    totalGross: sheets.reduce((a, s) => a + (s.grossSalary || 0), 0),
+    totalNet: sheets.reduce((a, s) => a + ((s.netPayable as number) || 0), 0),
+    totalGross: sheets.reduce(
+      (a, s) => a + ((s.grossSalary as number) || 0),
+      0
+    ),
   };
 
   const columns = [
     {
-      title: "Emp ID", dataIndex: "employeeId", key: "eid", width: 100,
-      render: (v: string) => <span style={{ fontFamily: "monospace", fontWeight: 600, fontSize: 12 }}>{v}</span>,
+      title: "Emp ID",
+      dataIndex: "employeeId",
+      key: "eid",
+      width: 100,
+      render: (v: string) => (
+        <span className="font-mono text-[12px] font-semibold">{v}</span>
+      ),
     },
     {
-      title: "Name", dataIndex: "employeeName", key: "name",
-      render: (v: string) => <span style={{ fontWeight: 600 }}>{v}</span>,
+      title: "Name",
+      dataIndex: "employeeName",
+      key: "name",
+      render: (v: string) => <span className="font-semibold">{v}</span>,
     },
-    { title: "Dept", dataIndex: "department", key: "dept", width: 120 },
+    { title: "Department", dataIndex: "department", key: "dept", width: 130 },
     {
-      title: "Gross Salary", dataIndex: "grossSalary", key: "gross", width: 130,
-      render: (v: number) => <span style={{ color: "#059669", fontWeight: 700 }}>{fmt(v)}</span>,
+      title: "Gross",
+      dataIndex: "grossSalary",
+      key: "gross",
+      width: 120,
+      render: (v: number) => (
+        <span className="font-bold text-emerald-600">{fmt(v)}</span>
+      ),
     },
     {
-      title: "Attendance", key: "att", width: 110,
+      title: "Attendance",
+      key: "att",
+      width: 110,
       render: (_: unknown, r: Record<string, number>) => (
-        <Tooltip title={`Present: ${r.daysPresent} | Paid Leave: ${r.leaveDays || 0} | Absent: ${Math.max(0, (r.workingDays || 0) - (r.daysPresent || 0) - (r.leaveDays || 0))} | Unpaid: ${r.unpaidLeaveDays || 0}`}>
-          <span style={{ cursor: "help" }}>
-            <span style={{ color: "#059669", fontWeight: 700 }}>{r.daysPresent}</span>
-            <span style={{ color: "#a1a1aa" }}> / {r.workingDays}</span>
+        <Tooltip
+          title={`Present: ${r.daysPresent} | Leave: ${r.leaveDays || 0} | Absent: ${Math.max(0, (r.workingDays || 0) - (r.daysPresent || 0) - (r.leaveDays || 0))} | Unpaid: ${r.unpaidLeaveDays || 0}`}
+        >
+          <span className="cursor-help">
+            <span className="font-bold text-emerald-600">{r.daysPresent}</span>
+            <span className="text-zinc-400"> / {r.workingDays}</span>
           </span>
         </Tooltip>
       ),
     },
     {
-      title: "Leave Deduction", key: "leaveded", width: 140,
+      title: "Deduction",
+      key: "leaveded",
+      width: 120,
       render: (_: unknown, r: Record<string, number>) => {
-        const absentDays = Math.max(0, (r.workingDays || 0) - (r.daysPresent || 0) - (r.leaveDays || 0));
-        const totalDeductDays = absentDays + (r.unpaidLeaveDays || 0);
+        const absent = Math.max(
+          0,
+          (r.workingDays || 0) - (r.daysPresent || 0) - (r.leaveDays || 0)
+        );
+        const total = absent + (r.unpaidLeaveDays || 0);
         return (
-          <Tooltip title={`Absent days: ${absentDays} | Unpaid leave: ${r.unpaidLeaveDays || 0} | Total deduct days: ${totalDeductDays}`}>
-            <span style={{ color: r.leaveDeduction > 0 ? "#e11d48" : "#a1a1aa", fontWeight: 600, cursor: "help" }}>
+          <Tooltip
+            title={`Absent: ${absent} | Unpaid leave: ${r.unpaidLeaveDays || 0} | Total deduct days: ${total}`}
+          >
+            <span
+              className={`font-semibold cursor-help ${r.leaveDeduction > 0 ? "text-rose-600" : "text-zinc-400"}`}
+            >
               {r.leaveDeduction > 0 ? `– ${fmt(r.leaveDeduction)}` : "—"}
             </span>
           </Tooltip>
@@ -139,94 +186,154 @@ export default function MonthlySalaryPage() {
       },
     },
     {
-      title: "PF + ESI", key: "pf", width: 110,
+      title: "PF + ESI",
+      key: "pf",
+      width: 110,
       render: (_: unknown, r: Record<string, number>) => (
-        <Tooltip title={`PF (Employee): ${fmt(r.pfEmployee)} | PF (Employer): ${fmt(r.pfEmployer)} | ESI: ${fmt(r.esi)} | TDS: ${fmt(r.tds)}`}>
-          <span style={{ color: "#d97706", fontWeight: 600, cursor: "help" }}>
+        <Tooltip
+          title={`PF (Emp): ${fmt(r.pfEmployee)} | PF (Empr): ${fmt(r.pfEmployer)} | ESI: ${fmt(r.esi)} | TDS: ${fmt(r.tds)}`}
+        >
+          <span className="font-semibold text-amber-600 cursor-help">
             – {fmt((r.pfEmployee || 0) + (r.esi || 0))}
           </span>
         </Tooltip>
       ),
     },
     {
-      title: "Overtime", dataIndex: "overtimeAmount", key: "ot", width: 100,
-      render: (v: number, r: Record<string, number>) => v > 0
-        ? <Tooltip title={`${r.overtimeHours}h OT`}><span style={{ color: "#2563eb", fontWeight: 600, cursor: "help" }}>+ {fmt(v)}</span></Tooltip>
-        : <span style={{ color: "#a1a1aa" }}>—</span>,
+      title: "Overtime",
+      dataIndex: "overtimeAmount",
+      key: "ot",
+      width: 100,
+      render: (v: number, r: Record<string, number>) =>
+        v > 0 ? (
+          <Tooltip title={`${r.overtimeHours}h OT`}>
+            <span className="font-semibold text-blue-600 cursor-help">
+              + {fmt(v)}
+            </span>
+          </Tooltip>
+        ) : (
+          <span className="text-zinc-400">—</span>
+        ),
     },
     {
-      title: "Net Payable", dataIndex: "netPayable", key: "net", width: 130,
-      render: (v: number) => <span style={{ fontWeight: 800, fontSize: 14, color: "#09090b" }}>{fmt(v)}</span>,
+      title: "Net Payable",
+      dataIndex: "netPayable",
+      key: "net",
+      width: 130,
+      render: (v: number) => (
+        <span className="font-extrabold text-[14px]">{fmt(v)}</span>
+      ),
     },
     {
-      title: "Status", dataIndex: "status", key: "status", width: 100,
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      width: 100,
       render: (v: string) => (
-        <Tag color={STATUS_COLOR[v] || "default"} style={{ borderRadius: 20, border: 0, fontWeight: 600, textTransform: "capitalize" }}>{v}</Tag>
+        <Tag
+          color={STATUS_COLOR[v] || "default"}
+          style={{ borderRadius: 20, border: 0, fontWeight: 600, textTransform: "capitalize" }}
+        >
+          {v}
+        </Tag>
       ),
     },
   ];
 
   return (
     <div className="attendance-reports-page">
-      <PageHeader
-        title="Monthly salary"
-        subtitle="CTC breakdown · leave & absent deductions · overtime · net payable"
-        actions={
-          <>
-            <Link href="/hrms/salary"><Button>Salary hub</Button></Link>
+      <RepHeader
+        title="Monthly Salary"
+        subtitle={`${cycleLabel} · CTC breakdown, leave deductions & net payable`}
+        backHref="/hrms/salary"
+        backLabel="Salary hub"
+      />
+
+      {/* Toolbar */}
+      <div className="sl-toolbar">
+        <div className="sl-toolbar__controls">
+          <div className="sl-toolbar__field">
+            <span className="sl-toolbar__label">Pay cycle</span>
             <DatePicker.RangePicker
               value={range}
-              onChange={(v) => { if (v && v[0] && v[1]) setRange([v[0], v[1]]); }}
+              onChange={(v) => {
+                if (v && v[0] && v[1]) setRange([v[0], v[1]]);
+              }}
               allowClear={false}
               format="DD MMM YYYY"
             />
-            <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>Refresh</Button>
-            <Button
-              icon={<ThunderboltOutlined />}
-              onClick={generate}
-              loading={generating}
-              style={{ background: "#7c3aed", borderColor: "#7c3aed", color: "#fff" }}
-            >
-              Generate
-            </Button>
-            <Button
-              icon={<CheckOutlined />}
-              onClick={bulkApprove}
-              loading={approving}
-              type="primary"
-              style={{ background: "#059669", borderColor: "#059669" }}
-            >
-              {selectedRowKeys.length > 0 ? `Approve (${selectedRowKeys.length})` : "Approve All"}
-            </Button>
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={() => window.open(`/api/hrms/salary/export.csv?cycle=${cycleKey}`, "_blank")}
-            >
-              Export CSV
-            </Button>
-          </>
-        }
-      />
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-        {[
-          { label: "Total Employees", value: summary.total, color: "#2563eb" },
-          { label: "Approved", value: summary.approved, color: "#059669" },
-          { label: "Total Gross", value: fmt(summary.totalGross), color: "#d97706" },
-          { label: "Total Net Payable", value: fmt(summary.totalNet), color: "#7c3aed" },
-        ].map((c) => (
-          <div key={c.label} style={{ background: "#fff", border: "1px solid #e4e4e7", borderLeft: `4px solid ${c.color}`, borderRadius: 10, padding: "12px 16px" }}>
-            <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#a1a1aa", margin: "0 0 4px" }}>{c.label}</p>
-            <p style={{ fontSize: typeof c.value === "string" && c.value.startsWith("₹") ? 18 : 28, fontWeight: 800, color: c.color, margin: 0, lineHeight: 1 }}>{c.value}</p>
           </div>
-        ))}
+        </div>
+        <div className="sl-toolbar__actions">
+          <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
+            Refresh
+          </Button>
+          <Button
+            icon={<ThunderboltOutlined />}
+            onClick={generate}
+            loading={generating}
+            style={{ background: "#7c3aed", borderColor: "#7c3aed", color: "#fff" }}
+          >
+            Generate
+          </Button>
+          <Button
+            icon={<CheckOutlined />}
+            onClick={bulkApprove}
+            loading={approving}
+            type="primary"
+            style={{ background: "#059669", borderColor: "#059669" }}
+          >
+            {selectedRowKeys.length > 0
+              ? `Approve (${selectedRowKeys.length})`
+              : "Approve All"}
+          </Button>
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={() =>
+              window.open(`/api/hrms/salary/export.csv?cycle=${cycleKey}`, "_blank")
+            }
+          >
+            Export CSV
+          </Button>
+        </div>
       </div>
 
-      <div style={{ background: "#fff", border: "1px solid #e4e4e7", borderRadius: 12, overflow: "hidden" }}>
-        <div style={{ padding: "14px 20px", borderBottom: "1px solid #f4f4f5" }}>
-          <p style={{ fontWeight: 700, color: "#09090b", margin: 0 }}>Salary Sheets — {cycleLabel}</p>
-          <p style={{ color: "#a1a1aa", fontSize: 12, margin: "2px 0 0" }}>{sheets.length} records · Hover on a cell for breakdown</p>
-        </div>
+      {/* KPI cards */}
+      <div className="attendance-kpi-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+        <StatCard
+          icon={TeamOutlined}
+          label="Total employees"
+          value={String(summary.total)}
+          hint={cycleLabel}
+        />
+        <StatCard
+          icon={CheckCircleOutlined}
+          label="Approved"
+          value={String(summary.approved)}
+          hint={`${summary.total - summary.approved} pending`}
+          hintTone="positive"
+        />
+        <StatCard
+          icon={DollarOutlined}
+          label="Total gross"
+          value={fmt(summary.totalGross)}
+          hint="Before deductions"
+        />
+        <StatCard
+          icon={WalletOutlined}
+          label="Net payable"
+          value={fmt(summary.totalNet)}
+          hint="Disbursal amount"
+          hintTone="positive"
+        />
+      </div>
+
+      {/* Salary sheets table */}
+      <ReportSection
+        title={`Salary sheets — ${cycleLabel}`}
+        meta={`${sheets.length} employees · hover cells for breakdown`}
+        flush
+      >
         <Table
           loading={loading}
           dataSource={sheets}
@@ -234,19 +341,30 @@ export default function MonthlySalaryPage() {
           rowKey="_id"
           size="middle"
           className="attendance-report-table"
-          rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys as string[]) }}
-          pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (n) => `${n} employees` }}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys as string[]),
+          }}
+          pagination={{
+            pageSize: 20,
+            showSizeChanger: true,
+            showTotal: (n) => `${n} employees`,
+          }}
           scroll={{ x: 1100 }}
           locale={{
             emptyText: (
-              <div style={{ padding: "48px 0", textAlign: "center" }}>
-                <p style={{ color: "#71717a", fontWeight: 600, margin: 0 }}>No salary sheets for this period</p>
-                <p style={{ color: "#a1a1aa", fontSize: 12, marginTop: 4 }}>Select a date range and click Generate</p>
+              <div className="py-12 text-center">
+                <p className="font-semibold text-zinc-500 m-0">
+                  No salary sheets for this period
+                </p>
+                <p className="text-zinc-400 text-[12px] mt-1">
+                  Select a date range and click Generate
+                </p>
               </div>
             ),
           }}
         />
-      </div>
+      </ReportSection>
     </div>
   );
 }

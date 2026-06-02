@@ -634,11 +634,11 @@ export default function AttendanceReportsContent() {
         subtitle="Attendance — company-wise, in-office vs field, trends, compliance"
         actions={
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <Link href="/hrms/reports">
+              <Button>All reports</Button>
+            </Link>
             <Link href="/hrms/reports/late-early">
               <Button icon={<ClockCircleOutlined />}>Late / Early</Button>
-            </Link>
-            <Link href="/hrms/attendance">
-              <Button icon={<EnvironmentOutlined />}>Attendance</Button>
             </Link>
             <Button
               icon={<DownloadOutlined />}

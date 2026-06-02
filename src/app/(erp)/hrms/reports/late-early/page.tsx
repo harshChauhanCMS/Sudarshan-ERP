@@ -23,7 +23,7 @@ import {
 import Link from "next/link";
 import dayjs from "dayjs";
 
-import PageHeader from "@/components/common/PageHeader";
+import RepHeader from "@/components/hrms/RepHeader";
 import StatCard from "@/components/common/StatCard";
 import CommonTable, {
   type CommonTableColumn,
@@ -309,30 +309,27 @@ export default function LateEarlyReportPage() {
 
   return (
     <div className="attendance-reports-page">
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[13px] text-amber-900">
-        Sample data for preview. Connect live punch data to replace these
-        figures.
+      <div className="rep-demo-banner">
+        <UnorderedListOutlined />
+        Sample data — connect live punch records to replace these figures.
       </div>
 
-      <PageHeader
-        title="Late coming / Early going report"
-        subtitle="Discipline view — late punches & early exits with grouping by employee / dept / shift / unit"
-        actions={
-          <>
-            <Link href="/hrms/reports">
-              <Button icon={<UnorderedListOutlined />}>All reports</Button>
-            </Link>
-            <Button icon={<DownloadOutlined />}>Export Excel</Button>
-          </>
-        }
+      <RepHeader
+        title="Late Coming / Early Going"
+        subtitle="Discipline view — late punches & early exits by employee, dept, shift & unit"
+        actions={<Button icon={<DownloadOutlined />}>Export Excel</Button>}
       />
 
-      <ReportSection title="Filters">
-        <div className="attendance-filters-grid">
-          <div>
-            <span className="text-[11px] font-bold uppercase text-zinc-500 block mb-2">
-              Company / unit
-            </span>
+      <div className="arf-panel">
+        <div className="arf-head">
+          <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
+          <span className="arf-head-title">Filters</span>
+        </div>
+
+        <div className="arf-body">
+        <div className="arf-controls">
+          <div className="arf-item">
+            <span className="arf-label">Company / unit</span>
             <Select
               className="w-full"
               value={company}
@@ -344,33 +341,26 @@ export default function LateEarlyReportPage() {
               ]}
             />
           </div>
-          <div>
-            <span className="text-[11px] font-bold uppercase text-zinc-500 block mb-2">
-              Department
-            </span>
+          <div className="arf-item">
+            <span className="arf-label">Department</span>
             <Select
               className="w-full"
               value={dept}
               onChange={setDept}
               options={[
-                { value: "all", label: "All" },
-                ...demo.filterDepartments.map((d) => ({
-                  value: d,
-                  label: d,
-                })),
+                { value: "all", label: "All departments" },
+                ...demo.filterDepartments.map((d) => ({ value: d, label: d })),
               ]}
             />
           </div>
-          <div>
-            <span className="text-[11px] font-bold uppercase text-zinc-500 block mb-2">
-              Shift
-            </span>
+          <div className="arf-item">
+            <span className="arf-label">Shift</span>
             <Select
               className="w-full"
               value={shift}
               onChange={setShift}
               options={[
-                { value: "all", label: "All" },
+                { value: "all", label: "All shifts" },
                 { value: "Shift A", label: "Shift A" },
                 { value: "Shift B", label: "Shift B" },
                 { value: "Shift C", label: "Shift C" },
@@ -378,25 +368,21 @@ export default function LateEarlyReportPage() {
               ]}
             />
           </div>
-          <div>
-            <span className="text-[11px] font-bold uppercase text-zinc-500 block mb-2">
-              Report type
-            </span>
+          <div className="arf-item">
+            <span className="arf-label">Report type</span>
             <Select
               className="w-full"
               value={reportType}
               onChange={setReportType}
               options={[
-                { value: "both", label: "Late coming + Early going" },
+                { value: "both", label: "Late + Early going" },
                 { value: "late", label: "Late coming only" },
                 { value: "early", label: "Early going only" },
               ]}
             />
           </div>
-          <div>
-            <span className="text-[11px] font-bold uppercase text-zinc-500 block mb-2">
-              From
-            </span>
+          <div className="arf-item">
+            <span className="arf-label">From</span>
             <DatePicker
               className="w-full"
               value={range[0]}
@@ -404,10 +390,8 @@ export default function LateEarlyReportPage() {
               allowClear={false}
             />
           </div>
-          <div>
-            <span className="text-[11px] font-bold uppercase text-zinc-500 block mb-2">
-              To
-            </span>
+          <div className="arf-item">
+            <span className="arf-label">To</span>
             <DatePicker
               className="w-full"
               value={range[1]}
@@ -415,10 +399,8 @@ export default function LateEarlyReportPage() {
               allowClear={false}
             />
           </div>
-          <div>
-            <span className="text-[11px] font-bold uppercase text-zinc-500 block mb-2">
-              Min minutes
-            </span>
+          <div className="arf-item">
+            <span className="arf-label">Min late minutes</span>
             <InputNumber
               className="w-full"
               min={0}
@@ -426,24 +408,19 @@ export default function LateEarlyReportPage() {
               onChange={(v) => setMinMinutes(v ?? 0)}
             />
           </div>
-          <div className="attendance-filters-grid__actions">
-            <Button
-              type="primary"
-              block
-              icon={<FilterOutlined />}
-              onClick={() =>
-                setApplied({
-                  dept,
-                  shift,
-                  minMinutes,
-                })
-              }
-            >
-              Apply
-            </Button>
-          </div>
         </div>
-      </ReportSection>
+        </div>
+
+        <div className="arf-footer">
+          <Button
+            type="primary"
+            icon={<FilterOutlined />}
+            onClick={() => setApplied({ dept, shift, minMinutes })}
+          >
+            Apply filters
+          </Button>
+        </div>
+      </div>
 
       <ReportSection title="Group by">
         <div className="attendance-report-segmented-wrap">

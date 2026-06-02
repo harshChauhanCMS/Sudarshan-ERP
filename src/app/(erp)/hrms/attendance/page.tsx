@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, Select, Card, Typography } from "antd";
+import { Button, Select, Badge } from "antd";
 import {
   LoginOutlined,
   LogoutOutlined,
@@ -9,11 +9,12 @@ import {
   ClockCircleOutlined,
   TeamOutlined,
   BarChartOutlined,
+  CheckCircleFilled,
+  MinusCircleFilled,
 } from "@ant-design/icons";
 import Link from "next/link";
 import dayjs from "dayjs";
 
-import PageHeader from "@/components/common/PageHeader";
 import { useErpData } from "@/context/erp-data-provider";
 import {
   useAttendancePunch,
@@ -103,148 +104,163 @@ export default function AttendancePunchPage() {
 
   const selectedCompany = companies.find((c) => c.id === companyId);
 
-  return (
-    <div className="attendance-punch-page">
-      <div className="attendance-punch-page__inner">
-        <PageHeader
-          title={
-            <span className="inline-flex items-center gap-2">
-              <ClockCircleOutlined className="text-[#374d95]" />
-              Attendance
-            </span>
-          }
-          subtitle="Punch in/out — GPS/location-based on phone"
-          actions={
-            <div className="flex flex-wrap gap-2">
-              <Link href="/hrms/reports">
-                <Button icon={<BarChartOutlined />}>Reports</Button>
-              </Link>
-              <Link href="/hrms/employees">
-                <Button icon={<TeamOutlined />}>Employee list</Button>
-              </Link>
-            </div>
-          }
-        />
+  const statusLabel =
+    myRow?.status === "In"
+      ? "Punched In"
+      : punchOutTime
+        ? "Punched Out"
+        : "Not Started";
+  const statusBadge: "success" | "processing" | "default" =
+    myRow?.status === "In" ? "success" : punchOutTime ? "processing" : "default";
 
-        <div className="attendance-my-filters">
-          <Typography.Text
-            type="secondary"
-            className="text-[11px] font-semibold uppercase tracking-wide"
-          >
-            Company / unit
-          </Typography.Text>
-          <Select
-            className="w-full"
-            value={companyId || undefined}
-            onChange={setCompanyId}
-            options={companies.map((c) => ({
-              value: c.id,
-              label: `${c.name} (${c.plant})`,
-            }))}
-          />
-          <Typography.Text
-            type="secondary"
-            className="mt-3 block text-[11px] font-semibold uppercase tracking-wide"
-          >
-            Work site
-          </Typography.Text>
-          <Select
-            className="w-full"
-            value={workSite}
-            onChange={setWorkSite}
-            options={[
-              { value: "office", label: "In office / plant" },
-              { value: "field", label: "Field" },
-            ]}
-          />
+  return (
+    <div className="ap-page">
+      <div className="ap-inner">
+        <div className="ap-header">
+          <div className="ap-header__left">
+            <div className="ap-header__title">
+              <ClockCircleOutlined className="ap-header__icon" />
+              Attendance
+            </div>
+            <div className="ap-header__sub">GPS/location-based punch in and out</div>
+          </div>
+          <div className="ap-header__actions">
+            <Link href="/hrms/reports">
+              <Button icon={<BarChartOutlined />}>Reports</Button>
+            </Link>
+            <Link href="/hrms/employees">
+              <Button icon={<TeamOutlined />}>Employees</Button>
+            </Link>
+          </div>
         </div>
 
-        <Card className="attendance-punch-card attendance-punch-card--in" bordered>
-          <Typography.Text
-            type="secondary"
-            className="text-[11px] font-bold uppercase tracking-wide"
-          >
-            Punch in
-          </Typography.Text>
-          <div className="attendance-punch-time">
-            {punchInTime ? punchInTime.format("HH:mm") : now.format("HH:mm")}
+        {/* Live clock hero */}
+        <div className="ap-clock-hero">
+          <div className="ap-clock-time">{now.format("HH:mm:ss")}</div>
+          <div className="ap-clock-date">{now.format("DD MMM YYYY")}</div>
+          <div className="ap-clock-status-wrap">
+            <Badge status={statusBadge} />
+            <span className="ap-clock-status-text">{statusLabel}</span>
           </div>
-          <Typography.Text type="secondary" className="block text-[13px]">
-            {now.format("DD MMM YYYY")}
-            {punchInTime ? ` · In at ${punchInTime.format("HH:mm")}` : ""}
-          </Typography.Text>
-          <Button
-            type="primary"
-            size="large"
-            block
-            className="attendance-punch-btn attendance-punch-btn--in"
-            icon={<LoginOutlined />}
-            loading={punching === "in"}
-            disabled={!canPunchIn || loading}
-            onClick={() => handlePunch("in")}
-          >
-            Punch in
-          </Button>
-        </Card>
+        </div>
 
-        <Card
-          className="attendance-punch-card attendance-punch-card--out"
-          bordered
-        >
-          <Typography.Text
-            type="secondary"
-            className="text-[11px] font-bold uppercase tracking-wide"
-          >
-            Punch out
-          </Typography.Text>
-          <div className="attendance-punch-time attendance-punch-time--muted">
-            {punchOutTime
-              ? punchOutTime.format("HH:mm")
-              : canPunchOut
-                ? "—"
-                : "Not punched out yet"}
+        {/* Filters */}
+        <div className="ap-filters">
+          <div className="ap-filter-item">
+            <label className="ap-filter-label">Company / Unit</label>
+            <Select
+              className="w-full"
+              value={companyId || undefined}
+              onChange={setCompanyId}
+              options={companies.map((c) => ({
+                value: c.id,
+                label: `${c.name} (${c.plant})`,
+              }))}
+            />
           </div>
-          <Typography.Text type="secondary" className="block text-[13px]">
-            {punchOutTime
-              ? `Out at ${punchOutTime.format("HH:mm")}`
-              : myRow?.status === "In"
-                ? "You are currently punched in"
-                : "Punch in first to enable punch out"}
-          </Typography.Text>
-          <Button
-            type="primary"
-            size="large"
-            block
-            className="attendance-punch-btn attendance-punch-btn--out"
-            icon={<LogoutOutlined />}
-            loading={punching === "out"}
-            disabled={!canPunchOut || loading}
-            onClick={() => handlePunch("out")}
-          >
-            Punch out
-          </Button>
-        </Card>
+          <div className="ap-filter-item">
+            <label className="ap-filter-label">Work Site</label>
+            <Select
+              className="w-full"
+              value={workSite}
+              onChange={setWorkSite}
+              options={[
+                { value: "office", label: "In office / plant" },
+                { value: "field", label: "Field" },
+              ]}
+            />
+          </div>
+        </div>
 
-        <Card size="small" className="attendance-my-info">
-          <div className="flex gap-2">
-            <EnvironmentOutlined className="mt-0.5 text-[#374d95]" />
-            <Typography.Text
-              type="secondary"
-              className="text-[12px] leading-relaxed"
+        {/* Punch timeline — only shown once punched */}
+        {(punchInTime || punchOutTime) && (
+          <div className="ap-timeline">
+            {punchInTime && (
+              <div className="ap-timeline-item ap-timeline-item--in">
+                <CheckCircleFilled className="ap-timeline-icon" />
+                <div>
+                  <div className="ap-timeline-label">Punched in</div>
+                  <div className="ap-timeline-value">
+                    {punchInTime.format("HH:mm")}
+                  </div>
+                </div>
+              </div>
+            )}
+            {punchOutTime && (
+              <div className="ap-timeline-item ap-timeline-item--out">
+                <MinusCircleFilled className="ap-timeline-icon" />
+                <div>
+                  <div className="ap-timeline-label">Punched out</div>
+                  <div className="ap-timeline-value">
+                    {punchOutTime.format("HH:mm")}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Punch action cards */}
+        <div className="ap-punch-grid">
+          <div
+            className={`ap-punch-card ap-punch-card--in${!canPunchIn ? " ap-punch-card--done" : ""}`}
+          >
+            <div className="ap-punch-card__icon">
+              <LoginOutlined />
+            </div>
+            <div className="ap-punch-card__label">Punch In</div>
+            <div className="ap-punch-card__time">
+              {punchInTime ? punchInTime.format("HH:mm") : "—"}
+            </div>
+            <Button
+              type="primary"
+              size="large"
+              block
+              className="ap-punch-btn ap-punch-btn--in"
+              icon={<LoginOutlined />}
+              loading={punching === "in"}
+              disabled={!canPunchIn || loading}
+              onClick={() => handlePunch("in")}
             >
-              <strong>GPS/location-based attendance:</strong> Punch in/out using
-              your phone when you are at{" "}
-              <strong>{selectedCompany?.name ?? "office"}</strong> or an approved
-              location. The system records your location so only on-site punches
-              are accepted. Field staff can mark <strong>Field</strong> when
-              working outside the plant.
-            </Typography.Text>
+              {punchInTime ? "Punched In" : "Punch In"}
+            </Button>
           </div>
-          <div className="mt-3 flex items-center gap-2 text-[12px] text-zinc-500">
-            <ClockCircleOutlined />
-            <span>Today&apos;s status: {myRow?.status ?? "—"}</span>
+
+          <div
+            className={`ap-punch-card ap-punch-card--out${!canPunchOut ? " ap-punch-card--disabled" : ""}`}
+          >
+            <div className="ap-punch-card__icon">
+              <LogoutOutlined />
+            </div>
+            <div className="ap-punch-card__label">Punch Out</div>
+            <div className="ap-punch-card__time">
+              {punchOutTime ? punchOutTime.format("HH:mm") : "—"}
+            </div>
+            <Button
+              type="primary"
+              size="large"
+              block
+              className="ap-punch-btn ap-punch-btn--out"
+              icon={<LogoutOutlined />}
+              loading={punching === "out"}
+              disabled={!canPunchOut || loading}
+              onClick={() => handlePunch("out")}
+            >
+              Punch Out
+            </Button>
           </div>
-        </Card>
+        </div>
+
+        {/* Info strip */}
+        <div className="ap-info">
+          <EnvironmentOutlined className="ap-info__icon" />
+          <p className="ap-info__text">
+            <strong>GPS-verified attendance.</strong> Punch in/out from{" "}
+            <strong>{selectedCompany?.name ?? "your office"}</strong> or an
+            approved site. Field staff should select <strong>Field</strong> when
+            working off-site.
+          </p>
+        </div>
       </div>
     </div>
   );
