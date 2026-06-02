@@ -73,6 +73,7 @@ const DEPT_BREAKDOWN: DeptBreakdownPoint[] = [
   { dept: "Maintenance", presentPct: 90 },
   { dept: "HR", presentPct: 95 },
   { dept: "Sales / Field", presentPct: 82 },
+  { dept: "Field Sales", presentPct: 78 },
 ];
 
 const UNIT_UDAI = "Sudarshan Minerals & Industries (Udaipur — Plant 1)";
@@ -230,6 +231,111 @@ const EMPLOYEES: AttendanceSummaryRow[] = [
     totalOvertime: 0,
   },
   {
+    employeeId: "EMP-F3011",
+    employeeName: "Rohit Sharma",
+    department: "Sales / Field",
+    designation: "Field Representative",
+    locationUnit: UNIT_UDAI,
+    primaryShift: "Field — flexible",
+    totalDays: 20,
+    presentDays: 18,
+    absentDays: 2,
+    lateDays: 3,
+    totalWorkedHours: 136,
+    totalShortfall: 4,
+    totalOvertime: 0,
+  },
+  {
+    employeeId: "EMP-F3012",
+    employeeName: "Neha Gupta",
+    department: "Sales / Field",
+    designation: "Customer Relations Executive",
+    locationUnit: UNIT_UDAI,
+    primaryShift: "Field — flexible",
+    totalDays: 20,
+    presentDays: 19,
+    absentDays: 1,
+    lateDays: 0,
+    totalWorkedHours: 148,
+    totalShortfall: 0,
+    totalOvertime: 0,
+  },
+  {
+    employeeId: "EMP-F3013",
+    employeeName: "Manish Tiwari",
+    department: "Field Sales",
+    designation: "Territory Manager — South Rajasthan",
+    locationUnit: UNIT_MAKRANA,
+    primaryShift: "Field — flexible",
+    totalDays: 20,
+    presentDays: 15,
+    absentDays: 5,
+    lateDays: 2,
+    totalWorkedHours: 118,
+    totalShortfall: 14,
+    totalOvertime: 0,
+  },
+  {
+    employeeId: "EMP-F3014",
+    employeeName: "Kavita Rao",
+    department: "Sales / Field",
+    designation: "Field Surveyor",
+    locationUnit: UNIT_UDAI,
+    primaryShift: "Field — flexible",
+    totalDays: 20,
+    presentDays: 17,
+    absentDays: 3,
+    lateDays: 4,
+    totalWorkedHours: 128,
+    totalShortfall: 8,
+    totalOvertime: 0,
+  },
+  {
+    employeeId: "EMP-F3015",
+    employeeName: "Arjun Malhotra",
+    department: "Field Sales",
+    designation: "Sales Officer — Udaipur",
+    locationUnit: UNIT_UDAI,
+    primaryShift: "Field — flexible",
+    totalDays: 20,
+    presentDays: 14,
+    absentDays: 6,
+    lateDays: 1,
+    totalWorkedHours: 108,
+    totalShortfall: 18,
+    totalOvertime: 0,
+  },
+  {
+    employeeId: "EMP-F3016",
+    employeeName: "Poonam Shukla",
+    department: "Sales / Field",
+    designation: "Field Coordinator",
+    locationUnit: UNIT_MAKRANA,
+    primaryShift: "Field — flexible",
+    totalDays: 20,
+    presentDays: 18,
+    absentDays: 2,
+    lateDays: 2,
+    totalWorkedHours: 138,
+    totalShortfall: 4,
+    totalOvertime: 0,
+  },
+  {
+    employeeId: "EMP-F3017",
+    employeeName: "Vikas Chauhan",
+    department: "Field Sales",
+    designation: "Dealer Visit Executive",
+    locationUnit: UNIT_UDAI,
+    primaryShift: "Field — flexible",
+    totalDays: 20,
+    presentDays: 16,
+    absentDays: 4,
+    lateDays: 5,
+    totalWorkedHours: 122,
+    totalShortfall: 10,
+    totalOvertime: 0,
+  },
+  {
     employeeId: "EMP-2084",
     employeeName: "Deepak Jain",
     department: "Quality",
@@ -299,12 +405,12 @@ export function getAttendanceReportDummy(month?: string) {
   const workingDays = 20;
 
   const kpi: AttendanceReportKpi = {
-    totalEmployees: 156,
-    presentDays: 2839,
-    absentDays: 42,
-    lateDays: 186,
-    totalShortfall: 48.5,
-    totalOvertime: 892,
+    totalEmployees: summary.length,
+    presentDays: summary.reduce((a, s) => a + s.presentDays, 0),
+    absentDays: summary.reduce((a, s) => a + s.absentDays, 0),
+    lateDays: summary.reduce((a, s) => a + s.lateDays, 0),
+    totalShortfall: round1(summary.reduce((a, s) => a + s.totalShortfall, 0)),
+    totalOvertime: Math.round(summary.reduce((a, s) => a + s.totalOvertime, 0)),
   };
 
   const gpsSummary: AttendanceGpsSummary = {
@@ -329,10 +435,43 @@ export function getAttendanceReportDummy(month?: string) {
       "Maintenance",
       "HR",
       "Sales / Field",
+      "Field Sales",
     ],
   };
 }
 
+function round1(n: number) {
+  return Math.round(n * 10) / 10;
+}
+
 export function isAttendanceReportEmpty(summary: AttendanceSummaryRow[]) {
   return summary.length === 0;
+}
+
+/** Live employees exist but no punches recorded for the period */
+export function isAttendanceReportSparse(summary: AttendanceSummaryRow[]) {
+  if (summary.length === 0) return true;
+  return summary.every((row) => row.presentDays === 0);
+}
+
+/** Field attendance report — demo rows + stats when live DB has no field staff */
+export function getFieldAttendanceDummy() {
+  const workingDays = 20;
+  const fieldSummary = EMPLOYEES.filter((e) => /sales|field/i.test(e.department));
+  const fieldDays = fieldSummary.reduce((a, s) => a + s.presentDays, 0);
+  const totalPresent = EMPLOYEES.reduce((a, s) => a + s.presentDays, 0);
+  const inOfficeDays = totalPresent - fieldDays;
+  const totalExpected = EMPLOYEES.length * workingDays || 1;
+
+  return {
+    summary: fieldSummary,
+    officeStats: {
+      inOfficePct: Math.round((inOfficeDays / totalExpected) * 100),
+      fieldPct: Math.round((fieldDays / totalExpected) * 100),
+      inOfficeDays,
+      fieldDays,
+      fieldEmployees: fieldSummary.length,
+      totalEmployees: EMPLOYEES.length,
+    },
+  };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Button } from "antd";
 import { DownloadOutlined, BankOutlined, EnvironmentOutlined } from "@ant-design/icons";
 
@@ -9,10 +9,16 @@ import StatCard from "@/components/common/StatCard";
 import CommonTable, { type CommonTableColumn } from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
 import AttendanceFilterPanel from "@/components/hrms/AttendanceFilterPanel";
+import { getFieldAttendanceDummy } from "@/lib/attendance-report-dummy";
 import { useAttendanceReport, type AttendanceSummaryRow } from "@/hooks/use-attendance-report";
 
 export default function FieldAttendancePage() {
   const r = useAttendanceReport();
+  const fieldDummy = useMemo(() => getFieldAttendanceDummy(), []);
+
+  const usingFieldDummy = r.fieldRows.length === 0;
+  const fieldRows = usingFieldDummy ? fieldDummy.summary : r.fieldRows;
+  const officeStats = usingFieldDummy ? fieldDummy.officeStats : r.officeStats;
 
   useEffect(() => {
     void r.handleApply();
@@ -105,31 +111,31 @@ export default function FieldAttendancePage() {
         <StatCard
           icon={BankOutlined}
           label="In-office attendance"
-          value={`${r.officeStats.inOfficePct}%`}
-          hint={`${r.officeStats.totalEmployees - r.officeStats.fieldEmployees} employees · ${r.officeStats.inOfficeDays} days`}
+          value={`${officeStats.inOfficePct}%`}
+          hint={`${officeStats.totalEmployees - officeStats.fieldEmployees} employees · ${officeStats.inOfficeDays} days`}
           hintTone="positive"
         />
         <StatCard
           icon={EnvironmentOutlined}
           label="Field attendance"
-          value={`${r.officeStats.fieldPct}%`}
-          hint={`${r.officeStats.fieldEmployees} field employees · ${r.officeStats.fieldDays} days`}
+          value={`${officeStats.fieldPct}%`}
+          hint={`${officeStats.fieldEmployees} field employees · ${officeStats.fieldDays} days`}
           hintTone="positive"
         />
       </div>
 
       <ReportSection
         title="Field employee breakdown"
-        meta={`${r.rangeLabel} · field staff only · ${r.fieldRows.length} employees`}
+        meta={`${r.rangeLabel} · field staff only · ${fieldRows.length} employees${usingFieldDummy ? " · demo data" : ""}`}
         footer="Field days = punches marked as Field (outside office). In-office = at plant/office."
         flush
       >
         <CommonTable
           {...tableProps}
           columns={columns}
-          dataSource={r.fieldRows}
+          dataSource={fieldRows}
           rowKey="employeeId"
-          loading={r.loading}
+          loading={r.loading && !usingFieldDummy}
           pagination={{ pageSize: 15, showSizeChanger: true }}
         />
       </ReportSection>

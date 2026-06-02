@@ -4,6 +4,7 @@ import { message } from "antd";
 import {
   getAttendanceReportDummy,
   isAttendanceReportEmpty,
+  isAttendanceReportSparse,
   type AttendanceSummaryRow,
   type AttendanceDailyRow,
   type AttendanceReportKpi,
@@ -106,7 +107,11 @@ export function useAttendanceReport() {
         rows = rows.filter((r) => r.locationUnit === opts.unit);
       }
 
-      if (isAttendanceReportEmpty(rows) || rows.length < 3) {
+      if (
+        isAttendanceReportEmpty(rows) ||
+        rows.length < 3 ||
+        isAttendanceReportSparse(rows)
+      ) {
         applyDummy(opts.range[0].format("YYYY-MM"), opts.employeeId);
         return;
       }
@@ -114,13 +119,19 @@ export function useAttendanceReport() {
       let dailyRows: AttendanceDailyRow[] = json.data.daily ?? [];
       dailyRows = filterDailyByEmployee(dailyRows, opts.employeeId);
 
+      const demo = getAttendanceReportDummy(opts.range[0].format("YYYY-MM"));
+
       setKpi(json.data.kpi);
       setWorkingDays(json.data.workingDays ?? 20);
-      setGpsSummary(json.data.gpsSummary ?? null);
+      setGpsSummary(json.data.gpsSummary ?? demo.gpsSummary);
       setSummary(rows);
       setDaily(dailyRows);
-      setWeeklyTrend(json.data.weeklyTrend ?? []);
-      setDeptBreakdown(json.data.deptBreakdown ?? []);
+      setWeeklyTrend(
+        json.data.weeklyTrend?.length ? json.data.weeklyTrend : demo.weeklyTrend
+      );
+      setDeptBreakdown(
+        json.data.deptBreakdown?.length ? json.data.deptBreakdown : demo.deptBreakdown
+      );
       setUsingDummy(false);
     } catch {
       applyDummy(opts.range[0].format("YYYY-MM"), opts.employeeId);
@@ -235,6 +246,7 @@ export function useAttendanceReport() {
     period, setPeriod,
     departments, units,
     loading,
+    usingDummy,
     kpi, workingDays, gpsSummary, summary, daily, weeklyTrend, deptBreakdown,
     fieldRows, officeStats, unitTable, deptCompliance,
     handleApply, buildCsvUrl,
