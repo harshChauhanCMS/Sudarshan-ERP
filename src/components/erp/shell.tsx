@@ -62,14 +62,25 @@ const NAV = [
     id: "people",
     label: "People",
     items: [
-      { id: "/hrms/employees",   label: "Employees",   icon: "user" },
       {
         id: "people/hr-management",
         label: "HR Management",
         icon: "user",
         items: [
+          { id: "/hrms/employees",  label: "Employees",  icon: "user" },
           { id: "/hrms/attendance", label: "Attendance", icon: "clock" },
           { id: "/hrms/salary",     label: "Salary",     icon: "money" },
+        ],
+      },
+      {
+        id: "people/leave-policy",
+        label: "Leave & Policy",
+        icon: "calendar",
+        items: [
+          { id: "/hrms/leave/record",   label: "Leave record",   icon: "chart" },
+          { id: "/hrms/leave/apply",    label: "Apply leave",    icon: "plus" },
+          { id: "/hrms/leave/approval", label: "Leave approval", icon: "check" },
+          { id: "/hrms/leave/admin",    label: "Leave admin",    icon: "layout" },
         ],
       },
       {
@@ -83,17 +94,6 @@ const NAV = [
           { id: "/hrms/reports/field",       label: "Field Attendance",    icon: "pin" },
           { id: "/hrms/reports/late-early",  label: "Late Coming / Early Going", icon: "clock" },
           { id: "/hrms/payroll",             label: "Payroll",                 icon: "money" },
-        ],
-      },
-      {
-        id: "people/leave-policy",
-        label: "Leave & Policy",
-        icon: "calendar",
-        items: [
-          { id: "/hrms/leave/record",   label: "Leave record",   icon: "chart" },
-          { id: "/hrms/leave/apply",    label: "Apply leave",    icon: "plus" },
-          { id: "/hrms/leave/approval", label: "Leave approval", icon: "check" },
-          { id: "/hrms/leave/admin",    label: "Leave admin",    icon: "layout" },
         ],
       },
     ],
@@ -159,6 +159,8 @@ const Sidebar = ({
       setCollapsedGroups((c) => ({ ...c, "people/hr-reports": false }));
     }
     if (
+      route === "/hrms/employees" ||
+      route?.startsWith("/hrms/employees/") ||
       route === "/hrms/attendance" ||
       route?.startsWith("/hrms/attendance/") ||
       route === "/hrms/salary" ||
@@ -442,7 +444,7 @@ const breadcrumbsFor = (route) => {
     "/field-sales":          ["Sales", "Field Sales"],
     "/production":           ["Operations", "Production"],
     "/dispatch":             ["Operations", "Dispatch & Tracking"],
-    "/hrms/employees":         ["People", "Employees"],
+    "/hrms/employees":         ["People", "HR Management", "Employees"],
     "/hrms/attendance":        ["People", "HR Management", "Attendance"],
     "/hrms/reports":              ["People", "Reports"],
     "/hrms/reports/attendance":   ["People", "Reports", "Attendance Overview"],

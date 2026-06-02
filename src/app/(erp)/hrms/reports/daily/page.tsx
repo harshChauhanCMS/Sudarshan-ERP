@@ -125,16 +125,24 @@ export default function DailyAttendancePage() {
       <AttendanceFilterPanel
         range={r.range} setRange={r.setRange}
         dept={r.dept} setDept={r.setDept}
+        employeeId={r.employeeId}
+        setEmployeeId={r.setEmployeeId}
         unit={r.unit} setUnit={r.setUnit}
         period={r.period} setPeriod={r.setPeriod}
         departments={r.departments} units={r.units}
         loading={r.loading} onApply={r.handleApply}
         showShift={false}
+        showEmployee
+        splitApplyRow
       />
 
       <ReportSection
         title="Daily records"
-        meta={`${r.rangeLabel} · ${r.daily.length} records`}
+        meta={
+          r.employeeId
+            ? `${r.rangeLabel} · ${r.daily.length} records · ${r.employeeId}`
+            : `${r.rangeLabel} · ${r.daily.length} records`
+        }
         flush
       >
         <CommonTable

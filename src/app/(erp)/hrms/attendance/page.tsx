@@ -6,12 +6,11 @@ import {
   LoginOutlined,
   LogoutOutlined,
   EnvironmentOutlined,
-  ClockCircleOutlined,
   CheckCircleFilled,
   MinusCircleFilled,
   FilterOutlined,
 } from "@ant-design/icons";
-import HrmsBackLink from "@/components/hrms/HrmsBackLink";
+import RepHeader from "@/components/hrms/RepHeader";
 import { HRMS_BACK } from "@/lib/hrms-nav";
 import dayjs from "dayjs";
 
@@ -128,168 +127,159 @@ export default function AttendancePunchPage() {
         : "default";
 
   return (
-    <div className="ap-page">
-      <div className="ap-inner">
-        <HrmsBackLink
-          href={HRMS_BACK.dashboard.backHref}
-          label={HRMS_BACK.dashboard.backLabel}
-        />
-        <div className="ap-header">
-          <div className="ap-header__left">
-            <div className="ap-header__title">
-              <ClockCircleOutlined className="ap-header__icon" />
-              Attendance
-            </div>
-            <div className="ap-header__sub">
-              GPS/location-based punch in and out
-            </div>
-          </div>
-        </div>
+    <div className="attendance-reports-page ap-page">
+      <RepHeader
+        backLabel={HRMS_BACK.dashboard.backLabel}
+        backHref={HRMS_BACK.dashboard.backHref}
+        title="Attendance"
+        subtitle="GPS/location-based punch in and out"
+      />
 
-        {/* Live clock hero */}
-        <div className="ap-clock-hero">
-          <div className="ap-clock-time">{now.format("HH:mm:ss")}</div>
-          <div className="ap-clock-date">{now.format("DD MMM YYYY")}</div>
-          <div className="ap-clock-status-wrap">
-            <Badge status={statusBadge} />
-            <span className="ap-clock-status-text">{statusLabel}</span>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="arf-panel ap-filters-panel">
-          <div className="arf-head">
-            <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
-            <span className="arf-head-title">Filters</span>
-          </div>
-          <div className="arf-body">
-            <div className="arf-controls ap-filters-controls">
-              <div className="arf-item">
-                <span className="arf-label">Company / unit</span>
-                <Select
-                  className="w-full"
-                  value={draftCompanyId || undefined}
-                  onChange={setDraftCompanyId}
-                  options={companies.map((c) => ({
-                    value: c.id,
-                    label: `${c.name} (${c.plant})`,
-                  }))}
-                />
-              </div>
-              <div className="arf-item">
-                <span className="arf-label">Work site</span>
-                <Select
-                  className="w-full"
-                  value={draftWorkSite}
-                  onChange={setDraftWorkSite}
-                  options={[
-                    { value: "office", label: "In office / plant" },
-                    { value: "field", label: "Field" },
-                  ]}
-                />
-              </div>
-              <div className="arf-item ap-filters-actions">
-                <Button
-                  type="primary"
-                  icon={<FilterOutlined />}
-                  loading={loading}
-                  onClick={handleApplyFilters}
-                >
-                  Apply filters
-                </Button>
-              </div>
+      <div className="ap-layout">
+        <div className="ap-layout__main">
+          <div className="ap-clock-hero">
+            <div className="ap-clock-time">{now.format("HH:mm:ss")}</div>
+            <div className="ap-clock-date">{now.format("DD MMM YYYY")}</div>
+            <div className="ap-clock-status-wrap">
+              <Badge status={statusBadge} />
+              <span className="ap-clock-status-text">{statusLabel}</span>
             </div>
           </div>
-        </div>
 
-        {/* Punch timeline — only shown once punched */}
-        {(punchInTime || punchOutTime) && (
-          <div className="ap-timeline">
-            {punchInTime && (
-              <div className="ap-timeline-item ap-timeline-item--in">
-                <CheckCircleFilled className="ap-timeline-icon" />
-                <div>
-                  <div className="ap-timeline-label">Punched in</div>
-                  <div className="ap-timeline-value">
-                    {punchInTime.format("HH:mm")}
+          {(punchInTime || punchOutTime) && (
+            <div className="ap-timeline">
+              {punchInTime && (
+                <div className="ap-timeline-item ap-timeline-item--in">
+                  <CheckCircleFilled className="ap-timeline-icon" />
+                  <div>
+                    <div className="ap-timeline-label">Punched in</div>
+                    <div className="ap-timeline-value">
+                      {punchInTime.format("HH:mm")}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-            {punchOutTime && (
-              <div className="ap-timeline-item ap-timeline-item--out">
-                <MinusCircleFilled className="ap-timeline-icon" />
-                <div>
-                  <div className="ap-timeline-label">Punched out</div>
-                  <div className="ap-timeline-value">
-                    {punchOutTime.format("HH:mm")}
+              )}
+              {punchOutTime && (
+                <div className="ap-timeline-item ap-timeline-item--out">
+                  <MinusCircleFilled className="ap-timeline-icon" />
+                  <div>
+                    <div className="ap-timeline-label">Punched out</div>
+                    <div className="ap-timeline-value">
+                      {punchOutTime.format("HH:mm")}
+                    </div>
                   </div>
                 </div>
+              )}
+            </div>
+          )}
+
+          <div className="ap-punch-grid">
+            <div
+              className={`ap-punch-card ap-punch-card--in${!canPunchIn ? " ap-punch-card--done" : ""}`}
+            >
+              <div className="ap-punch-card__icon">
+                <LoginOutlined />
               </div>
-            )}
-          </div>
-        )}
+              <div className="ap-punch-card__label">Punch In</div>
+              <div className="ap-punch-card__time">
+                {punchInTime ? punchInTime.format("HH:mm") : "—"}
+              </div>
+              <Button
+                type="primary"
+                size="large"
+                block
+                className="ap-punch-btn ap-punch-btn--in"
+                icon={<LoginOutlined />}
+                loading={punching === "in"}
+                disabled={!canPunchIn || loading}
+                onClick={() => handlePunch("in")}
+              >
+                {punchInTime ? "Punched In" : "Punch In"}
+              </Button>
+            </div>
 
-        {/* Punch action cards */}
-        <div className="ap-punch-grid">
-          <div
-            className={`ap-punch-card ap-punch-card--in${!canPunchIn ? " ap-punch-card--done" : ""}`}
-          >
-            <div className="ap-punch-card__icon">
-              <LoginOutlined />
-            </div>
-            <div className="ap-punch-card__label">Punch In</div>
-            <div className="ap-punch-card__time">
-              {punchInTime ? punchInTime.format("HH:mm") : "—"}
-            </div>
-            <Button
-              type="primary"
-              size="large"
-              block
-              className="ap-punch-btn ap-punch-btn--in"
-              icon={<LoginOutlined />}
-              loading={punching === "in"}
-              disabled={!canPunchIn || loading}
-              onClick={() => handlePunch("in")}
+            <div
+              className={`ap-punch-card ap-punch-card--out${!canPunchOut ? " ap-punch-card--disabled" : ""}`}
             >
-              {punchInTime ? "Punched In" : "Punch In"}
-            </Button>
-          </div>
-
-          <div
-            className={`ap-punch-card ap-punch-card--out${!canPunchOut ? " ap-punch-card--disabled" : ""}`}
-          >
-            <div className="ap-punch-card__icon">
-              <LogoutOutlined />
+              <div className="ap-punch-card__icon">
+                <LogoutOutlined />
+              </div>
+              <div className="ap-punch-card__label">Punch Out</div>
+              <div className="ap-punch-card__time">
+                {punchOutTime ? punchOutTime.format("HH:mm") : "—"}
+              </div>
+              <Button
+                type="primary"
+                size="large"
+                block
+                className="ap-punch-btn ap-punch-btn--out"
+                icon={<LogoutOutlined />}
+                loading={punching === "out"}
+                disabled={!canPunchOut || loading}
+                onClick={() => handlePunch("out")}
+              >
+                Punch Out
+              </Button>
             </div>
-            <div className="ap-punch-card__label">Punch Out</div>
-            <div className="ap-punch-card__time">
-              {punchOutTime ? punchOutTime.format("HH:mm") : "—"}
-            </div>
-            <Button
-              type="primary"
-              size="large"
-              block
-              className="ap-punch-btn ap-punch-btn--out"
-              icon={<LogoutOutlined />}
-              loading={punching === "out"}
-              disabled={!canPunchOut || loading}
-              onClick={() => handlePunch("out")}
-            >
-              Punch Out
-            </Button>
           </div>
         </div>
 
-        {/* Info strip */}
-        <div className="ap-info">
-          <EnvironmentOutlined className="ap-info__icon" />
-          <p className="ap-info__text">
-            <strong>GPS-verified attendance.</strong> Punch in/out from{" "}
-            <strong>{selectedCompany?.name ?? "your office"}</strong> or an
-            approved site. Field staff should select <strong>Field</strong> when
-            working off-site.
-          </p>
+        <div className="ap-layout__side">
+          <div className="arf-panel ap-filters-panel">
+            <div className="arf-head">
+              <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
+              <span className="arf-head-title">Filters</span>
+            </div>
+            <div className="arf-body">
+              <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
+                <div className="arf-item">
+                  <span className="arf-label">Company / unit</span>
+                  <Select
+                    className="w-full"
+                    value={draftCompanyId || undefined}
+                    onChange={setDraftCompanyId}
+                    options={companies.map((c) => ({
+                      value: c.id,
+                      label: `${c.name} (${c.plant})`,
+                    }))}
+                  />
+                </div>
+                <div className="arf-item">
+                  <span className="arf-label">Work site</span>
+                  <Select
+                    className="w-full"
+                    value={draftWorkSite}
+                    onChange={setDraftWorkSite}
+                    options={[
+                      { value: "office", label: "In office / plant" },
+                      { value: "field", label: "Field" },
+                    ]}
+                  />
+                </div>
+                <div className="ap-filters-row-break" aria-hidden="true" />
+                <div className="arf-item ap-filters-actions">
+                  <Button
+                    type="primary"
+                    icon={<FilterOutlined />}
+                    loading={loading}
+                    onClick={handleApplyFilters}
+                  >
+                    Apply filters
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="ap-info">
+            <EnvironmentOutlined className="ap-info__icon" />
+            <p className="ap-info__text">
+              <strong>GPS-verified attendance.</strong> Punch in/out from{" "}
+              <strong>{selectedCompany?.name ?? "your office"}</strong> or an
+              approved site. Field staff should select <strong>Field</strong>{" "}
+              when working off-site.
+            </p>
+          </div>
         </div>
       </div>
     </div>
