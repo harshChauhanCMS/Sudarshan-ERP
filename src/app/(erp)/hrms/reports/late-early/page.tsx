@@ -17,7 +17,6 @@ import {
   BankOutlined,
   WarningOutlined,
   CheckCircleOutlined,
-  UnorderedListOutlined,
   UserOutlined,
   LineChartOutlined,
 } from "@ant-design/icons";
@@ -119,24 +118,6 @@ function ReportSection({
         {children}
       </div>
     </section>
-  );
-}
-
-function PatternBars({ values }: { values: number[] }) {
-  const max = Math.max(...values, 1);
-  return (
-    <div className="flex items-end gap-0.5 h-5" title="Weekly late pattern">
-      {values.map((v, i) => (
-        <div
-          key={i}
-          className="w-1.5 rounded-sm"
-          style={{
-            height: `${Math.max(20, (v / max) * 100)}%`,
-            background: v >= 3 ? "#dc2626" : v >= 1 ? "#d97706" : "#e4e4e7",
-          }}
-        />
-      ))}
-    </div>
   );
 }
 
@@ -258,12 +239,6 @@ export default function LateEarlyReportPage() {
           <span className="text-zinc-400">—</span>
         ),
     },
-    {
-      title: "Pattern",
-      key: "pattern",
-      width: 90,
-      render: (_, r) => <PatternBars values={r.pattern} />,
-    },
   ];
 
   const deptColumns: CommonTableColumn<LateEarlyDeptRow>[] = [
@@ -361,25 +336,50 @@ export default function LateEarlyReportPage() {
 
   return (
     <div className="attendance-reports-page">
-      <div className="rep-demo-banner">
-        <UnorderedListOutlined />
-        Sample data — connect live punch records to replace these figures.
-      </div>
-
       <RepHeader
         title="Late Coming / Early Going"
         subtitle="Discipline view — late punches & early exits by employee, dept, shift & unit"
         actions={<Button icon={<DownloadOutlined />}>Export Excel</Button>}
       />
 
-      <div className="arf-panel">
+      <div className="attendance-kpi-grid attendance-kpi-grid--4">
+        <StatCard
+          icon={ClockCircleOutlined}
+          label="Late punches"
+          value={String(kpi.latePunches)}
+          hint={`Avg ${kpi.lateAvgMins} min · ${kpi.lateEmployeesAffected} employees affected`}
+          hintTone="warning"
+        />
+        <StatCard
+          icon={WarningOutlined}
+          label="Early going incidents"
+          value={String(kpi.earlyIncidents)}
+          hint={`Avg ${kpi.earlyAvgMins} min · ${kpi.earlyEmployees} employees`}
+        />
+        <StatCard
+          icon={TeamOutlined}
+          label="Repeat offenders"
+          value={String(kpi.repeatOffenders)}
+          hint={`Includes ${kpi.criticalOffenders} critical (≥10 events)`}
+          hintTone="warning"
+        />
+        <StatCard
+          icon={CheckCircleOutlined}
+          label="100% on-time"
+          value={String(kpi.onTimeCount)}
+          hint={`Out of ${kpi.totalEmployees} total employees`}
+          hintTone="positive"
+        />
+      </div>
+
+      <div className="arf-panel ap-filters-panel">
         <div className="arf-head">
           <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
           <span className="arf-head-title">Filters</span>
         </div>
 
         <div className="arf-body">
-        <div className="arf-controls">
+        <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
           <div className="arf-item">
             <span className="arf-label">Company / unit</span>
             <Select
@@ -442,6 +442,7 @@ export default function LateEarlyReportPage() {
               allowClear={false}
             />
           </div>
+          <div className="ap-filters-row-break" aria-hidden="true" />
           <div className="arf-item">
             <span className="arf-label">To</span>
             <DatePicker
@@ -460,17 +461,17 @@ export default function LateEarlyReportPage() {
               onChange={(v) => setMinMinutes(v ?? 0)}
             />
           </div>
+          <div className="ap-filters-spacer" aria-hidden="true" />
+          <div className="arf-item ap-filters-actions">
+            <Button
+              type="primary"
+              icon={<FilterOutlined />}
+              onClick={() => setApplied({ dept, shift, minMinutes })}
+            >
+              Apply filters
+            </Button>
+          </div>
         </div>
-        </div>
-
-        <div className="arf-footer">
-          <Button
-            type="primary"
-            icon={<FilterOutlined />}
-            onClick={() => setApplied({ dept, shift, minMinutes })}
-          >
-            Apply filters
-          </Button>
         </div>
       </div>
 
@@ -484,36 +485,6 @@ export default function LateEarlyReportPage() {
           />
         </div>
       </ReportSection>
-
-      <div className="attendance-kpi-grid attendance-kpi-grid--4">
-        <StatCard
-          icon={ClockCircleOutlined}
-          label="Late punches"
-          value={String(kpi.latePunches)}
-          hint={`Avg ${kpi.lateAvgMins} min · ${kpi.lateEmployeesAffected} employees affected`}
-          hintTone="warning"
-        />
-        <StatCard
-          icon={WarningOutlined}
-          label="Early going incidents"
-          value={String(kpi.earlyIncidents)}
-          hint={`Avg ${kpi.earlyAvgMins} min · ${kpi.earlyEmployees} employees`}
-        />
-        <StatCard
-          icon={TeamOutlined}
-          label="Repeat offenders"
-          value={String(kpi.repeatOffenders)}
-          hint={`Includes ${kpi.criticalOffenders} critical (≥10 events)`}
-          hintTone="warning"
-        />
-        <StatCard
-          icon={CheckCircleOutlined}
-          label="100% on-time"
-          value={String(kpi.onTimeCount)}
-          hint={`Out of ${kpi.totalEmployees} total employees`}
-          hintTone="positive"
-        />
-      </div>
 
       {(groupBy === "employee" || groupBy === "trend") && (
         <ReportSection

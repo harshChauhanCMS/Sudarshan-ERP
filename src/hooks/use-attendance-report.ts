@@ -220,7 +220,7 @@ export function useAttendanceReport() {
     unit, setUnit,
     period, setPeriod,
     departments, units,
-    loading, usingDummy,
+    loading,
     kpi, workingDays, gpsSummary, summary, daily, weeklyTrend, deptBreakdown,
     fieldRows, officeStats, unitTable, deptCompliance,
     handleApply, buildCsvUrl,

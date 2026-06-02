@@ -7,7 +7,6 @@ import {
   MinusCircleOutlined,
   WalletOutlined,
   TableOutlined,
-  CalendarOutlined,
   ArrowRightOutlined,
 } from "@ant-design/icons";
 
@@ -21,13 +20,13 @@ import {
 } from "@/lib/payroll-sheet-dummy";
 
 const FEATURE_CARDS = [
-  {
-    href: "/hrms/salary/monthly",
-    title: "Monthly Salary",
-    description:
-      "Generate, approve and export monthly salary sheets from attendance data.",
-    icon: CalendarOutlined,
-  },
+  // {
+  //   href: "/hrms/salary/monthly",
+  //   title: "Monthly Salary",
+  //   description:
+  //     "Generate, approve and export monthly salary sheets from attendance data.",
+  //   icon: CalendarOutlined,
+  // },
   {
     href: "/hrms/salary/bulk",
     title: "Payroll Sheet — Bulk View",

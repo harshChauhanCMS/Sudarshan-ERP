@@ -67,10 +67,21 @@ const NAV = [
         label: "HR Management",
         icon: "user",
         items: [
-          { id: "/hrms/attendance",    label: "Attendance",    icon: "clock" },
-          { id: "/hrms/reports",       label: "Reports",       icon: "chart" },
-          { id: "/hrms/reports/late-early", label: "Late / Early going", icon: "clock" },
-          { id: "/hrms/salary",        label: "Salary",        icon: "money" },
+          { id: "/hrms/attendance", label: "Attendance", icon: "clock" },
+          { id: "/hrms/salary",     label: "Salary",     icon: "money" },
+        ],
+      },
+      {
+        id: "people/hr-reports",
+        label: "Reports",
+        icon: "chart",
+        items: [
+          { id: "/hrms/reports/attendance", label: "Attendance Overview", icon: "chart" },
+          { id: "/hrms/reports/employee",   label: "Employee Report",     icon: "user" },
+          { id: "/hrms/reports/daily",       label: "Daily Attendance",    icon: "calendar" },
+          { id: "/hrms/reports/field",       label: "Field Attendance",    icon: "pin" },
+          { id: "/hrms/reports/late-early",  label: "Late Coming / Early Going", icon: "clock" },
+          { id: "/hrms/payroll",             label: "Payroll",                 icon: "money" },
         ],
       },
       {
@@ -84,7 +95,6 @@ const NAV = [
           { id: "/hrms/leave/admin",    label: "Leave admin",    icon: "layout" },
         ],
       },
-      { id: "/hrms/payroll",     label: "Payroll",     icon: "money" },
     ],
   },
   {
@@ -97,6 +107,21 @@ const NAV = [
     ],
   },
 ];
+
+/** Collect nested nav group ids (items with sub-items). */
+const collectNavGroupIds = (items) => {
+  const ids = [];
+  for (const item of items) {
+    if (Array.isArray(item?.items)) {
+      ids.push(item.id);
+      ids.push(...collectNavGroupIds(item.items));
+    }
+  }
+  return ids;
+};
+
+const ALL_SECTION_IDS = NAV.map((section) => section.id);
+const ALL_GROUP_IDS = NAV.flatMap((section) => collectNavGroupIds(section.items));
 
 const Sidebar = ({
   route,
@@ -115,8 +140,23 @@ const Sidebar = ({
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const toggle = (id) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
   const toggleGroup = (id) => setCollapsedGroups((c) => ({ ...c, [id]: !c[id] }));
+  const collapseAll = () => {
+    setCollapsed(Object.fromEntries(ALL_SECTION_IDS.map((id) => [id, true])));
+    setCollapsedGroups(Object.fromEntries(ALL_GROUP_IDS.map((id) => [id, true])));
+  };
 
   const isResizing = useRef(false);
+
+  useEffect(() => {
+    if (
+      route === "/hrms/reports" ||
+      route?.startsWith("/hrms/reports/") ||
+      route === "/hrms/payroll" ||
+      route?.startsWith("/hrms/payroll/")
+    ) {
+      setCollapsedGroups((c) => ({ ...c, "people/hr-reports": false }));
+    }
+  }, [route]);
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -153,6 +193,71 @@ const Sidebar = ({
   const goTo = (path) => {
     navigate(path);
     onMobileClose?.();
+  };
+
+  const navItemIsActive = (item) => {
+    if (!item) return false;
+    if (Array.isArray(item.items)) {
+      if (
+        item.id === "people/hr-reports" &&
+        (route === "/hrms/reports" || route?.startsWith("/hrms/reports/"))
+      ) {
+        return true;
+      }
+      return item.items.some((child) => navItemIsActive(child));
+    }
+    return route === item.id || (route && route.startsWith(`${item.id}/`));
+  };
+
+  const renderNavItem = (item, depth = 0) => {
+    const isGroup = item && typeof item === "object" && Array.isArray(item.items);
+    if (isGroup) {
+      const groupActive = navItemIsActive(item);
+      const isGroupCollapsed = !!collapsedGroups[item.id];
+      return (
+        <div
+          key={item.id}
+          className={`sb-item-group ${groupActive ? "active" : ""} ${depth > 0 ? "sb-item-group--nested" : ""}`}
+        >
+          <div
+            className={`sb-item ${depth > 0 ? "sub" : ""} ${groupActive ? "active" : ""}`}
+            onClick={() => toggleGroup(item.id)}
+          >
+            <span className="sb-item-icon">
+              <Icon name={item.icon || "user"} size={15} />
+            </span>
+            <span className="sb-item-label">{item.label}</span>
+            <span className="sb-item-right">
+              <Icon name="chevDown" size={11} className={`chev ${isGroupCollapsed ? "" : "open"}`} />
+            </span>
+          </div>
+          {!isGroupCollapsed && (
+            <div className="sb-subitems">
+              {item.items.map((child) => renderNavItem(child, depth + 1))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const isActive = navItemIsActive(item);
+    const badges = badgeMap[item.id];
+    return (
+      <div
+        key={item.id}
+        className={`sb-item ${depth > 0 ? "sub" : ""} ${isActive ? "active" : ""}`}
+        onClick={() => goTo(item.id)}
+      >
+        <span className="sb-item-icon">
+          <Icon name={item.icon} size={15} />
+        </span>
+        <span className="sb-item-label">{item.label}</span>
+        {badges?.badge && <span className="sb-item-badge">{badges.badge}</span>}
+        {badges?.badgeAlert && (
+          <span className="sb-item-badge alert">{badges.badgeAlert}</span>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -226,6 +331,18 @@ const Sidebar = ({
         </div>
       </div>
 
+      <div className="sb-nav-toolbar">
+        <button
+          type="button"
+          className="sb-collapse-all-btn"
+          onClick={collapseAll}
+          title="Collapse all sections"
+          aria-label="Collapse all sections"
+        >
+          <Icon name="chevUp" size={13} />
+        </button>
+      </div>
+
       <nav className="sb-nav">
         {NAV.map((section) => (
           <div key={section.id} className={`sb-section ${collapsed[section.id] ? "collapsed" : ""}`}>
@@ -234,78 +351,7 @@ const Sidebar = ({
               <Icon name="chevDown" size={11} className="chev" />
             </div>
             <div className="sb-section-items">
-              {section.items.map((item) => {
-                const isGroup = item && typeof item === "object" && Array.isArray(item.items);
-                if (isGroup) {
-                  const groupHasActiveChild = item.items.some(
-                    (child) =>
-                      route === child.id ||
-                      route?.startsWith(`${child.id}/`)
-                  );
-                  const isGroupCollapsed = !!collapsedGroups[item.id];
-                  return (
-                    <div key={item.id} className={`sb-item-group ${groupHasActiveChild ? "active" : ""}`}>
-                      <div
-                        className={`sb-item ${groupHasActiveChild ? "active" : ""}`}
-                        onClick={() => toggleGroup(item.id)}
-                      >
-                        <span className="sb-item-icon">
-                          <Icon name={item.icon || "user"} size={15} />
-                        </span>
-                        <span className="sb-item-label">{item.label}</span>
-                        <span className="sb-item-right">
-                          <Icon name="chevDown" size={11} className={`chev ${isGroupCollapsed ? "" : "open"}`} />
-                        </span>
-                      </div>
-                      {!isGroupCollapsed && (
-                        <div className="sb-subitems">
-                          {item.items.map((child) => {
-                            const isActive =
-                              route === child.id ||
-                              route?.startsWith(`${child.id}/`);
-                            const badges = badgeMap[child.id];
-                            return (
-                              <div
-                                key={child.id}
-                                className={`sb-item sub ${isActive ? "active" : ""}`}
-                                onClick={() => goTo(child.id)}
-                              >
-                                <span className="sb-item-icon">
-                                  <Icon name={child.icon} size={15} />
-                                </span>
-                                <span className="sb-item-label">{child.label}</span>
-                                {badges?.badge && <span className="sb-item-badge">{badges.badge}</span>}
-                                {badges?.badgeAlert && (
-                                  <span className="sb-item-badge alert">{badges.badgeAlert}</span>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-
-                const isActive = route === item.id || (route && route.startsWith(item.id));
-                const badges = badgeMap[item.id];
-                return (
-                  <div
-                    key={item.id}
-                    className={`sb-item ${isActive ? "active" : ""}`}
-                    onClick={() => goTo(item.id)}
-                  >
-                    <span className="sb-item-icon">
-                      <Icon name={item.icon} size={15} />
-                    </span>
-                    <span className="sb-item-label">{item.label}</span>
-                    {badges?.badge && <span className="sb-item-badge">{badges.badge}</span>}
-                    {badges?.badgeAlert && (
-                      <span className="sb-item-badge alert">{badges.badgeAlert}</span>
-                    )}
-                  </div>
-                );
-              })}
+              {section.items.map((item) => renderNavItem(item))}
             </div>
           </div>
         ))}
@@ -348,8 +394,12 @@ const breadcrumbsFor = (route) => {
     "/dispatch":             ["Operations", "Dispatch & Tracking"],
     "/hrms/employees":         ["People", "Employees"],
     "/hrms/attendance":        ["People", "HR Management", "Attendance"],
-    "/hrms/reports":           ["People", "HR Management", "Reports"],
-    "/hrms/reports/late-early": ["People", "HR Management", "Late / Early going"],
+    "/hrms/reports":              ["People", "Reports"],
+    "/hrms/reports/attendance":   ["People", "Reports", "Attendance Overview"],
+    "/hrms/reports/employee":     ["People", "Reports", "Employee Report"],
+    "/hrms/reports/daily":        ["People", "Reports", "Daily Attendance"],
+    "/hrms/reports/field":        ["People", "Reports", "Field Attendance"],
+    "/hrms/reports/late-early":   ["People", "Reports", "Late Coming / Early Going"],
     "/hrms/leave":              ["People", "Leave & Policy", "Leave record"],
     "/hrms/leave/record":       ["People", "Leave & Policy", "Leave record"],
     "/hrms/leave/apply":        ["People", "Leave & Policy", "Apply leave"],
@@ -361,7 +411,7 @@ const breadcrumbsFor = (route) => {
     "/hrms/salary/monthly":    ["People", "HR Management", "Monthly salary"],
     "/hrms/salary/bulk":       ["People", "HR Management", "Payroll bulk view"],
     "/hrms/salary/daily-wage": ["People", "HR Management", "Daily wage payroll"],
-    "/hrms/payroll":           ["People", "Payroll"],
+    "/hrms/payroll":           ["People", "Reports", "Payroll"],
     "/reports":              ["System", "Reports"],
     "/users":                ["System", "User Management"],
     "/design-system":        ["System", "Design System"],
