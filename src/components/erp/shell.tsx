@@ -1,6 +1,5 @@
 // @ts-nocheck
-'use client';
-
+"use client";
 
 import React, { useState, useEffect, useRef } from "react";
 import { isGroupBrandRoute } from "@/lib/group-brand-routes";
@@ -10,17 +9,16 @@ import { Icon } from "./icons";
    SIDEBAR + TOPBAR
    ============================================================ */
 
-
 const NAV = [
   {
     id: "dashboards",
     label: "Dashboards",
     items: [
-      { id: "/dashboard/master",     label: "Master",      icon: "master" },
-      { id: "/dashboard/admin",      label: "Admin",       icon: "shield" },
-      { id: "/dashboard/owner",      label: "Owner",       icon: "crown" },
-      { id: "/dashboard/production", label: "Production",  icon: "factory" },
-      { id: "/dashboard/dispatch",   label: "Dispatch",    icon: "truck" },
+      { id: "/dashboard/master", label: "Master", icon: "master" },
+      { id: "/dashboard/admin", label: "Admin", icon: "shield" },
+      { id: "/dashboard/owner", label: "Owner", icon: "crown" },
+      { id: "/dashboard/production", label: "Production", icon: "factory" },
+      { id: "/dashboard/dispatch", label: "Dispatch", icon: "truck" },
     ],
   },
   {
@@ -28,34 +26,34 @@ const NAV = [
     label: "Inventory",
     items: [
       { id: "/inventory/raw-material", label: "Raw Material", icon: "box" },
-      { id: "/inventory/packaging",    label: "Packaging",    icon: "package" },
-      { id: "/inventory/spare-parts",  label: "Spare Parts",  icon: "wrench" },
+      { id: "/inventory/packaging", label: "Packaging", icon: "package" },
+      { id: "/inventory/spare-parts", label: "Spare Parts", icon: "wrench" },
     ],
   },
   {
     id: "procurement",
     label: "Procurement",
     items: [
-      { id: "/procurement/vendors",   label: "Vendors",          icon: "users" },
-      { id: "/procurement/po",        label: "Purchase Orders",  icon: "cart" },
-      { id: "/procurement/invoices",  label: "Invoice Verify",   icon: "invoice" },
+      { id: "/procurement/vendors", label: "Vendors", icon: "users" },
+      { id: "/procurement/po", label: "Purchase Orders", icon: "cart" },
+      { id: "/procurement/invoices", label: "Invoice Verify", icon: "invoice" },
     ],
   },
   {
     id: "sales",
     label: "Sales & Orders",
     items: [
-      { id: "/customers",             label: "Customers",        icon: "users" },
-      { id: "/orders",                label: "Customer Orders",  icon: "ticket" },
-      { id: "/field-sales",           label: "Field Sales",      icon: "pin" },
+      { id: "/customers", label: "Customers", icon: "users" },
+      { id: "/orders", label: "Customer Orders", icon: "ticket" },
+      { id: "/field-sales", label: "Field Sales", icon: "pin" },
     ],
   },
   {
     id: "ops",
     label: "Operations",
     items: [
-      { id: "/production",            label: "Production",       icon: "factory" },
-      { id: "/dispatch",              label: "Dispatch & Track", icon: "truck" },
+      { id: "/production", label: "Production", icon: "factory" },
+      { id: "/dispatch", label: "Dispatch & Track", icon: "truck" },
     ],
   },
   {
@@ -67,9 +65,9 @@ const NAV = [
         label: "HR Management",
         icon: "user",
         items: [
-          { id: "/hrms/employees",  label: "Employees",  icon: "user" },
+          { id: "/hrms/employees", label: "Employees", icon: "user" },
           { id: "/hrms/attendance", label: "Attendance", icon: "clock" },
-          { id: "/hrms/salary",     label: "Salary",     icon: "money" },
+          { id: "/hrms/salary", label: "Salary", icon: "money" },
         ],
       },
       {
@@ -77,10 +75,14 @@ const NAV = [
         label: "Leave & Policy",
         icon: "calendar",
         items: [
-          { id: "/hrms/leave/record",   label: "Leave record",   icon: "chart" },
-          { id: "/hrms/leave/apply",    label: "Apply leave",    icon: "plus" },
-          { id: "/hrms/leave/approval", label: "Leave approval", icon: "check" },
-          { id: "/hrms/leave/admin",    label: "Leave admin",    icon: "layout" },
+          { id: "/hrms/leave/record", label: "Leave record", icon: "chart" },
+          { id: "/hrms/leave/apply", label: "Apply leave", icon: "plus" },
+          {
+            id: "/hrms/leave/approval",
+            label: "Leave approval",
+            icon: "check",
+          },
+          { id: "/hrms/leave/admin", label: "Leave admin", icon: "layout" },
         ],
       },
       {
@@ -88,12 +90,28 @@ const NAV = [
         label: "Reports",
         icon: "chart",
         items: [
-          { id: "/hrms/reports/attendance", label: "Attendance Overview", icon: "chart" },
-          { id: "/hrms/reports/employee",   label: "Employee Report",     icon: "user" },
-          { id: "/hrms/reports/daily",       label: "Daily Attendance",    icon: "calendar" },
-          { id: "/hrms/reports/field",       label: "Field Attendance",    icon: "pin" },
-          { id: "/hrms/reports/late-early",  label: "Late Coming / Early Going", icon: "clock" },
-          { id: "/hrms/payroll",             label: "Payroll",                 icon: "money" },
+          {
+            id: "/hrms/reports/attendance",
+            label: "Attendance Overview",
+            icon: "chart",
+          },
+          {
+            id: "/hrms/reports/employee",
+            label: "Employee Report",
+            icon: "user",
+          },
+          {
+            id: "/hrms/reports/daily",
+            label: "Daily Attendance",
+            icon: "calendar",
+          },
+          { id: "/hrms/reports/field", label: "Field Attendance", icon: "pin" },
+          {
+            id: "/hrms/reports/late-early",
+            label: "Late Coming / Early Going",
+            icon: "clock",
+          },
+          { id: "/hrms/payroll", label: "Payroll", icon: "money" },
         ],
       },
     ],
@@ -102,9 +120,8 @@ const NAV = [
     id: "system",
     label: "System",
     items: [
-      { id: "/reports",        label: "Reports",          icon: "chart" },
-      { id: "/users",          label: "User Management",  icon: "shield" },
-      { id: "/design-system",  label: "Design System",    icon: "layout" },
+      { id: "/reports", label: "Reports", icon: "chart" },
+      { id: "/users", label: "User Management", icon: "shield" },
     ],
   },
 ];
@@ -122,7 +139,9 @@ const collectNavGroupIds = (items) => {
 };
 
 const ALL_SECTION_IDS = NAV.map((section) => section.id);
-const ALL_GROUP_IDS = NAV.flatMap((section) => collectNavGroupIds(section.items));
+const ALL_GROUP_IDS = NAV.flatMap((section) =>
+  collectNavGroupIds(section.items),
+);
 
 const Sidebar = ({
   route,
@@ -141,10 +160,13 @@ const Sidebar = ({
   const [collapsed, setCollapsed] = useState({});
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const toggle = (id) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
-  const toggleGroup = (id) => setCollapsedGroups((c) => ({ ...c, [id]: !c[id] }));
+  const toggleGroup = (id) =>
+    setCollapsedGroups((c) => ({ ...c, [id]: !c[id] }));
   const collapseAll = () => {
     setCollapsed(Object.fromEntries(ALL_SECTION_IDS.map((id) => [id, true])));
-    setCollapsedGroups(Object.fromEntries(ALL_GROUP_IDS.map((id) => [id, true])));
+    setCollapsedGroups(
+      Object.fromEntries(ALL_GROUP_IDS.map((id) => [id, true])),
+    );
   };
 
   const isResizing = useRef(false);
@@ -224,7 +246,8 @@ const Sidebar = ({
   const showGroupBrand = companies.length >= 2 && isGroupBrandRoute(route);
 
   const renderNavItem = (item, depth = 0) => {
-    const isGroup = item && typeof item === "object" && Array.isArray(item.items);
+    const isGroup =
+      item && typeof item === "object" && Array.isArray(item.items);
     if (isGroup) {
       const groupActive = navItemIsActive(item);
       const isGroupCollapsed = !!collapsedGroups[item.id];
@@ -245,7 +268,11 @@ const Sidebar = ({
             </span>
             <span className="sb-item-label">{item.label}</span>
             <span className="sb-item-right">
-              <Icon name="chevDown" size={11} className={`chev ${isGroupCollapsed ? "" : "open"}`} />
+              <Icon
+                name="chevDown"
+                size={11}
+                className={`chev ${isGroupCollapsed ? "" : "open"}`}
+              />
             </span>
           </div>
           {!isGroupCollapsed && (
@@ -281,12 +308,14 @@ const Sidebar = ({
   };
 
   return (
-    <aside className={`sidebar ${isCollapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}>
+    <aside
+      className={`sidebar ${isCollapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}
+    >
       {/* Resizer Handle */}
       {!isCollapsed && (
-        <div 
-          className="sidebar-resizer" 
-          onMouseDown={handleMouseDown} 
+        <div
+          className="sidebar-resizer"
+          onMouseDown={handleMouseDown}
           title="Drag to resize"
         />
       )}
@@ -308,7 +337,9 @@ const Sidebar = ({
             <div className="sb-brand-mark sec">M</div>
           </div>
         ) : (
-          <div className={`sb-brand-mark ${company.mark === "gold" ? "sec" : ""}`}>
+          <div
+            className={`sb-brand-mark ${company.mark === "gold" ? "sec" : ""}`}
+          >
             {company.mark === "gold" ? "M" : "S"}
           </div>
         )}
@@ -332,7 +363,10 @@ const Sidebar = ({
             <div className="sb-brand-name">{company.short || company.name}</div>
           )}
           <div className="sb-brand-sub">
-            <span className="dot success" style={{ width: 5, height: 5 }}></span>
+            <span
+              className="dot success"
+              style={{ width: 5, height: 5 }}
+            ></span>
             {company.plant}
           </div>
         </div>
@@ -341,25 +375,25 @@ const Sidebar = ({
         </div>
       </div>
       {/* Collapse Toggle — desktop only */}
-      <button 
+      <button
         className="sb-collapse-toggle"
-        onClick={() => setIsCollapsed(!isCollapsed)} 
+        onClick={() => setIsCollapsed(!isCollapsed)}
         title="Toggle Sidebar"
-        style={{ 
+        style={{
           position: "absolute",
           right: -12,
           top: 24,
           zIndex: 110,
-          background: "var(--bg-elev)", 
-          border: "1px solid var(--border)", 
-          borderRadius: "50%", 
-          width: 24, 
-          height: 24, 
-          display: "grid", 
+          background: "var(--bg-elev)",
+          border: "1px solid var(--border)",
+          borderRadius: "50%",
+          width: 24,
+          height: 24,
+          display: "grid",
           placeItems: "center",
           cursor: "pointer",
           color: "var(--fg)",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
         }}
       >
         <Icon name={isCollapsed ? "chevRight" : "chevLeft"} size={14} />
@@ -379,7 +413,10 @@ const Sidebar = ({
         <div className="sb-search-box">
           <Icon name="search" size={13} />
           <span>Search…</span>
-          <div className="kbd-group" style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
+          <div
+            className="kbd-group"
+            style={{ marginLeft: "auto", display: "flex", gap: 2 }}
+          >
             <span className="kbd">⌘</span>
             <span className="kbd">K</span>
           </div>
@@ -397,8 +434,14 @@ const Sidebar = ({
 
       <nav className="sb-nav">
         {NAV.map((section) => (
-          <div key={section.id} className={`sb-section ${collapsed[section.id] ? "collapsed" : ""}`}>
-            <div className="sb-section-label" onClick={() => toggle(section.id)}>
+          <div
+            key={section.id}
+            className={`sb-section ${collapsed[section.id] ? "collapsed" : ""}`}
+          >
+            <div
+              className="sb-section-label"
+              onClick={() => toggle(section.id)}
+            >
               <span>{section.label}</span>
               <Icon name="chevDown" size={11} className="chev" />
             </div>
@@ -428,50 +471,66 @@ const Sidebar = ({
    ============================================================ */
 const breadcrumbsFor = (route) => {
   const map = {
-    "/dashboard/master":     ["Dashboards", "Master"],
-    "/dashboard/admin":      ["Dashboards", "Admin"],
-    "/dashboard/owner":      ["Dashboards", "Owner"],
+    "/dashboard/master": ["Dashboards", "Master"],
+    "/dashboard/admin": ["Dashboards", "Admin"],
+    "/dashboard/owner": ["Dashboards", "Owner"],
     "/dashboard/production": ["Dashboards", "Production"],
-    "/dashboard/dispatch":   ["Dashboards", "Dispatch"],
-    "/inventory/raw-material":["Inventory", "Raw Material"],
-    "/inventory/packaging":  ["Inventory", "Packaging"],
-    "/inventory/spare-parts":["Inventory", "Spare Parts"],
-    "/procurement/vendors":  ["Procurement", "Vendors"],
-    "/procurement/po":       ["Procurement", "Purchase Orders"],
+    "/dashboard/dispatch": ["Dashboards", "Dispatch"],
+    "/inventory/raw-material": ["Inventory", "Raw Material"],
+    "/inventory/packaging": ["Inventory", "Packaging"],
+    "/inventory/spare-parts": ["Inventory", "Spare Parts"],
+    "/procurement/vendors": ["Procurement", "Vendors"],
+    "/procurement/po": ["Procurement", "Purchase Orders"],
     "/procurement/invoices": ["Procurement", "Invoice Verification"],
-    "/customers":            ["Sales", "Customers"],
-    "/orders":               ["Sales", "Orders"],
-    "/field-sales":          ["Sales", "Field Sales"],
-    "/production":           ["Operations", "Production"],
-    "/dispatch":             ["Operations", "Dispatch & Tracking"],
-    "/hrms/employees":         ["People", "HR Management", "Employees"],
-    "/hrms/attendance":        ["People", "HR Management", "Attendance"],
-    "/hrms/reports":              ["People", "Reports"],
-    "/hrms/reports/attendance":   ["People", "Reports", "Attendance Overview"],
-    "/hrms/reports/employee":     ["People", "Reports", "Employee Report"],
-    "/hrms/reports/daily":        ["People", "Reports", "Daily Attendance"],
-    "/hrms/reports/field":        ["People", "Reports", "Field Attendance"],
-    "/hrms/reports/late-early":   ["People", "Reports", "Late Coming / Early Going"],
-    "/hrms/leave":              ["People", "Leave & Policy", "Leave record"],
-    "/hrms/leave/record":       ["People", "Leave & Policy", "Leave record"],
-    "/hrms/leave/apply":        ["People", "Leave & Policy", "Apply leave"],
-    "/hrms/leave/approval":     ["People", "Leave & Policy", "Leave approval"],
-    "/hrms/leave/admin":        ["People", "Leave & Policy", "Leave admin"],
-    "/hrms/leave/policy":       ["People", "Leave & Policy", "Leave admin"],
-    "/hrms/holidays":           ["People", "Leave & Policy", "Leave admin"],
-    "/hrms/salary":            ["People", "HR Management", "Salary"],
-    "/hrms/salary/monthly":    ["People", "HR Management", "Monthly salary"],
-    "/hrms/salary/bulk":       ["People", "HR Management", "Payroll bulk view"],
-    "/hrms/salary/daily-wage": ["People", "HR Management", "Daily wage payroll"],
-    "/hrms/payroll":           ["People", "Reports", "Payroll"],
-    "/reports":              ["System", "Reports"],
-    "/users":                ["System", "User Management"],
-    "/design-system":        ["System", "Design System"],
+    "/customers": ["Sales", "Customers"],
+    "/orders": ["Sales", "Orders"],
+    "/field-sales": ["Sales", "Field Sales"],
+    "/production": ["Operations", "Production"],
+    "/dispatch": ["Operations", "Dispatch & Tracking"],
+    "/hrms/employees": ["People", "HR Management", "Employees"],
+    "/hrms/employees/add": ["People", "HR Management", "Employees", "Add employee"],
+    "/hrms/attendance": ["People", "HR Management", "Attendance"],
+    "/hrms/reports": ["People", "Reports"],
+    "/hrms/reports/attendance": ["People", "Reports", "Attendance Overview"],
+    "/hrms/reports/employee": ["People", "Reports", "Employee Report"],
+    "/hrms/reports/daily": ["People", "Reports", "Daily Attendance"],
+    "/hrms/reports/field": ["People", "Reports", "Field Attendance"],
+    "/hrms/reports/late-early": [
+      "People",
+      "Reports",
+      "Late Coming / Early Going",
+    ],
+    "/hrms/leave": ["People", "Leave & Policy", "Leave record"],
+    "/hrms/leave/record": ["People", "Leave & Policy", "Leave record"],
+    "/hrms/leave/apply": ["People", "Leave & Policy", "Apply leave"],
+    "/hrms/leave/approval": ["People", "Leave & Policy", "Leave approval"],
+    "/hrms/leave/admin": ["People", "Leave & Policy", "Leave admin"],
+    "/hrms/leave/policy": ["People", "Leave & Policy", "Leave admin"],
+    "/hrms/holidays": ["People", "Leave & Policy", "Leave admin"],
+    "/hrms/salary": ["People", "HR Management", "Salary"],
+    "/hrms/salary/monthly": ["People", "HR Management", "Monthly salary"],
+    "/hrms/salary/bulk": ["People", "HR Management", "Payroll bulk view"],
+    "/hrms/salary/daily-wage": [
+      "People",
+      "HR Management",
+      "Daily wage payroll",
+    ],
+    "/hrms/payroll": ["People", "Reports", "Payroll"],
+    "/reports": ["System", "Reports"],
+    "/users": ["System", "User Management"],
+    "/design-system": ["System", "Design System"],
   };
   return map[route] || [route];
 };
 
-const Topbar = ({ route, onNotifClick, onMobileClick, onLogout, onMenuClick, menuOpen }) => {
+const Topbar = ({
+  route,
+  onNotifClick,
+  onMobileClick,
+  onLogout,
+  onMenuClick,
+  menuOpen,
+}) => {
   const crumbs = breadcrumbsFor(route);
   return (
     <header className="topbar">
@@ -487,21 +546,37 @@ const Topbar = ({ route, onNotifClick, onMobileClick, onLogout, onMenuClick, men
       </button>
 
       <div className="tb-bread">
-        <span className="crumb"><Icon name="home" size={14} /></span>
+        <span className="crumb">
+          <Icon name="home" size={14} />
+        </span>
         {crumbs.map((c, i) => (
           <React.Fragment key={i}>
-            <span className="sep"><Icon name="chevRight" size={12} /></span>
-            <span className={`crumb ${i === crumbs.length - 1 ? "last" : ""}`}>{c}</span>
+            <span className="sep">
+              <Icon name="chevRight" size={12} />
+            </span>
+            <span className={`crumb ${i === crumbs.length - 1 ? "last" : ""}`}>
+              {c}
+            </span>
           </React.Fragment>
         ))}
       </div>
 
       <div className="tb-actions">
-        <button className="tb-iconbtn" title="Mobile preview" onClick={onMobileClick}>
+        <button
+          className="tb-iconbtn"
+          title="Mobile preview"
+          onClick={onMobileClick}
+        >
           <Icon name="phone" size={15} />
         </button>
-        <button className="tb-iconbtn" title="Help"><Icon name="help" size={15} /></button>
-        <button className="tb-iconbtn" onClick={onNotifClick} title="Notifications">
+        <button className="tb-iconbtn" title="Help">
+          <Icon name="help" size={15} />
+        </button>
+        <button
+          className="tb-iconbtn"
+          onClick={onNotifClick}
+          title="Notifications"
+        >
           <Icon name="bell" size={15} />
           <span className="dot"></span>
         </button>

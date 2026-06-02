@@ -62,6 +62,10 @@ const EmployeeSchema = new Schema(
       required: [true, "Please specify a location or unit"],
       trim: true,
     },
+    companies: {
+      type: [String],
+      default: [],
+    },
     reportingManager: { type: String, trim: true },
     employmentType: {
       type: String,

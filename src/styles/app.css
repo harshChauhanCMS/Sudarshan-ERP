@@ -1183,6 +1183,43 @@
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
 }
 
+.users-page-kpi {
+  margin-bottom: 8px;
+}
+
+.users-roles-section__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding: 0 4px;
+}
+
+.users-roles-section__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.users-roles-section__hint {
+  margin: 0;
+  text-align: right;
+}
+
+@media (max-width: 576px) {
+  .users-roles-section__bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .users-roles-section__hint {
+    text-align: left;
+  }
+}
+
 @media (max-width: 1200px) {
   .attendance-kpi-grid:not(.attendance-kpi-grid--4):not(.attendance-kpi-grid--auto) {
     grid-template-columns: repeat(3, minmax(0, 1fr));

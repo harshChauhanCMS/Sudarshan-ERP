@@ -25,9 +25,17 @@ import dayjs from "dayjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/common/PageHeader";
+import NumericInput from "@/components/common/NumericInput";
 import { HRMS_BACK } from "@/lib/hrms-nav";
 
 const DRAFT_KEY = "hrms_employee_draft";
+
+const EMPLOYEE_COMPANY_OPTIONS = [
+  { value: "smi", label: "Sudarshan Minerals & Industries (SMI)" },
+  { value: "smic", label: "Sudarshan Microns" },
+];
+
+const digitsOnlyRule = { pattern: /^\d+$/, message: "Numbers only" };
 
 export default function AddEmployeePage() {
   const router = useRouter();
@@ -218,17 +226,33 @@ export default function AddEmployeePage() {
       content: (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1 p-2">
-            <Form.Item name="primaryContact" label="Primary Contact No." rules={[{ required: true, message: "Required" }]}>
-              <Input style={{ height: 38 }} />
+            <Form.Item
+              name="primaryContact"
+              label="Primary Contact No."
+              rules={[
+                { required: true, message: "Required" },
+                digitsOnlyRule,
+                { len: 10, message: "Enter a 10-digit mobile number" },
+              ]}
+            >
+              <NumericInput style={{ height: 38 }} maxDigits={10} />
             </Form.Item>
             <Form.Item name="personalEmail" label="Personal Email">
               <Input style={{ height: 38 }} />
             </Form.Item>
-            <Form.Item name="alternateContact" label="Alternate Contact No.">
-              <Input style={{ height: 38 }} />
+            <Form.Item
+              name="alternateContact"
+              label="Alternate Contact No."
+              rules={[{ pattern: /^\d*$/, message: "Numbers only" }]}
+            >
+              <NumericInput style={{ height: 38 }} maxDigits={10} />
             </Form.Item>
-            <Form.Item name="emergencyContact" label="Emergency Contact No.">
-              <Input style={{ height: 38 }} />
+            <Form.Item
+              name="emergencyContact"
+              label="Emergency Contact No."
+              rules={[{ pattern: /^\d*$/, message: "Numbers only" }]}
+            >
+              <NumericInput style={{ height: 38 }} maxDigits={10} />
             </Form.Item>
             <Form.Item name="emergencyNameRelation" label="Emergency Contact — Name & Relation">
               <Input style={{ height: 38 }} />
@@ -242,8 +266,12 @@ export default function AddEmployeePage() {
               <Form.Item name="currentAddress" label="Current Address">
                 <Input.TextArea rows={2} />
               </Form.Item>
-              <Form.Item name="currentStatePin" label="State / PIN Code">
-                <Input style={{ height: 38 }} />
+              <Form.Item
+                name="currentStatePin"
+                label="State / PIN Code"
+                rules={[{ pattern: /^\d*$/, message: "PIN must be numbers only" }]}
+              >
+                <NumericInput style={{ height: 38 }} maxDigits={6} />
               </Form.Item>
             </div>
             <div>
@@ -255,8 +283,12 @@ export default function AddEmployeePage() {
                 <Input.TextArea rows={2} className="mb-2.5" />
               </Form.Item>
               <div className="h-2" />
-              <Form.Item name="permanentStatePin" label="State / PIN Code">
-                <Input style={{ height: 38 }} />
+              <Form.Item
+                name="permanentStatePin"
+                label="State / PIN Code"
+                rules={[{ pattern: /^\d*$/, message: "PIN must be numbers only" }]}
+              >
+                <NumericInput style={{ height: 38 }} maxDigits={6} />
               </Form.Item>
             </div>
           </div>
@@ -268,23 +300,39 @@ export default function AddEmployeePage() {
       fields: ["aadhar", "pan", "pfUan", "esiIp", "bankName", "accountNo", "ifscCode"],
       content: (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1 p-2">
-          <Form.Item name="aadhar" label="Aadhar No.">
-            <Input style={{ height: 38 }} />
+          <Form.Item
+            name="aadhar"
+            label="Aadhar No."
+            rules={[{ pattern: /^\d{0,12}$/, message: "Aadhar must be 12 digits" }]}
+          >
+            <NumericInput style={{ height: 38 }} maxDigits={12} />
           </Form.Item>
           <Form.Item name="pan" label="PAN No.">
             <Input style={{ height: 38 }} />
           </Form.Item>
-          <Form.Item name="pfUan" label="PF / UAN No.">
-            <Input style={{ height: 38 }} />
+          <Form.Item
+            name="pfUan"
+            label="PF / UAN No."
+            rules={[{ pattern: /^\d*$/, message: "Numbers only" }]}
+          >
+            <NumericInput style={{ height: 38 }} maxDigits={12} />
           </Form.Item>
-          <Form.Item name="esiIp" label="ESI / IP No.">
-            <Input style={{ height: 38 }} />
+          <Form.Item
+            name="esiIp"
+            label="ESI / IP No."
+            rules={[{ pattern: /^\d*$/, message: "Numbers only" }]}
+          >
+            <NumericInput style={{ height: 38 }} maxDigits={17} />
           </Form.Item>
           <Form.Item name="bankName" label="Bank Name">
             <Input style={{ height: 38 }} />
           </Form.Item>
-          <Form.Item name="accountNo" label="Account No.">
-            <Input style={{ height: 38 }} />
+          <Form.Item
+            name="accountNo"
+            label="Account No."
+            rules={[{ pattern: /^\d*$/, message: "Account number must be numbers only" }]}
+          >
+            <NumericInput style={{ height: 38 }} maxDigits={18} />
           </Form.Item>
           <Form.Item name="ifscCode" label="IFSC Code">
             <Input style={{ height: 38 }} />
@@ -294,9 +342,23 @@ export default function AddEmployeePage() {
     },
     {
       title: "Employment",
-      fields: ["department", "designation", "locationUnit", "reportingManager", "employmentType", "dateJoining", "dateConfirmation", "probationMonths"],
+      fields: ["companies", "department", "designation", "locationUnit", "reportingManager", "employmentType", "dateJoining", "dateConfirmation", "probationMonths"],
       content: (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1 p-2">
+          <Form.Item
+            name="companies"
+            label="Companies"
+            className="md:col-span-3"
+            rules={[{ required: true, type: "array", min: 1, message: "Select at least one company" }]}
+          >
+            <Select
+              mode="multiple"
+              style={{ width: "100%" }}
+              placeholder="Select company access"
+              options={EMPLOYEE_COMPANY_OPTIONS}
+              maxTagCount="responsive"
+            />
+          </Form.Item>
           <Form.Item name="department" label="Department" rules={[{ required: true, message: "Required" }]}>
             <Select
               style={{ height: 38 }}
