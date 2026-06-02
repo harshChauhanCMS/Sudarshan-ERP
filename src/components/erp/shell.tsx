@@ -45,7 +45,37 @@ const NAV = [
     items: [
       { id: "/customers", label: "Customers", icon: "users" },
       { id: "/orders", label: "Customer Orders", icon: "ticket" },
-      { id: "/field-sales", label: "Field Sales", icon: "pin" },
+    ],
+  },
+  {
+    id: "field-sales",
+    label: "Field sales and Beat tracking",
+    items: [
+      {
+        id: "/field-sales/activity-dashboard",
+        label: "Field Activity Dashboard",
+        icon: "chart",
+      },
+      {
+        id: "/field-sales/visits-beat-tracking",
+        label: "Field Visits & Beat Tracking",
+        icon: "pin",
+      },
+      {
+        id: "/field-sales/visit-log",
+        label: "Field Visit Log (Employee view)",
+        icon: "invoice",
+      },
+      {
+        id: "/field-sales/visit-history",
+        label: "Field Visit History",
+        icon: "clock",
+      },
+      {
+        id: "/field-sales/beat-territory",
+        label: "Beat Territory Management",
+        icon: "map",
+      },
     ],
   },
   {
@@ -189,6 +219,9 @@ const Sidebar = ({
       route?.startsWith("/hrms/salary/")
     ) {
       setCollapsedGroups((c) => ({ ...c, "people/hr-management": false }));
+    }
+    if (route === "/field-sales" || route?.startsWith("/field-sales/")) {
+      setCollapsed((c) => ({ ...c, "field-sales": false }));
     }
   }, [route]);
 
@@ -484,7 +517,30 @@ const breadcrumbsFor = (route) => {
     "/procurement/invoices": ["Procurement", "Invoice Verification"],
     "/customers": ["Sales", "Customers"],
     "/orders": ["Sales", "Orders"],
-    "/field-sales": ["Sales", "Field Sales"],
+    "/field-sales": [
+      "Field sales and Beat tracking",
+      "Field Activity Dashboard",
+    ],
+    "/field-sales/activity-dashboard": [
+      "Field sales and Beat tracking",
+      "Field Activity Dashboard",
+    ],
+    "/field-sales/visits-beat-tracking": [
+      "Field sales and Beat tracking",
+      "Field Visits & Beat Tracking",
+    ],
+    "/field-sales/visit-log": [
+      "Field sales and Beat tracking",
+      "Field Visit Log (Employee view)",
+    ],
+    "/field-sales/visit-history": [
+      "Field sales and Beat tracking",
+      "Field Visit History",
+    ],
+    "/field-sales/beat-territory": [
+      "Field sales and Beat tracking",
+      "Beat Territory Management",
+    ],
     "/production": ["Operations", "Production"],
     "/dispatch": ["Operations", "Dispatch & Tracking"],
     "/hrms/employees": ["People", "HR Management", "Employees"],

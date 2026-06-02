@@ -3,6 +3,9 @@
 
 
 import React, { useState } from "react";
+import { Select, DatePicker, Button } from "antd";
+import { FilterOutlined, UnorderedListOutlined, LineChartOutlined, FileTextOutlined, TeamOutlined, EnvironmentOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
@@ -416,14 +419,91 @@ const CustomerOrders = () => {
 };
 
 /* ============================================================
-   FIELD SALES / BEAT TRACKING (with territory map)
+   FIELD SALES / BEAT TRACKING — Activity dashboard
    ============================================================ */
+const FIELD_ACTIVITY_KPIS = [
+  { label: "Employees in field", value: "5", hint: "Currently out on visit", tone: "teal" },
+  { label: "Visits completed today", value: "12", hint: "09 Mar 2025", tone: "green" },
+  { label: "Pending visit reports", value: "3", hint: "Awaiting notes/closure", tone: "amber" },
+  { label: "Average visit duration", value: "2h 45m", hint: "Last 7 days", tone: "teal" },
+];
+
+const FIELD_LIVE_STATUS = [
+  { name: "Rajesh Mehta", status: "IN FIELD", badge: "field" },
+  { name: "Mohammed Irfan", status: "IN FIELD", badge: "field" },
+  { name: "Sneha Reddy", status: "VISIT COMPLETED", badge: "done" },
+  { name: "Karthik N.", status: "IN FIELD", badge: "field" },
+  { name: "Priya Sharma", status: "IN OFFICE", badge: "office" },
+  { name: "Vikram Singh", status: "DELAYED RETURN", badge: "delayed" },
+];
+
+const FIELD_TERRITORY_SUMMARY = [
+  { area: "Rajasthan North", visits: 8 },
+  { area: "Rajasthan South", visits: 4 },
+  { area: "Madhya Pradesh", visits: 3 },
+  { area: "Gujarat", visits: 2 },
+  { area: "Others", visits: 2 },
+];
+
+const FIELD_MAP_REPS = [
+  { x: 38, y: 52, name: "RM", label: "Rajesh Mehta", city: "Kota", color: "#0d9488" },
+  { x: 52, y: 38, name: "MI", label: "Mohammed Irfan", city: "Jaipur", color: "#374d95" },
+  { x: 48, y: 68, name: "KN", label: "Karthik N.", city: "Chittorgarh", color: "#0369a1" },
+  { x: 28, y: 42, name: "SR", label: "Sneha Reddy", city: "Udaipur", color: "#16a34a" },
+  { x: 62, y: 58, name: "PS", label: "Priya Sharma", city: "Jodhpur", color: "#6b7280" },
+];
+
+const FIELD_MAP_CUSTOMERS = [
+  { x: 40, y: 50, n: "Asian Paints, Kota", s: "done" },
+  { x: 54, y: 36, n: "Berger Paints, Jaipur", s: "done" },
+  { x: 46, y: 66, n: "Minerals & Chemicals", s: "active" },
+  { x: 30, y: 44, n: "Udaipur Depot", s: "next" },
+  { x: 64, y: 54, n: "Gujarat Distributor", s: "next" },
+];
+
+const FIELD_VISIT_CHART_CUSTOMERS = [
+  { customer: "Asian Paints", visits: 14 },
+  { customer: "Berger", visits: 11 },
+  { customer: "ITC", visits: 9 },
+  { customer: "Pidilite", visits: 8 },
+  { customer: "Nirma", visits: 6 },
+  { customer: "Others", visits: 4 },
+];
+
+const FIELD_VISIT_CHART_WEEKLY = [
+  { week: "W1", visits: 18, completed: 15 },
+  { week: "W2", visits: 22, completed: 19 },
+  { week: "W3", visits: 20, completed: 17 },
+  { week: "W4", visits: 26, completed: 24 },
+];
+
+const FIELD_VISIT_TIMELINE = [
+  {
+    time: "11:45",
+    title: "Rajesh Mehta — Asian Paints, Kota (completed)",
+    sub: "Customer · 3h 30m · Order confirmed",
+  },
+  {
+    time: "10:20",
+    title: "Mohammed Irfan — Berger Paints, Jaipur (completed)",
+    sub: "Customer · 2h 35m · PO expected",
+  },
+  {
+    time: "12:30",
+    title: "Sneha Reddy — Minerals & Chemicals Ltd (completed)",
+    sub: "Vendor · 2h 30m · Sample collected",
+  },
+  {
+    time: "09:30",
+    title: "Karthik N. — Market survey, Chittorgarh (in progress)",
+    sub: "Market · Expected return 14:00",
+  },
+];
+
 const FieldSales = () => {
   const DATA = useDATA();
-  const { append, update, saving, error, clearError } = useEntityMutation();
-  const [openVisit, setOpenVisit] = useState(null);
+  const { append, saving, error, clearError } = useEntityMutation();
   const [planOpen, setPlanOpen] = useState(false);
-  const [visitNote, setVisitNote] = useState("");
   const salesReps = DATA.EMPLOYEES.filter((e) => e.dept === "Sales");
   const [planRep, setPlanRep] = useState(salesReps[0]?.name ?? "");
   const [planDate, setPlanDate] = useState(new Date().toISOString().slice(0, 10));
@@ -433,9 +513,6 @@ const FieldSales = () => {
     { customer: "Pidilite Andheri", slot: "12:00 PM", type: "Existing" },
   ]);
   const [planNotes, setPlanNotes] = useState("");
-
-  const completedVisits = DATA.FIELD_VISITS.filter((v) => v.status === "completed").length;
-  const pipelineValue = DATA.ORDERS.filter((o) => o.status === "scheduled").reduce((s, o) => s + o.value, 0);
 
   const publishBeat = async (draft: boolean) => {
     let visits = [...DATA.FIELD_VISITS];
@@ -458,140 +535,144 @@ const FieldSales = () => {
     setPlanNotes("");
   };
 
-  const saveVisitNotes = async () => {
-    if (!openVisit) return;
-    await update("fieldVisits", openVisit.id, {
-      outcome: visitNote || openVisit.outcome,
-      status: "completed",
-    });
-    setOpenVisit(null);
-  };
-
   return (
     <>
-      <DashHead title="Field Sales · Beat Tracking" sub="Visit log, territory map, check-in/check-out">
+      <DashHead
+        title="Field Activity Dashboard"
+        sub="Overview of field visits, beats, and check-ins — who is on beat, late, or pending"
+      >
         <Btn size="sm" icon="calendar">Today</Btn>
         <Btn size="sm" icon="map">Territories</Btn>
         <Btn variant="primary" size="sm" icon="plus" onClick={() => { clearError(); setPlanOpen(true); }}>Plan beat</Btn>
       </DashHead>
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="kpi"><div className="kpi-label"><Icon name="user" size={13} className="ico" />Sales reps</div><div className="kpi-value tabular">{salesReps.length}</div><div style={{ fontSize: 11, color: "var(--success)" }}>In database</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="pin" size={13} className="ico" />Visits logged</div><div className="kpi-value tabular">{DATA.FIELD_VISITS.length}</div><div style={{ fontSize: 11, color: "var(--success)" }}>{completedVisits} completed</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="check" size={13} className="ico" />Scheduled orders</div><div className="kpi-value tabular">{DATA.ORDERS.filter((o) => o.status === "scheduled").length}</div><div style={{ fontSize: 11, color: "var(--success)" }}>Pipeline</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="money" size={13} className="ico" />Pipeline value</div><div className="kpi-value">{fmtINR(pipelineValue)}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Scheduled SOs</div></div>
-      </div>
+      <div className="field-activity-page">
+        <div className="field-activity-kpi-grid">
+          {FIELD_ACTIVITY_KPIS.map((kpi) => (
+            <div
+              key={kpi.label}
+              className={`field-activity-kpi field-activity-kpi--${kpi.tone}`}
+            >
+              <div className="field-activity-kpi__label">{kpi.label}</div>
+              <div className="field-activity-kpi__value">{kpi.value}</div>
+              <div className="field-activity-kpi__hint">{kpi.hint}</div>
+            </div>
+          ))}
+        </div>
 
-      <div className="grid" style={{ gridTemplateColumns: "1.4fr 1fr", marginBottom: 20 }}>
-        <div className="card">
-          <div className="card-head">
-            <div className="card-title"><Icon name="map" size={14} /> Territory map · West India</div>
-            <div className="row">
-              <Badge tone="primary" dot>4 reps live</Badge>
-              <Badge tone="success" dot>3 done</Badge>
-              <Badge tone="warning" dot>1 active</Badge>
+        <div className="field-activity-map-row">
+          <div className="field-activity-map-main">
+            <div className="field-activity-map-frame card">
+              <div className="card-head">
+                <div className="card-title">
+                  <Icon name="map" size={14} /> Field locations · Rajasthan &amp; MP
+                </div>
+                <div className="row">
+                  <Badge tone="success" dot>3 in field</Badge>
+                  <Badge tone="primary" dot>2 completed</Badge>
+                </div>
+              </div>
+              <div className="card-body" style={{ padding: 0 }}>
+                <FieldActivityMap />
+              </div>
             </div>
           </div>
-          <div className="card-body">
-            <TerritoryMap />
+
+          <div className="field-activity-map-side">
+            <div className="field-activity-panel">
+              <div className="field-activity-panel__head field-activity-panel__head--warm">
+                <Icon name="user" size={14} />
+                Employee live status
+              </div>
+              <div className="field-activity-panel__body">
+                {FIELD_LIVE_STATUS.map((row) => (
+                  <div key={row.name} className="field-activity-row">
+                    <span className="field-activity-row__name">{row.name}</span>
+                    <span className={`field-activity-badge field-activity-badge--${row.badge}`}>
+                      {row.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="field-activity-panel">
+              <div className="field-activity-panel__head field-activity-panel__head--mint">
+                <Icon name="map" size={14} />
+                Territory / area summary
+              </div>
+              <div className="field-activity-panel__body">
+                {FIELD_TERRITORY_SUMMARY.map((row) => (
+                  <div key={row.area} className="field-activity-row">
+                    <span className="field-activity-row__name">{row.area}</span>
+                    <span className="field-activity-row__meta">
+                      {row.visits} visit{row.visits === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-head">
-            <div className="card-title"><Icon name="user" size={14} /> Reps live now</div>
-            <Btn variant="ghost" size="sm">All</Btn>
+        <div className="field-activity-bottom-card">
+          <div className="field-activity-bottom-card__head">
+            <div className="field-activity-bottom-card__title">
+              <Icon name="chart" size={14} />
+              Customer visit frequency
+            </div>
+            <span className="field-activity-bottom-card__meta">Last 30 days</span>
           </div>
-          <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {[
-              { name: "Karan Singh",    loc: "Andheri E, Mumbai", status: "checked-in", at: "Pidilite", time: "23 min", color: 2 },
-              { name: "Pooja Aggarwal", loc: "BKC, Mumbai",       status: "in-transit", at: "Berger HQ", time: "ETA 8m", color: 5 },
-              { name: "Amit Reddy",     loc: "Vatva, Ahmedabad",  status: "checked-in", at: "Nirma Plant", time: "1h 4m", color: 3 },
-              { name: "Sneha Patil",    loc: "Pune", status: "checked-out", at: "Bharat Forge", time: "Done 15m", color: 4 },
-            ].map((r) => (
-              <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Avatar name={r.name} color={r.color} size="lg" />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontWeight: 600, fontSize: 13 }}>{r.name}</span>
-                    <span className={`dot ${r.status === "checked-in" ? "success" : r.status === "in-transit" ? "warning" : ""}`}></span>
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>
-                    {r.status === "checked-in" ? `Visiting ${r.at}` : r.status === "in-transit" ? `→ ${r.at}` : `Visited ${r.at}`}
-                    <span style={{ opacity: 0.5 }}> · </span>{r.loc}
-                  </div>
+          <div className="field-activity-charts-grid">
+            <div className="field-activity-chart-panel">
+              <div className="field-activity-chart-panel__label">Visits per customer</div>
+              <BarChart
+                data={FIELD_VISIT_CHART_CUSTOMERS}
+                keys={["visits"]}
+                colors={["#0d9488"]}
+                labelKey="customer"
+                h={220}
+              />
+            </div>
+            <div className="field-activity-chart-panel">
+              <div className="field-activity-chart-panel__label">Weekly visits (scheduled vs completed)</div>
+              <BarChart
+                data={FIELD_VISIT_CHART_WEEKLY}
+                keys={["visits", "completed"]}
+                colors={["#94a3b8", "#16a34a"]}
+                labelKey="week"
+                h={220}
+              />
+            </div>
+          </div>
+          <div className="field-activity-chart-legend">
+            <span><i className="field-activity-chart-legend__swatch field-activity-chart-legend__swatch--muted" /> Scheduled</span>
+            <span><i className="field-activity-chart-legend__swatch field-activity-chart-legend__swatch--green" /> Completed</span>
+          </div>
+        </div>
+
+        <div className="field-activity-bottom-card">
+          <div className="field-activity-bottom-card__head">
+            <div className="field-activity-bottom-card__title">
+              <Icon name="clock" size={14} />
+              Recent field visit timeline
+            </div>
+            <span className="field-activity-bottom-card__meta">Today</span>
+          </div>
+          <div className="field-activity-timeline">
+            {FIELD_VISIT_TIMELINE.map((item) => (
+              <div key={item.time + item.title} className="field-activity-timeline__item">
+                <span className="field-activity-timeline__time">{item.time}</span>
+                <span className="field-activity-timeline__dot" aria-hidden />
+                <div>
+                  <div className="field-activity-timeline__title">{item.title}</div>
+                  <div className="field-activity-timeline__sub">{item.sub}</div>
                 </div>
-                <div style={{ fontSize: 11, color: "var(--fg-subtle)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>{r.time}</div>
               </div>
             ))}
           </div>
         </div>
       </div>
-
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title"><Icon name="speech" size={14} /> Field visit log</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <select className="input" style={{ height: 30, width: 160 }}><option>All reps</option><option>Karan Singh</option><option>Pooja Aggarwal</option></select>
-            <Btn size="sm" icon="download">Export</Btn>
-          </div>
-        </div>
-        <div className="card-body flush">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Visit #</th><th>Rep</th><th>Customer</th><th>City</th><th>When</th><th>Status</th><th>Outcome</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {DATA.FIELD_VISITS.map((v, i) => (
-                <tr key={v.id} onClick={() => { setVisitNote(v.outcome); setOpenVisit(v); }} style={{ cursor: "pointer" }}>
-                  <td className="mono strong">{v.id}</td>
-                  <td><div style={{ display: "flex", alignItems: "center", gap: 8 }}><Avatar name={v.rep} color={(i % 5) + 1} />{v.rep}</div></td>
-                  <td className="strong">{v.customer}</td>
-                  <td className="muted">{v.city}</td>
-                  <td className="muted">{v.ts}</td>
-                  <td><StatusBadge status={v.status} /></td>
-                  <td className="muted">{v.outcome}</td>
-                  <td><Icon name="chevRight" size={13} className="subtle" /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <EntityFormModal
-        open={!!openVisit}
-        onClose={() => setOpenVisit(null)}
-        title={openVisit ? `Visit ${openVisit.id}` : ""}
-        sub={openVisit ? `${openVisit.rep} at ${openVisit.customer}` : ""}
-        wide
-        submitLabel="Save visit"
-        saving={saving}
-        error={error}
-        onSubmit={saveVisitNotes}
-      >
-        {openVisit && (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-              <div className="card" style={{ padding: 14 }}>
-                <div style={{ fontSize: 10, color: "var(--fg-subtle)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, marginBottom: 8 }}>CHECK-IN</div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{openVisit.ts}</div>
-                <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>{openVisit.customer}, {openVisit.city}</div>
-              </div>
-              <div className="card" style={{ padding: 14 }}>
-                <div style={{ fontSize: 10, color: "var(--fg-subtle)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, marginBottom: 8 }}>STATUS</div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}><StatusBadge status={openVisit.status} /></div>
-                <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 6 }}>{openVisit.outcome}</div>
-              </div>
-            </div>
-            <FormField label="Meeting notes">
-              <textarea className="input" rows={4} value={visitNote || openVisit.outcome} onChange={(e) => setVisitNote(e.target.value)} />
-            </FormField>
-          </>
-        )}
-      </EntityFormModal>
 
       <EntityFormModal
         open={planOpen}
@@ -652,38 +733,24 @@ const FieldSales = () => {
   );
 };
 
-/* ---------- Territory map for field sales ---------- */
-const TerritoryMap = () => {
-  // Mumbai metro + nearby
-  const customers = [
-    { x: 22, y: 78, n: "Asian Paints",  s: "done" },
-    { x: 32, y: 65, n: "Pidilite",      s: "active" },
-    { x: 42, y: 70, n: "Berger HQ",     s: "next" },
-    { x: 52, y: 85, n: "Kansai",        s: "next" },
-    { x: 18, y: 55, n: "Akzo Nobel",    s: "next" },
-    { x: 70, y: 45, n: "Nirma",         s: "done" },
-    { x: 60, y: 55, n: "Bharat Forge",  s: "done" },
-    { x: 80, y: 72, n: "JK Cement",     s: "next" },
-  ];
-  const reps = [
-    { x: 32, y: 65, name: "K", color: "var(--secondary)" },     // Karan at Pidilite
-    { x: 36, y: 68, name: "P", color: "var(--primary)" },        // Pooja en-route
-    { x: 70, y: 45, name: "A", color: "var(--info)" },           // Amit at Nirma
-  ];
-  // Territory boundaries (rough polygons)
+/* ---------- Field activity map (dummy GPS locations) ---------- */
+const FieldActivityMap = () => {
+  const customers = FIELD_MAP_CUSTOMERS;
+  const reps = FIELD_MAP_REPS;
   return (
-    <div className="map-frame" style={{ height: 340, position: "relative" }}>
+    <div className="map-frame field-activity-map-canvas" style={{ position: "relative" }}>
       <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 0 }}>
         {/* Territory polygons */}
-        <polygon points="5,50 45,40 55,90 5,95" fill="rgba(55,77,149,0.05)" stroke="rgba(55,77,149,0.3)" strokeWidth="0.3" strokeDasharray="1 1" />
-        <polygon points="45,40 55,90 95,80 90,30" fill="rgba(232,169,1,0.05)" stroke="rgba(232,169,1,0.3)" strokeWidth="0.3" strokeDasharray="1 1" />
-        {/* Connecting lines from rep K to next */}
-        <line x1="32" y1="65" x2="42" y2="70" stroke="var(--primary)" strokeWidth="0.4" strokeDasharray="1 1" opacity="0.6" />
+        <polygon points="8,35 48,28 58,75 12,82" fill="rgba(13,148,136,0.06)" stroke="rgba(13,148,136,0.35)" strokeWidth="0.35" strokeDasharray="1 1" />
+        <polygon points="48,28 58,75 92,68 88,22" fill="rgba(55,77,149,0.05)" stroke="rgba(55,77,149,0.3)" strokeWidth="0.35" strokeDasharray="1 1" />
+        <line x1="38" y1="52" x2="40" y2="50" stroke="#0d9488" strokeWidth="0.5" strokeDasharray="1 1" opacity="0.7" />
+        <line x1="52" y1="38" x2="54" y2="36" stroke="#374d95" strokeWidth="0.5" strokeDasharray="1 1" opacity="0.7" />
+        <line x1="48" y1="68" x2="46" y2="66" stroke="#0369a1" strokeWidth="0.5" strokeDasharray="1 1" opacity="0.7" />
       </svg>
 
-      {/* Territory labels */}
-      <div style={{ position: "absolute", left: "20%", top: "70%", fontSize: 10, color: "var(--primary)", fontWeight: 600, opacity: 0.7, pointerEvents: "none" }}>WEST · KARAN</div>
-      <div style={{ position: "absolute", left: "65%", top: "58%", fontSize: 10, color: "var(--warning)", fontWeight: 600, opacity: 0.7, pointerEvents: "none" }}>NORTH · AMIT</div>
+      <div style={{ position: "absolute", left: "18%", top: "78%", fontSize: 10, color: "#0d9488", fontWeight: 600, opacity: 0.75, pointerEvents: "none" }}>KOTA · RAJESH</div>
+      <div style={{ position: "absolute", left: "58%", top: "28%", fontSize: 10, color: "var(--primary)", fontWeight: 600, opacity: 0.75, pointerEvents: "none" }}>JAIPUR · MOHAMMED</div>
+      <div style={{ position: "absolute", left: "52%", top: "72%", fontSize: 10, color: "#0369a1", fontWeight: 600, opacity: 0.75, pointerEvents: "none" }}>CHITTORGARH · KARTHIK</div>
 
       {/* Customers as pins */}
       {customers.map((c, i) => (
@@ -720,22 +787,41 @@ const TerritoryMap = () => {
 
       {/* Rep avatars (live) */}
       {reps.map((r, i) => (
-        <div key={i} style={{
-          position: "absolute", left: `${r.x}%`, top: `${r.y}%`,
-          transform: "translate(-50%, -50%)",
-          width: 32, height: 32, borderRadius: "50%",
-          background: r.color, color: "white",
-          display: "grid", placeItems: "center",
-          fontWeight: 700, fontSize: 14, border: "3px solid white",
-          boxShadow: "0 4px 10px rgba(0,0,0,0.18)",
-          zIndex: 5,
-        }}>
-          {r.name}
-          <span style={{
-            position: "absolute", inset: -6, borderRadius: "50%",
-            background: r.color, opacity: 0.3,
-            animation: "pulse 1.8s ease-in-out infinite",
-          }}></span>
+        <div
+          key={r.label}
+          title={`${r.label} · ${r.city}`}
+          style={{
+            position: "absolute", left: `${r.x}%`, top: `${r.y}%`,
+            transform: "translate(-50%, -50%)",
+            zIndex: 5,
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{
+            width: 34, height: 34, borderRadius: "50%",
+            background: r.color, color: "white",
+            display: "grid", placeItems: "center",
+            fontWeight: 700, fontSize: 11, border: "3px solid white",
+            boxShadow: "0 4px 10px rgba(0,0,0,0.18)",
+          }}>
+            {r.name}
+          </div>
+          <div style={{
+            position: "absolute", left: "50%", top: "calc(100% + 4px)",
+            transform: "translateX(-50%)",
+            fontSize: 9, fontWeight: 600, color: "var(--fg)",
+            whiteSpace: "nowrap", background: "rgba(255,255,255,0.92)",
+            padding: "2px 6px", borderRadius: 4, border: "1px solid var(--border)",
+          }}>
+            {r.city}
+          </div>
+          {i < 3 ? (
+            <span style={{
+              position: "absolute", inset: -6, borderRadius: "50%",
+              background: r.color, opacity: 0.28,
+              animation: "pulse 1.8s ease-in-out infinite",
+            }} />
+          ) : null}
         </div>
       ))}
 
@@ -747,9 +833,10 @@ const TerritoryMap = () => {
         display: "flex", flexDirection: "column", gap: 4,
         boxShadow: "var(--shadow-sm)",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span className="dot success"></span> Visited</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span className="dot gold"></span> Active</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span className="dot" style={{ background: "white", border: "1.5px solid var(--fg-muted)" }}></span> Scheduled</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span className="dot success"></span> Customer visited</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span className="dot gold"></span> Visit in progress</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span className="dot" style={{ background: "#0d9488" }}></span> Field employee</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span className="dot" style={{ background: "white", border: "1.5px solid var(--fg-muted)" }}></span> Scheduled stop</div>
       </div>
     </div>
   );
@@ -974,4 +1061,802 @@ const InvoiceVerify = () => {
   );
 };
 
-export { Customers, CustomerOrders, FieldSales, InvoiceVerify };
+/* ============================================================
+   FIELD VISITS & BEAT TRACKING
+   ============================================================ */
+const FIELD_CHECKINS = [
+  {
+    employee: "Arun Sharma",
+    beat: "Udaipur — Paint dealers",
+    checkIn: "09 Mar 2025, 11:20",
+    location: "Near Hathi Pole, Udaipur",
+    status: "on-beat",
+    statusLabel: "On beat",
+  },
+  {
+    employee: "Sunita Patel",
+    beat: "Ahmedabad — Cosmetics",
+    checkIn: "09 Mar 2025, 10:45",
+    location: "SG Highway, Ahmedabad",
+    status: "on-beat",
+    statusLabel: "On beat",
+  },
+  {
+    employee: "Rakesh Meena",
+    beat: "Jaipur — Paper & detergent",
+    checkIn: "09 Mar 2025, 09:30",
+    location: "Malviya Nagar, Jaipur",
+    status: "late",
+    statusLabel: "Late start",
+  },
+  {
+    employee: "Kavita Singh",
+    beat: "Makrana — Local units",
+    checkIn: "08 Mar 2025, 17:00",
+    location: "Makrana plant",
+    status: "none",
+    statusLabel: "Not checked in today",
+  },
+];
+
+const FIELD_BEATS = [
+  {
+    name: "Udaipur — Paint dealers",
+    areas: ["Hathi Pole", "Bapu Bazar", "Delhi Gate"],
+    assigned: "Arun Sharma",
+  },
+  {
+    name: "Ahmedabad — Cosmetics",
+    areas: ["SG Highway", "Satellite", "Prahlad Nagar"],
+    assigned: "Sunita Patel",
+  },
+  {
+    name: "Jaipur — Paper & detergent",
+    areas: ["Malviya Nagar", "Vaishali", "Bani Park"],
+    assigned: "Rakesh Meena",
+  },
+  {
+    name: "Makrana — Local units",
+    areas: ["Makrana plant", "nearby industries"],
+    assigned: "Kavita Singh (Sudarshan Microns)",
+  },
+];
+
+const FieldVisitsBeatTracking = () => (
+  <>
+    <DashHead
+      title="Field Visits & Beat Tracking"
+      sub="Beats, check-in location/time, field sales and employee movement"
+    />
+
+    <div className="field-beat-page">
+      <div className="field-beat-info-banner">
+        <Icon name="pin" size={15} />
+        <span>
+          <strong>Field visit tracking.</strong> Define beats (areas to cover). Employees check in via
+          phone — GPS/location or &apos;I am at this location&apos;. Alerts and key data can sync to
+          WhatsApp.
+        </span>
+      </div>
+
+      <div className="field-beat-card">
+        <div className="field-beat-card__head">Today&apos;s field check-ins</div>
+        <div className="field-beat-card__body flush">
+          <table className="tbl field-beat-table">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Beat / area</th>
+                <th>Last check-in</th>
+                <th>Location</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {FIELD_CHECKINS.map((row) => (
+                <tr key={row.employee}>
+                  <td className="strong">{row.employee}</td>
+                  <td>{row.beat}</td>
+                  <td className="muted">{row.checkIn}</td>
+                  <td>
+                    <span className="field-beat-location">{row.location}</span>
+                  </td>
+                  <td>
+                    <span className={`field-beat-status field-beat-status--${row.status}`}>
+                      {row.statusLabel}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="field-beat-card">
+        <div className="field-beat-card__head">Beats (areas)</div>
+        <div className="field-beat-card__body">
+          {FIELD_BEATS.map((beat) => (
+            <div key={beat.name} className="field-beat-area-row">
+              <div className="field-beat-area-row__main">
+                <span className="field-beat-area-row__name">{beat.name}</span>
+                <div className="field-beat-area-tags">
+                  {beat.areas.map((area) => (
+                    <span key={area} className="field-beat-area-tag">
+                      {area}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="field-beat-area-row__assigned">
+                <span className="field-beat-area-row__assigned-label">Assigned</span>
+                <span className="field-beat-area-row__assigned-name">{beat.assigned}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </>
+);
+
+/* ============================================================
+   FIELD VISIT LOG (Employee view)
+   ============================================================ */
+const FIELD_VISIT_LOG_RECENT = [
+  {
+    date: "09 Mar 2025",
+    party: "Asian Paints, Kota",
+    meta: "Rajesh Mehta · Started 08:15 · Customer visit · Rate discussion",
+    type: "Customer",
+  },
+  {
+    date: "09 Mar 2025",
+    party: "Berger Paints — Jaipur branch",
+    meta: "Mohammed Irfan · Started 07:45 · Customer · Order follow-up",
+    type: "Customer",
+  },
+  {
+    date: "09 Mar 2025",
+    party: "Minerals & Chemicals Ltd (Udaipur)",
+    meta: "Sneha Reddy · Started 10:00 · Vendor · Quality sample collection",
+    type: "Vendor",
+  },
+  {
+    date: "09 Mar 2025",
+    party: "Market survey — Chittorgarh",
+    meta: "Karthik N. · Started 09:30 · Market · Competitor pricing",
+    type: "Market",
+  },
+];
+
+const VISIT_TYPE_OPTIONS = ["Customer", "Vendor", "Market", "Other"];
+
+const FieldVisitLog = () => {
+  const [employeeName] = useState("Rajesh Mehta");
+  const [company, setCompany] = useState("smi");
+  const [visitDate, setVisitDate] = useState("2025-03-09");
+  const [visitType, setVisitType] = useState("Customer");
+  const [partyName, setPartyName] = useState("");
+  const [location, setLocation] = useState("");
+  const [startTime, setStartTime] = useState("09:00");
+  const [returnTime, setReturnTime] = useState("14:00");
+  const [purpose, setPurpose] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const recentByDate = FIELD_VISIT_LOG_RECENT.reduce(
+    (acc, item) => {
+      if (!acc[item.date]) acc[item.date] = [];
+      acc[item.date].push(item);
+      return acc;
+    },
+    {} as Record<string, typeof FIELD_VISIT_LOG_RECENT>,
+  );
+
+  return (
+    <>
+      <DashHead
+        title="Field Visit Log (Employee view)"
+        sub="Log field visits — check-in, location, and beat"
+      />
+
+      <div className="field-visit-log-page">
+        <div className="field-visit-log-layout">
+          <div className="field-beat-card field-visit-log-form-card">
+            <div className="field-beat-card__head">New field visit</div>
+            <div className="field-visit-log-form-body">
+              <FormGrid>
+                <FormField label="Employee name">
+                  <input className="input" value={employeeName} readOnly style={{ background: "var(--bg-sunken)" }} />
+                </FormField>
+                <FormField label="Current company">
+                  <FormSelect value={company} onChange={setCompany}>
+                    <option value="smi">Sudarshan Minerals &amp; Industries (Udaipur)</option>
+                    <option value="smic">Sudarshan Microns</option>
+                  </FormSelect>
+                </FormField>
+                <FormField label="Date">
+                  <FormInput type="date" value={visitDate} onChange={setVisitDate} />
+                </FormField>
+                <FormField label="Visit type">
+                  <FormSelect value={visitType} onChange={setVisitType}>
+                    {VISIT_TYPE_OPTIONS.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </FormSelect>
+                </FormField>
+                <FormField label="Party name">
+                  <FormInput
+                    value={partyName}
+                    onChange={setPartyName}
+                    placeholder="Customer / vendor / contact name"
+                  />
+                </FormField>
+                <FormField label="Location">
+                  <FormInput
+                    value={location}
+                    onChange={setLocation}
+                    placeholder="Address or area (e.g. Kota, Industrial Area)"
+                  />
+                </FormField>
+                <FormField label="Start time">
+                  <FormInput type="time" value={startTime} onChange={setStartTime} />
+                </FormField>
+                <FormField label="Expected return time">
+                  <FormInput type="time" value={returnTime} onChange={setReturnTime} />
+                </FormField>
+              </FormGrid>
+
+              <div className="field-visit-log-full">
+                <FormField label="Purpose of visit">
+                  <FormInput
+                    value={purpose}
+                    onChange={setPurpose}
+                    placeholder="e.g. Follow-up on order, rate discussion, sample delivery"
+                  />
+                </FormField>
+              </div>
+
+              <div className="field-visit-log-full">
+                <FormField label="Notes">
+                  <textarea
+                    className="input"
+                    rows={3}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Any additional notes..."
+                  />
+                </FormField>
+              </div>
+
+              <div className="field-visit-log-gps-note">
+                <Icon name="pin" size={14} />
+                <div>
+                  <div className="field-visit-log-gps-note__title">Location capture</div>
+                  <p>
+                    When you tap <strong>Start Visit</strong>, the app will capture your current GPS
+                    location (with your permission). This helps record where the visit started. You
+                    can also type the location above if needed.
+                  </p>
+                </div>
+              </div>
+
+              <div className="field-visit-log-actions">
+                <Btn variant="primary" size="sm" icon="pin">
+                  Start Visit
+                </Btn>
+                <Btn variant="ghost" size="sm">
+                  Save Draft
+                </Btn>
+              </div>
+            </div>
+          </div>
+
+          <div className="field-beat-card field-visit-log-recent-card">
+            <div className="field-beat-card__head">Today&apos;s recent field visits</div>
+            <div className="field-visit-log-recent-body">
+              {Object.entries(recentByDate).map(([date, items]) => (
+                <div key={date} className="field-visit-log-date-group">
+                  <div className="field-visit-log-date">{date}</div>
+                  {items.map((visit) => (
+                    <div key={visit.party + visit.meta} className="field-visit-log-recent-item">
+                      <div className="field-visit-log-recent-item__top">
+                        <span className="field-visit-log-recent-item__party">{visit.party}</span>
+                        <span className={`field-visit-log-type field-visit-log-type--${visit.type.toLowerCase()}`}>
+                          {visit.type}
+                        </span>
+                      </div>
+                      <p className="field-visit-log-recent-item__meta">{visit.meta}</p>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+/* ============================================================
+   FIELD VISIT HISTORY
+   ============================================================ */
+const FIELD_VISIT_HISTORY_ROWS = [
+  {
+    id: "1",
+    date: "09 Mar 2025",
+    employee: "Rajesh Mehta",
+    party: "Asian Paints, Kota",
+    visitType: "Customer",
+    start: "08:15",
+    end: "11:45",
+    duration: "3h 30m",
+    area: "Kota",
+    outcome: "Order confirmed",
+    outcomeTone: "positive",
+    followUp: "15 Mar — rate sheet",
+    notes:
+      "Rate discussion completed. Customer agreed on GCC 325 at ₹X per MT for Q2. Order for 50 MT confirmed pending PO. Follow-up call scheduled for dispatch timeline.",
+  },
+  {
+    id: "2",
+    date: "09 Mar 2025",
+    employee: "Mohammed Irfan",
+    party: "Berger Paints — Jaipur branch",
+    visitType: "Customer",
+    start: "07:45",
+    end: "10:20",
+    duration: "2h 35m",
+    area: "Jaipur",
+    outcome: "PO expected",
+    outcomeTone: "positive",
+    followUp: "12 Mar — PO status",
+    notes:
+      "Met purchase manager for annual contract renewal. Discussed volume discount and delivery schedule. PO expected by 12 Mar.",
+  },
+  {
+    id: "3",
+    date: "08 Mar 2025",
+    employee: "Sneha Reddy",
+    party: "Minerals & Chemicals Ltd (Udaipur)",
+    visitType: "Vendor",
+    start: "10:00",
+    end: "12:30",
+    duration: "2h 30m",
+    area: "Udaipur",
+    outcome: "Sample collected",
+    outcomeTone: "positive",
+    followUp: "—",
+    notes: "Collected quality samples for lab testing. Vendor shared updated MSDS and batch certificates.",
+  },
+  {
+    id: "4",
+    date: "08 Mar 2025",
+    employee: "Karthik N.",
+    party: "Market survey — Chittorgarh",
+    visitType: "Market",
+    start: "09:30",
+    end: "—",
+    duration: "In progress",
+    area: "Chittorgarh",
+    outcome: "Data logged",
+    outcomeTone: "neutral",
+    followUp: "10 Mar — report",
+    notes: "Competitor pricing survey in progress. Visited 4 distributors in industrial belt.",
+  },
+  {
+    id: "5",
+    date: "07 Mar 2025",
+    employee: "Rajesh Mehta",
+    party: "ITC Paperboards, Bikaner",
+    visitType: "Customer",
+    start: "11:00",
+    end: "13:15",
+    duration: "2h 15m",
+    area: "Bikaner",
+    outcome: "Proposal sent",
+    outcomeTone: "neutral",
+    followUp: "14 Mar — decision",
+    notes: "Presented Q1 proposal for coated grades. Customer requested revised terms for bulk order.",
+  },
+  {
+    id: "6",
+    date: "07 Mar 2025",
+    employee: "Mohammed Irfan",
+    party: "Nirma Ltd, Ahmedabad",
+    visitType: "Customer",
+    start: "14:00",
+    end: "16:30",
+    duration: "2h 30m",
+    area: "Ahmedabad",
+    outcome: "Rate agreed",
+    outcomeTone: "positive",
+    followUp: "—",
+    notes: "Finalized rate for soda ash supply. Customer confirmed trial batch for next month.",
+  },
+];
+
+const FIELD_TOP_VISITED = [
+  { name: "Asian Paints", visits: 8 },
+  { name: "Berger Paints", visits: 6 },
+  { name: "ITC Paperboards", visits: 4 },
+  { name: "Minerals & Chemicals Ltd", visits: 3 },
+  { name: "Nirma Ltd", visits: 3 },
+  { name: "Hindustan Unilever", visits: 2 },
+];
+
+const visitTypeClass = (type) => {
+  const key = type.toLowerCase();
+  if (key === "customer") return "customer";
+  if (key === "vendor") return "vendor";
+  if (key === "market") return "market";
+  return "other";
+};
+
+const FieldVisitHistory = () => {
+  const [selectedId, setSelectedId] = useState(FIELD_VISIT_HISTORY_ROWS[0].id);
+  const [dateFrom, setDateFrom] = useState(dayjs("2025-03-01"));
+  const [dateTo, setDateTo] = useState(dayjs("2025-03-09"));
+
+  const selected = FIELD_VISIT_HISTORY_ROWS.find((r) => r.id === selectedId) ?? FIELD_VISIT_HISTORY_ROWS[0];
+
+  return (
+    <>
+      <DashHead
+        title="Field Visit History"
+        sub="Past field visits by employee, beat, and date"
+      />
+
+      <div className="field-visit-history-page">
+        <div className="arf-panel ap-filters-panel field-visit-history-filters">
+          <div className="arf-head">
+            <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
+            <span className="arf-head-title">Filters</span>
+          </div>
+          <div className="arf-body">
+            <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
+              <div className="arf-item">
+                <span className="arf-label">Employee</span>
+                <Select
+                  className="w-full"
+                  defaultValue="all"
+                  options={[
+                    { value: "all", label: "All employees" },
+                    { value: "rajesh", label: "Rajesh Mehta" },
+                    { value: "mohammed", label: "Mohammed Irfan" },
+                    { value: "sneha", label: "Sneha Reddy" },
+                  ]}
+                />
+              </div>
+              <div className="arf-item">
+                <span className="arf-label">Company</span>
+                <Select
+                  className="w-full"
+                  defaultValue="all"
+                  options={[
+                    { value: "all", label: "All companies" },
+                    { value: "smi", label: "Sudarshan Minerals (Udaipur)" },
+                    { value: "smic", label: "Sudarshan Microns" },
+                  ]}
+                />
+              </div>
+              <div className="arf-item">
+                <span className="arf-label">Territory</span>
+                <Select
+                  className="w-full"
+                  defaultValue="all"
+                  options={[
+                    { value: "all", label: "All territories" },
+                    { value: "rajasthan", label: "Rajasthan" },
+                    { value: "gujarat", label: "Gujarat" },
+                  ]}
+                />
+              </div>
+              <div className="arf-item">
+                <span className="arf-label">Visit type</span>
+                <Select
+                  className="w-full"
+                  defaultValue="all"
+                  options={[
+                    { value: "all", label: "All visit types" },
+                    { value: "customer", label: "Customer" },
+                    { value: "vendor", label: "Vendor" },
+                    { value: "market", label: "Market" },
+                  ]}
+                />
+              </div>
+              <div className="ap-filters-row-break" aria-hidden="true" />
+              <div className="arf-item">
+                <span className="arf-label">From</span>
+                <DatePicker
+                  className="w-full"
+                  format="DD/MM/YYYY"
+                  value={dateFrom}
+                  onChange={(d) => d && setDateFrom(d)}
+                />
+              </div>
+              <div className="arf-item">
+                <span className="arf-label">To</span>
+                <DatePicker
+                  className="w-full"
+                  format="DD/MM/YYYY"
+                  value={dateTo}
+                  onChange={(d) => d && setDateTo(d)}
+                />
+              </div>
+              <div className="ap-filters-spacer" aria-hidden="true" />
+              <div className="arf-item ap-filters-actions">
+                <Button type="primary" icon={<FilterOutlined />}>
+                  Apply filters
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="field-beat-card field-visit-history-table-card">
+          <div className="field-visit-history-table-head">
+            <div className="field-visit-history-table-title">
+              <UnorderedListOutlined />
+              Visit history
+            </div>
+            <span className="field-visit-history-table-hint">Click a row to see notes</span>
+          </div>
+          <div className="field-beat-card__body flush">
+            <table className="tbl field-visit-history-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Employee</th>
+                  <th>Party</th>
+                  <th>Visit type</th>
+                  <th>Start / end</th>
+                  <th>Duration</th>
+                  <th>Area</th>
+                  <th>Outcome</th>
+                  <th>Follow-up</th>
+                </tr>
+              </thead>
+              <tbody>
+                {FIELD_VISIT_HISTORY_ROWS.map((row) => (
+                  <tr
+                    key={row.id}
+                    className={selectedId === row.id ? "field-visit-history-row--selected" : ""}
+                    onClick={() => setSelectedId(row.id)}
+                  >
+                    <td className="muted">{row.date}</td>
+                    <td className="strong">{row.employee}</td>
+                    <td>{row.party}</td>
+                    <td>
+                      <span className={`field-visit-history-type field-visit-history-type--${visitTypeClass(row.visitType)}`}>
+                        {row.visitType}
+                      </span>
+                    </td>
+                    <td className="muted">
+                      {row.start} / {row.end}
+                    </td>
+                    <td className="muted">{row.duration}</td>
+                    <td>{row.area}</td>
+                    <td>
+                      <span className={`field-visit-history-outcome field-visit-history-outcome--${row.outcomeTone}`}>
+                        {row.outcome}
+                      </span>
+                    </td>
+                    <td className="muted">{row.followUp}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="field-visit-history-bottom">
+          <div className="field-beat-card">
+            <div className="field-beat-card__head field-visit-history-side__head">
+              <LineChartOutlined />
+              Top visited (last 30 days)
+            </div>
+            <div className="field-visit-history-side__body">
+              {FIELD_TOP_VISITED.map((item) => (
+                <div key={item.name} className="field-visit-history-top-row">
+                  <span>{item.name}</span>
+                  <span className="field-visit-history-top-row__count">{item.visits}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="field-beat-card">
+            <div className="field-beat-card__head field-visit-history-side__head">
+              <FileTextOutlined />
+              Visit notes preview
+            </div>
+            <div className="field-visit-history-notes">
+              <div className="field-visit-history-notes__title">
+                {selected.date} · {selected.employee} · {selected.party}
+              </div>
+              <p className="field-visit-history-notes__body">{selected.notes}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+/* ============================================================
+   BEAT TERRITORY MANAGEMENT
+   ============================================================ */
+const BEAT_TERRITORY_KPIS = [
+  { label: "Weekly target (total)", value: "32", hint: "visits across 4 field staff", tone: "teal" },
+  { label: "Completed this week", value: "18", hint: "as of 09 Mar", tone: "green" },
+  { label: "On track", value: "3 / 4", hint: "employees meeting target", tone: "green" },
+];
+
+const BEAT_EMPLOYEE_CARDS = [
+  {
+    name: "Rajesh Mehta",
+    role: "Field Sales · Rajasthan North",
+    territory: "Rajasthan North — Kota, Jaipur, Alwar",
+    cluster: "Asian Paints, Berger, Nirma, ITC (Kota/Jaipur)",
+    weeklyTarget: 8,
+    completed: 5,
+  },
+  {
+    name: "Mohammed Irfan",
+    role: "Field Sales · Rajasthan + MP",
+    territory: "Rajasthan South, Madhya Pradesh — Udaipur, Indore, Bhopal",
+    cluster: "Berger, HUL, regional distributors",
+    weeklyTarget: 8,
+    completed: 6,
+  },
+  {
+    name: "Sneha Reddy",
+    role: "Field Sales · Vendors & South",
+    territory: "Rajasthan (Udaipur), Gujarat — vendor visits",
+    cluster: "Minerals & Chemicals, Calcium Products, key vendors",
+    weeklyTarget: 6,
+    completed: 4,
+  },
+  {
+    name: "Karthik N.",
+    role: "Field Sales · Market & expansion",
+    territory: "Chittorgarh, Bhilwara, Ajmer — market surveys",
+    cluster: "New leads, Emami, regional paint units",
+    weeklyTarget: 10,
+    completed: 3,
+  },
+];
+
+const BEAT_ROUTES = [
+  { id: "A", title: "Beat A — Rajasthan North", places: "Kota, Jaipur, Alwar cluster", meta: "12 customers · Rajesh Mehta" },
+  { id: "B", title: "Beat B — Rajasthan South + MP", places: "Udaipur, Indore, Bhopal", meta: "10 customers · Mohammed Irfan" },
+  { id: "C", title: "Beat C — Vendor circuit", places: "Udaipur, Makrana, Gujarat vendors", meta: "8 vendors · Sneha Reddy" },
+  { id: "D", title: "Beat D — Market / expansion", places: "Chittorgarh, Bhilwara, Ajmer", meta: "15 leads · Karthik N." },
+];
+
+const BEAT_TERRITORY_SUMMARY = [
+  { employee: "Rajesh Mehta", territory: "Rajasthan North", customers: 12, target: 8, completed: 5, status: "In progress", statusTone: "progress" },
+  { employee: "Mohammed Irfan", territory: "Rajasthan South, MP", customers: 10, target: 8, completed: 6, status: "In progress", statusTone: "progress" },
+  { employee: "Sneha Reddy", territory: "Vendor circuit", customers: 8, target: 6, completed: 4, status: "In progress", statusTone: "progress" },
+  { employee: "Karthik N.", territory: "Market / expansion", customers: 15, target: 10, completed: 3, status: "Behind target", statusTone: "behind" },
+];
+
+const FieldBeatTerritory = () => (
+  <>
+    <DashHead
+      title="Beat Territory Management"
+      sub="Define beats and territories; assign areas to field employees"
+    />
+
+    <div className="field-beat-territory-page">
+      <div className="field-activity-kpi-grid">
+        {BEAT_TERRITORY_KPIS.map((kpi) => (
+          <div key={kpi.label} className={`field-activity-kpi field-activity-kpi--${kpi.tone}`}>
+            <div className="field-activity-kpi__label">{kpi.label}</div>
+            <div className="field-activity-kpi__value">{kpi.value}</div>
+            <div className="field-activity-kpi__hint">{kpi.hint}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="field-beat-territory-section">
+        <div className="field-beat-territory-section__head">
+          <TeamOutlined />
+          Employee cards
+        </div>
+        <div className="field-beat-employee-grid">
+          {BEAT_EMPLOYEE_CARDS.map((emp) => (
+            <div key={emp.name} className="field-beat-employee-card">
+              <div className="field-beat-employee-card__header">
+                <div className="field-beat-employee-card__name">{emp.name}</div>
+                <div className="field-beat-employee-card__role">{emp.role}</div>
+              </div>
+              <div className="field-beat-employee-card__block">
+                <div className="field-beat-employee-card__label">Assigned territory / cities</div>
+                <div className="field-beat-employee-card__value">{emp.territory}</div>
+              </div>
+              <div className="field-beat-employee-card__block">
+                <div className="field-beat-employee-card__label">Customer cluster</div>
+                <div className="field-beat-employee-card__value">{emp.cluster}</div>
+              </div>
+              <div className="field-beat-employee-card__stats">
+                <div>
+                  <span className="field-beat-employee-card__stat-label">Weekly target</span>
+                  <span className="field-beat-employee-card__stat-value">{emp.weeklyTarget} visits</span>
+                </div>
+                <div>
+                  <span className="field-beat-employee-card__stat-label">This week</span>
+                  <span className="field-beat-employee-card__stat-value field-beat-employee-card__stat-value--green">
+                    {emp.completed} completed
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="field-beat-card">
+        <div className="field-beat-territory-section__head field-beat-card__head-inline">
+          <EnvironmentOutlined />
+          Route / beat grouping
+        </div>
+        <div className="field-beat-route-grid">
+          {BEAT_ROUTES.map((beat) => (
+            <div key={beat.id} className="field-beat-route-card">
+              <div className="field-beat-route-card__title">{beat.title}</div>
+              <div className="field-beat-route-card__places">{beat.places}</div>
+              <div className="field-beat-route-card__meta">{beat.meta}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="field-beat-card">
+        <div className="field-visit-history-table-head">
+          <div className="field-visit-history-table-title">
+            <UnorderedListOutlined />
+            Territory &amp; visit summary
+          </div>
+          <span className="field-visit-history-table-hint">Week of 04–10 Mar 2025</span>
+        </div>
+        <div className="field-beat-card__body flush">
+          <table className="tbl field-beat-territory-table">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Territory</th>
+                <th>Assigned customers</th>
+                <th>Weekly target visits</th>
+                <th>Completed visits</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {BEAT_TERRITORY_SUMMARY.map((row) => (
+                <tr key={row.employee}>
+                  <td className="strong">{row.employee}</td>
+                  <td>{row.territory}</td>
+                  <td className="tabular">{row.customers}</td>
+                  <td className="tabular">{row.target}</td>
+                  <td className="tabular">{row.completed}</td>
+                  <td>
+                    <span className={`field-beat-territory-status field-beat-territory-status--${row.statusTone}`}>
+                      {row.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </>
+);
+
+export { Customers, CustomerOrders, FieldSales, FieldVisitsBeatTracking, FieldVisitLog, FieldVisitHistory, FieldBeatTerritory, InvoiceVerify };

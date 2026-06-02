@@ -173,7 +173,7 @@ const NOTIFS = [
   { id: 2, type: "info",    text: "PO-2026-0142 awaiting invoice verification",                    time: "1 hr",   target: "/procurement" },
   { id: 3, type: "success", text: "DSP-1039 nearing delivery — Nirma Ltd, Bhavnagar",              time: "2 hr",   target: "/dispatch" },
   { id: 4, type: "alert",   text: "BOPP Bag 20kg stock low, 2 active orders affected",             time: "3 hr",   target: "/inventory/packaging" },
-  { id: 5, type: "info",    text: "Field visit log: Karan Singh checked-in at Asian Paints HO",    time: "4 hr",   target: "/field-sales" },
+  { id: 5, type: "info",    text: "Field visit log: Karan Singh checked-in at Asian Paints HO",    time: "4 hr",   target: "/field-sales/activity-dashboard" },
 ];
 
 const REVENUE_DATA = [
