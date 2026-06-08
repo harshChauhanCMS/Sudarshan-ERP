@@ -3,11 +3,20 @@ import { ok, fail } from "@/lib/api-response";
 import LeaveRequest from "@/lib/models/LeaveRequest";
 import LeavePolicy from "@/lib/models/LeavePolicy";
 import Employee from "@/lib/models/Employee";
+import {
+  assertManagerCanAccessEmployee,
+  filterByManagerScope,
+  isManagerRole,
+  managerTeamEmployeeFilter,
+  resolveManagerScope,
+} from "@/lib/manager-scope";
 import { getSession } from "@/lib/session";
 
 export async function GET(request: Request) {
   try {
     await connectDB();
+    const session = await getSession();
+    const scope = await resolveManagerScope(session.user);
     const url = new URL(request.url);
     const status = url.searchParams.get("status");
     const department = url.searchParams.get("department");
@@ -18,7 +27,19 @@ export async function GET(request: Request) {
     const q: Record<string, any> = {};
     if (status) q.status = status;
     if (department) q.department = department;
-    if (employeeId) q.employeeId = employeeId;
+    if (employeeId) {
+      if (scope.restricted) {
+        const access = await assertManagerCanAccessEmployee(
+          session.user,
+          employeeId
+        );
+        if (!access.ok) return fail(access.message, 403);
+      }
+      q.employeeId = employeeId;
+    } else {
+      const teamFilter = managerTeamEmployeeFilter(scope);
+      if (teamFilter) Object.assign(q, teamFilter);
+    }
     if (from || to) {
       q.fromDate = {};
       if (from) q.fromDate.$gte = new Date(from);
@@ -26,7 +47,14 @@ export async function GET(request: Request) {
     }
 
     const leaves = await LeaveRequest.find(q).sort({ createdAt: -1 }).lean();
-    return ok(leaves);
+    const visible = filterByManagerScope(
+      leaves.map((leave) => ({
+        ...leave,
+        employeeId: String(leave.employeeId),
+      })),
+      scope
+    );
+    return ok(visible);
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Failed", 500);
   }
@@ -48,6 +76,10 @@ export async function POST(request: Request) {
 
     const employee = await Employee.findOne({ employeeId }).lean();
     if (!employee) return fail(`Employee ${employeeId} not found`, 404);
+
+    if (isManagerRole(session.user?.role)) {
+      return fail("Managers cannot apply leave on behalf of employees.", 403);
+    }
 
     const created = await LeaveRequest.create({
       employeeId,

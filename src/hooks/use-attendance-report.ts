@@ -2,9 +2,6 @@ import { useState, useMemo, useEffect } from "react";
 import dayjs from "dayjs";
 import { message } from "antd";
 import {
-  getAttendanceReportDummy,
-  isAttendanceReportEmpty,
-  isAttendanceReportSparse,
   type AttendanceSummaryRow,
   type AttendanceDailyRow,
   type AttendanceReportKpi,
@@ -12,6 +9,21 @@ import {
   type WeeklyTrendPoint,
   type DeptBreakdownPoint,
 } from "@/lib/attendance-report-dummy";
+
+const EMPTY_KPI: AttendanceReportKpi = {
+  totalEmployees: 0,
+  presentDays: 0,
+  absentDays: 0,
+  lateDays: 0,
+  totalShortfall: 0,
+  totalOvertime: 0,
+};
+
+const EMPTY_GPS: AttendanceGpsSummary = {
+  gpsPunches: 0,
+  biometricPunches: 0,
+  gpsPercent: 0,
+};
 
 export type {
   AttendanceSummaryRow,
@@ -23,10 +35,8 @@ export type {
 };
 
 export function useAttendanceReport() {
-  const dummy = getAttendanceReportDummy();
-
   const [loading, setLoading] = useState(false);
-  const [departments, setDepartments] = useState<string[]>(() => dummy.departments);
+  const [departments, setDepartments] = useState<string[]>([]);
   const [range, setRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs().startOf("month"),
     dayjs().endOf("month"),
@@ -36,18 +46,14 @@ export function useAttendanceReport() {
   const [shift, setShift] = useState("all");
   const [unit, setUnit] = useState("all");
   const [period, setPeriod] = useState("month");
-  const [kpi, setKpi] = useState<AttendanceReportKpi | null>(() => dummy.kpi);
-  const [workingDays, setWorkingDays] = useState(() => dummy.workingDays);
-  const [gpsSummary, setGpsSummary] = useState<AttendanceGpsSummary | null>(
-    () => dummy.gpsSummary
-  );
-  const [summary, setSummary] = useState<AttendanceSummaryRow[]>(() => dummy.summary);
-  const [daily, setDaily] = useState<AttendanceDailyRow[]>(() => dummy.daily);
-  const [usingDummy, setUsingDummy] = useState(true);
-  const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendPoint[]>(() => dummy.weeklyTrend);
-  const [deptBreakdown, setDeptBreakdown] = useState<DeptBreakdownPoint[]>(
-    () => dummy.deptBreakdown
-  );
+  const [kpi, setKpi] = useState<AttendanceReportKpi | null>(null);
+  const [workingDays, setWorkingDays] = useState(0);
+  const [gpsSummary, setGpsSummary] = useState<AttendanceGpsSummary | null>(null);
+  const [summary, setSummary] = useState<AttendanceSummaryRow[]>([]);
+  const [daily, setDaily] = useState<AttendanceDailyRow[]>([]);
+  const [usingDummy, setUsingDummy] = useState(false);
+  const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendPoint[]>([]);
+  const [deptBreakdown, setDeptBreakdown] = useState<DeptBreakdownPoint[]>([]);
 
   useEffect(() => {
     fetch("/api/hrms/departments")
@@ -55,7 +61,7 @@ export function useAttendanceReport() {
       .then((j) => {
         const fromApi: string[] = j?.data || [];
         if (fromApi.length) {
-          setDepartments([...new Set([...dummy.departments, ...fromApi])]);
+          setDepartments([...new Set(fromApi)]);
         }
       })
       .catch(() => {});
@@ -67,18 +73,15 @@ export function useAttendanceReport() {
     empId?: string
   ) => (empId ? rows.filter((r) => r.employeeId === empId) : rows);
 
-  const applyDummy = (month?: string, empId?: string) => {
-    const demo = getAttendanceReportDummy(month);
-    const dailyRows = filterDailyByEmployee(demo.daily, empId);
-    setKpi(demo.kpi);
-    setWorkingDays(demo.workingDays);
-    setGpsSummary(demo.gpsSummary);
-    setSummary(demo.summary);
-    setDaily(dailyRows);
-    setDepartments(demo.departments);
-    setWeeklyTrend(demo.weeklyTrend);
-    setDeptBreakdown(demo.deptBreakdown);
-    setUsingDummy(true);
+  const applyEmpty = () => {
+    setKpi(EMPTY_KPI);
+    setWorkingDays(0);
+    setGpsSummary(EMPTY_GPS);
+    setSummary([]);
+    setDaily([]);
+    setWeeklyTrend([]);
+    setDeptBreakdown([]);
+    setUsingDummy(false);
   };
 
   const load = async (opts: {
@@ -107,35 +110,20 @@ export function useAttendanceReport() {
         rows = rows.filter((r) => r.locationUnit === opts.unit);
       }
 
-      if (
-        isAttendanceReportEmpty(rows) ||
-        rows.length < 3 ||
-        isAttendanceReportSparse(rows)
-      ) {
-        applyDummy(opts.range[0].format("YYYY-MM"), opts.employeeId);
-        return;
-      }
-
       let dailyRows: AttendanceDailyRow[] = json.data.daily ?? [];
       dailyRows = filterDailyByEmployee(dailyRows, opts.employeeId);
 
-      const demo = getAttendanceReportDummy(opts.range[0].format("YYYY-MM"));
-
-      setKpi(json.data.kpi);
-      setWorkingDays(json.data.workingDays ?? 20);
-      setGpsSummary(json.data.gpsSummary ?? demo.gpsSummary);
+      setKpi(json.data.kpi ?? EMPTY_KPI);
+      setWorkingDays(json.data.workingDays ?? 0);
+      setGpsSummary(json.data.gpsSummary ?? EMPTY_GPS);
       setSummary(rows);
       setDaily(dailyRows);
-      setWeeklyTrend(
-        json.data.weeklyTrend?.length ? json.data.weeklyTrend : demo.weeklyTrend
-      );
-      setDeptBreakdown(
-        json.data.deptBreakdown?.length ? json.data.deptBreakdown : demo.deptBreakdown
-      );
+      setWeeklyTrend(json.data.weeklyTrend ?? []);
+      setDeptBreakdown(json.data.deptBreakdown ?? []);
       setUsingDummy(false);
     } catch {
-      applyDummy(opts.range[0].format("YYYY-MM"), opts.employeeId);
-      message.warning("Showing demo data — live report could not be loaded");
+      applyEmpty();
+      message.warning("Could not load attendance report");
     } finally {
       setLoading(false);
     }

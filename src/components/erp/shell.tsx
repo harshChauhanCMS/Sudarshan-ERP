@@ -192,8 +192,8 @@ const Sidebar = ({
   userRole,
 }) => {
   const filteredNav = useMemo(
-    () => filterNavByPermissions(NAV, permissions),
-    [permissions]
+    () => filterNavByPermissions(NAV, permissions, userRole),
+    [permissions, userRole]
   );
 
   const displayName = userName || "User";
@@ -564,6 +564,7 @@ const breadcrumbsFor = (route) => {
     "/hrms/employees": ["People", "HR Management", "Employees"],
     "/hrms/employees/add": ["People", "HR Management", "Employees", "Add employee"],
     "/hrms/attendance": ["People", "HR Management", "Attendance"],
+    "/hrms/notifications": ["People", "HR Management", "Notifications"],
     "/hrms/reports": ["People", "Reports"],
     "/hrms/reports/attendance": ["People", "Reports", "Attendance Overview"],
     "/hrms/reports/employee": ["People", "Reports", "Employee Report"],
@@ -604,6 +605,7 @@ const Topbar = ({
   onLogout,
   onMenuClick,
   menuOpen,
+  notifUnreadCount = 0,
 }) => {
   const crumbs = breadcrumbsFor(route);
   return (
@@ -650,9 +652,19 @@ const Topbar = ({
           className="tb-iconbtn"
           onClick={onNotifClick}
           title="Notifications"
+          style={{ position: "relative" }}
         >
           <Icon name="bell" size={15} />
-          <span className="dot"></span>
+          {notifUnreadCount > 0 ? (
+            <span
+              className="dot"
+              style={{
+                position: "absolute",
+                top: 6,
+                right: 6,
+              }}
+            />
+          ) : null}
         </button>
         <div className="divider v"></div>
         <button className="btn ghost" onClick={onLogout}>

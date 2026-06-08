@@ -1,7 +1,9 @@
 import { connectDB } from "@/lib/db";
 import { ok, fail } from "@/lib/api-response";
 import AttendancePunch from "@/lib/models/AttendancePunch";
+import Employee from "@/lib/models/Employee";
 import { verifyBiometricRequest } from "@/lib/biometric-auth";
+import { notifyAttendancePunch } from "@/lib/hrms-punch-notifications";
 
 function isFiniteNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
@@ -46,6 +48,10 @@ export async function POST(request: Request) {
   try {
     const location = validateLocation(body.location);
     await connectDB();
+    const employee = await Employee.findOne({ employeeId })
+      .select({ fullName: 1 })
+      .lean();
+
     const created = await AttendancePunch.create({
       employeeId,
       punchType,
@@ -56,6 +62,16 @@ export async function POST(request: Request) {
       notes: notes || undefined,
       raw: body.raw ?? body,
     });
+
+    void notifyAttendancePunch({
+      employeeId,
+      employeeName: employee?.fullName ? String(employee.fullName) : undefined,
+      punchType,
+      punchedAt,
+      source,
+      punchId: String(created._id),
+    });
+
     return ok({ punch: created, auth: auth.mode }, 201);
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Ingestion failed", 500);

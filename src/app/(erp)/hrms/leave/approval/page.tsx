@@ -23,7 +23,7 @@ import {
   EyeOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import RepHeader from "@/components/hrms/RepHeader";
@@ -32,7 +32,8 @@ import CommonTable from "@/components/common/CommonTable";
 import StatCard from "@/components/common/StatCard";
 import EmployeeSelect from "@/components/erp/EmployeeSelect";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
-import { getLeaveDummy, leaveTypeColor } from "@/lib/leave-dummy";
+import { leaveTypeColor } from "@/lib/leave-dummy";
+import { computeLeaveApprovalKpi } from "@/lib/hrms-leave-kpi";
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "orange",
@@ -64,9 +65,6 @@ function formatDate(v: unknown): string {
 }
 
 export default function LeaveApprovalPage() {
-  const demo = getLeaveDummy();
-  const kpi = demo.approvalKpi;
-
   const [leaves, setLeaves] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
@@ -87,12 +85,10 @@ export default function LeaveApprovalPage() {
     setViewOpen(true);
   };
 
-  const load = async (status?: string) => {
+  const load = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (status && status !== "all") params.set("status", status);
-      const res = await fetch(`/api/hrms/leave?${params}`);
+      const res = await fetch("/api/hrms/leave");
       // Guard against HTML responses (auth redirect, 404 page, etc.)
       if (!res.headers.get("content-type")?.includes("application/json")) {
         setLeaves([]);
@@ -110,8 +106,15 @@ export default function LeaveApprovalPage() {
   };
 
   useEffect(() => {
-    void load(activeTab);
-  }, [activeTab]);
+    void load();
+  }, []);
+
+  const kpi = useMemo(() => computeLeaveApprovalKpi(leaves), [leaves]);
+
+  const tableData = useMemo(() => {
+    if (activeTab === "all") return leaves;
+    return leaves.filter((row) => String(row.status) === activeTab);
+  }, [leaves, activeTab]);
 
   const approve = async (id: string) => {
     try {
@@ -123,7 +126,7 @@ export default function LeaveApprovalPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed");
       message.success("Approved");
-      void load(activeTab);
+      void load();
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Failed");
     }
@@ -142,7 +145,7 @@ export default function LeaveApprovalPage() {
       message.success("Rejected");
       setRejectOpen(false);
       rejectForm.resetFields();
-      void load(activeTab);
+      void load();
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Failed");
     }
@@ -161,7 +164,7 @@ export default function LeaveApprovalPage() {
       message.success("Rolled back");
       setRollbackOpen(false);
       rollbackForm.resetFields();
-      void load(activeTab);
+      void load();
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Failed");
     }
@@ -182,7 +185,7 @@ export default function LeaveApprovalPage() {
       if (!res.ok) throw new Error(json?.error || "Failed");
       message.success(`${json.data.processed} records ${action}d`);
       setSelectedRowKeys([]);
-      void load(activeTab);
+      void load();
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Failed");
     }
@@ -204,7 +207,7 @@ export default function LeaveApprovalPage() {
       message.success("Leave applied successfully");
       setApplyOpen(false);
       applyForm.resetFields();
-      void load(activeTab);
+      void load();
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Failed");
     }
@@ -322,30 +325,6 @@ export default function LeaveApprovalPage() {
     },
   ];
 
-  const pendingDemoData = demo.pendingApprovals.map((r) => ({
-    _id: r.id,
-    employeeId: r.employeeId,
-    employeeName: r.employeeName,
-    department: r.department,
-    leaveType: r.type,
-    fromDate: r.fromDate,
-    toDate: r.toDate,
-    days: r.days,
-    reason: r.reason,
-    description: r.description ?? r.reason,
-    status: "pending",
-    balanceAfter: r.balanceAfter,
-    appliedOn: r.applied,
-    contact: r.contact,
-    sla: r.sla,
-    slaTone: r.slaTone,
-  }));
-
-  const tableData =
-    activeTab === "pending" && !loading && leaves.length === 0
-      ? pendingDemoData
-      : leaves;
-
   const tabItems = [
     { key: "all", label: "All" },
     { key: "pending", label: `Pending (${kpi.pending})` },
@@ -382,7 +361,7 @@ export default function LeaveApprovalPage() {
             )}
             <Button
               icon={<ReloadOutlined />}
-              onClick={() => load(activeTab)}
+              onClick={() => load()}
               loading={loading}
             >
               Refresh

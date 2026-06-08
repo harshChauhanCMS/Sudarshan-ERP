@@ -2,6 +2,8 @@ import { connectDB } from "@/lib/db";
 import Employee from "@/lib/models/Employee";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import { ok, fail } from "@/lib/api-response";
+import { resolveManagerScope } from "@/lib/manager-scope";
+import { getSession } from "@/lib/session";
 import { enrichLocation, shortAddressFromLocation, type GeoLocation } from "@/lib/reverse-geocode";
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
@@ -199,7 +201,19 @@ export async function GET(request: Request) {
       byPersonDay.set(rowKey, cur);
     }
 
-    const rows = Array.from(byPersonDay.values())
+    const session = await getSession();
+    const managerScope = await resolveManagerScope(session.user);
+
+    let dayRows = Array.from(byPersonDay.values());
+    if (managerScope.restricted) {
+      dayRows = dayRows.filter(
+        (p) =>
+          p.employeeId &&
+          managerScope.teamEmployeeIds.includes(String(p.employeeId))
+      );
+    }
+
+    const rows = dayRows
       .map((p) => {
         const employee = p.employeeId
           ? byEmployeeId.get(String(p.employeeId))

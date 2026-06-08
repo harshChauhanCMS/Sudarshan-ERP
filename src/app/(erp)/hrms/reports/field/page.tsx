@@ -9,16 +9,12 @@ import StatCard from "@/components/common/StatCard";
 import CommonTable, { type CommonTableColumn } from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
 import AttendanceFilterPanel from "@/components/hrms/AttendanceFilterPanel";
-import { getFieldAttendanceDummy } from "@/lib/attendance-report-dummy";
 import { useAttendanceReport, type AttendanceSummaryRow } from "@/hooks/use-attendance-report";
 
 export default function FieldAttendancePage() {
   const r = useAttendanceReport();
-  const fieldDummy = useMemo(() => getFieldAttendanceDummy(), []);
-
-  const usingFieldDummy = r.fieldRows.length === 0;
-  const fieldRows = usingFieldDummy ? fieldDummy.summary : r.fieldRows;
-  const officeStats = usingFieldDummy ? fieldDummy.officeStats : r.officeStats;
+  const fieldRows = r.fieldRows;
+  const officeStats = r.officeStats;
 
   useEffect(() => {
     void r.handleApply();
@@ -126,7 +122,7 @@ export default function FieldAttendancePage() {
 
       <ReportSection
         title="Field employee breakdown"
-        meta={`${r.rangeLabel} · field staff only · ${fieldRows.length} employees${usingFieldDummy ? " · demo data" : ""}`}
+        meta={`${r.rangeLabel} · field staff only · ${fieldRows.length} employees`}
         footer="Field days = punches marked as Field (outside office). In-office = at plant/office."
         flush
       >
@@ -135,7 +131,7 @@ export default function FieldAttendancePage() {
           columns={columns}
           dataSource={fieldRows}
           rowKey="employeeId"
-          loading={r.loading && !usingFieldDummy}
+          loading={r.loading}
           pagination={{ pageSize: 15, showSizeChanger: true }}
         />
       </ReportSection>

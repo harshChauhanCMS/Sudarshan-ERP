@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "antd";
+import dayjs from "dayjs";
 import {
   DownloadOutlined,
   UserOutlined,
@@ -35,6 +36,12 @@ const REPORT_TYPE_CHIPS: ReportChipOption<ReportType>[] = [
   { value: "short", label: "Short hours", tone: "orange" },
   { value: "overtime", label: "Overtime", tone: "emerald" },
 ];
+
+function formatJoiningDate(value?: string) {
+  if (!value) return "—";
+  const parsed = dayjs(value, ["DD/MM/YYYY", "YYYY-MM-DD"], true);
+  return parsed.isValid() ? parsed.format("DD MMM YYYY") : value;
+}
 
 const GROUP_CHIPS: ReportChipOption<GroupBy>[] = [
   {
@@ -125,6 +132,14 @@ export default function EmployeeReportPage() {
       ),
     },
     { title: "Dept", dataIndex: "department", key: "dept" },
+    {
+      title: "Joining date",
+      dataIndex: "dateJoining",
+      key: "joining",
+      render: (v: string | undefined) => (
+        <span className="text-zinc-600">{formatJoiningDate(v)}</span>
+      ),
+    },
     { title: "Shift", dataIndex: "primaryShift", key: "shift" },
     {
       title: "Present",

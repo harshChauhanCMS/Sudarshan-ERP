@@ -57,11 +57,7 @@ const EmployeeSchema = new Schema(
       required: [true, "Please specify a designation"],
       trim: true,
     },
-    locationUnit: {
-      type: String,
-      required: [true, "Please specify a location or unit"],
-      trim: true,
-    },
+    locationUnit: { type: String, trim: true },
     companies: {
       type: [String],
       default: [],

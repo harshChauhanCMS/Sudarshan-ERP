@@ -1,19 +1,21 @@
 "use client";
 
-import { Button, Tag, message, Tooltip, DatePicker } from "antd";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Button, Tag, message, Tooltip, DatePicker, Select, Input } from "antd";
 import {
   DownloadOutlined,
   ThunderboltOutlined,
   CheckOutlined,
   ReloadOutlined,
   FilterOutlined,
+  SearchOutlined,
   TeamOutlined,
   CheckCircleOutlined,
   DollarOutlined,
   WalletOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { useEffect, useState } from "react";
 
 import RepHeader from "@/components/hrms/RepHeader";
 import { HRMS_BACK } from "@/lib/hrms-nav";
@@ -22,39 +24,88 @@ import StatCard from "@/components/common/StatCard";
 import ReportSection from "@/components/hrms/ReportSection";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 
+type SalaryRow = {
+  _id: string;
+  employeeId: string;
+  employeeName: string;
+  department: string;
+  grossSalary: number;
+  netPayable: number;
+  status: string;
+  workingDays: number;
+  daysPresent: number;
+  leaveDays?: number;
+  unpaidLeaveDays?: number;
+  leaveDeduction: number;
+  pfEmployee: number;
+  pfEmployer: number;
+  esi: number;
+  tds: number;
+  overtimeHours: number;
+  overtimeAmount: number;
+};
+
 const STATUS_COLOR: Record<string, string> = {
   draft: "orange",
   approved: "green",
   disbursed: "blue",
+  pending: "default",
 };
+
+const STATUS_OPTIONS = [
+  { value: "all", label: "All monthly employees" },
+  { value: "paid", label: "Paid (disbursed)" },
+  { value: "approved", label: "Approved" },
+  { value: "draft", label: "Draft" },
+  { value: "pending", label: "Not generated" },
+];
+
 const fmt = (n: number) =>
   `₹${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 0 })}`;
 
-export default function MonthlySalaryPage() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [sheets, setSheets] = useState<any[]>([]);
+function parseCycleParam(value: string | null): dayjs.Dayjs {
+  if (value && dayjs(value, "YYYY-MM", true).isValid()) {
+    return dayjs(value, "YYYY-MM");
+  }
+  return dayjs();
+}
+
+function MonthlySalaryContent() {
+  const searchParams = useSearchParams();
+  const [sheets, setSheets] = useState<SalaryRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [approving, setApproving] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
-  const [range, setRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
-    dayjs().startOf("month"),
-    dayjs().endOf("month"),
-  ]);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [month, setMonth] = useState(() =>
+    parseCycleParam(searchParams.get("cycle"))
+  );
 
-  const cycleLabel =
-    range[0].format("MMM YYYY") === range[1].format("MMM YYYY")
-      ? range[0].format("MMMM YYYY")
-      : `${range[0].format("DD MMM")} – ${range[1].format("DD MMM YYYY")}`;
-  const cycleKey = range[0].format("YYYY-MM");
+  const cycleLabel = month.format("MMMM YYYY");
+  const cycleKey = month.format("YYYY-MM");
+  const range: [dayjs.Dayjs, dayjs.Dayjs] = [
+    month.startOf("month"),
+    month.endOf("month"),
+  ];
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/hrms/salary?cycle=${cycleKey}`);
+      const params = new URLSearchParams({
+        cycle: cycleKey,
+        monthly: "1",
+      });
+      if (statusFilter !== "all") {
+        params.set("status", statusFilter);
+      }
+
+      const res = await fetch(`/api/hrms/salary?${params.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed");
       setSheets(json.data || []);
+      setSelectedRowKeys([]);
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Failed to load");
     } finally {
@@ -65,7 +116,7 @@ export default function MonthlySalaryPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cycleKey]);
+  }, [cycleKey, statusFilter]);
 
   const generate = async () => {
     setGenerating(true);
@@ -115,15 +166,31 @@ export default function MonthlySalaryPage() {
     }
   };
 
-  const summary = {
-    total: sheets.length,
-    approved: sheets.filter((s) => s.status === "approved").length,
-    totalNet: sheets.reduce((a, s) => a + ((s.netPayable as number) || 0), 0),
-    totalGross: sheets.reduce(
-      (a, s) => a + ((s.grossSalary as number) || 0),
-      0
-    ),
-  };
+  const filteredSheets = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return sheets;
+    return sheets.filter((row) => {
+      const haystack = [row.employeeId, row.employeeName, row.department]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [sheets, search]);
+
+  const summary = useMemo(
+    () => ({
+      total: filteredSheets.length,
+      paid: filteredSheets.filter((s) => s.status === "disbursed").length,
+      approved: filteredSheets.filter((s) => s.status === "approved").length,
+      pending: filteredSheets.filter((s) => s.status === "pending").length,
+      totalNet: filteredSheets.reduce((a, s) => a + (s.netPayable || 0), 0),
+      totalGross: filteredSheets.reduce((a, s) => a + (s.grossSalary || 0), 0),
+      paidNet: filteredSheets
+        .filter((s) => s.status === "disbursed")
+        .reduce((a, s) => a + (s.netPayable || 0), 0),
+    }),
+    [filteredSheets]
+  );
 
   const columns = [
     {
@@ -155,22 +222,28 @@ export default function MonthlySalaryPage() {
       title: "Attendance",
       key: "att",
       width: 110,
-      render: (_: unknown, r: Record<string, number>) => (
-        <Tooltip
-          title={`Present: ${r.daysPresent} | Leave: ${r.leaveDays || 0} | Absent: ${Math.max(0, (r.workingDays || 0) - (r.daysPresent || 0) - (r.leaveDays || 0))} | Unpaid: ${r.unpaidLeaveDays || 0}`}
-        >
-          <span className="cursor-help">
-            <span className="font-bold text-emerald-600">{r.daysPresent}</span>
-            <span className="text-zinc-400"> / {r.workingDays}</span>
-          </span>
-        </Tooltip>
-      ),
+      render: (_: unknown, r: SalaryRow) =>
+        r.status === "pending" ? (
+          <span className="text-zinc-400">—</span>
+        ) : (
+          <Tooltip
+            title={`Present: ${r.daysPresent} | Leave: ${r.leaveDays || 0} | Absent: ${Math.max(0, (r.workingDays || 0) - (r.daysPresent || 0) - (r.leaveDays || 0))} | Unpaid: ${r.unpaidLeaveDays || 0}`}
+          >
+            <span className="cursor-help">
+              <span className="font-bold text-emerald-600">{r.daysPresent}</span>
+              <span className="text-zinc-400"> / {r.workingDays}</span>
+            </span>
+          </Tooltip>
+        ),
     },
     {
       title: "Deduction",
       key: "leaveded",
       width: 120,
-      render: (_: unknown, r: Record<string, number>) => {
+      render: (_: unknown, r: SalaryRow) => {
+        if (r.status === "pending") {
+          return <span className="text-zinc-400">—</span>;
+        }
         const absent = Math.max(
           0,
           (r.workingDays || 0) - (r.daysPresent || 0) - (r.leaveDays || 0)
@@ -193,22 +266,25 @@ export default function MonthlySalaryPage() {
       title: "PF + ESI",
       key: "pf",
       width: 110,
-      render: (_: unknown, r: Record<string, number>) => (
-        <Tooltip
-          title={`PF (Emp): ${fmt(r.pfEmployee)} | PF (Empr): ${fmt(r.pfEmployer)} | ESI: ${fmt(r.esi)} | TDS: ${fmt(r.tds)}`}
-        >
-          <span className="font-semibold text-amber-600 cursor-help">
-            – {fmt((r.pfEmployee || 0) + (r.esi || 0))}
-          </span>
-        </Tooltip>
-      ),
+      render: (_: unknown, r: SalaryRow) =>
+        r.status === "pending" ? (
+          <span className="text-zinc-400">—</span>
+        ) : (
+          <Tooltip
+            title={`PF (Emp): ${fmt(r.pfEmployee)} | PF (Empr): ${fmt(r.pfEmployer)} | ESI: ${fmt(r.esi)} | TDS: ${fmt(r.tds)}`}
+          >
+            <span className="font-semibold text-amber-600 cursor-help">
+              – {fmt((r.pfEmployee || 0) + (r.esi || 0))}
+            </span>
+          </Tooltip>
+        ),
     },
     {
       title: "Overtime",
       dataIndex: "overtimeAmount",
       key: "ot",
       width: 100,
-      render: (v: number, r: Record<string, number>) =>
+      render: (v: number, r: SalaryRow) =>
         v > 0 ? (
           <Tooltip title={`${r.overtimeHours}h OT`}>
             <span className="font-semibold text-blue-600 cursor-help">
@@ -232,13 +308,18 @@ export default function MonthlySalaryPage() {
       title: "Status",
       dataIndex: "status",
       key: "status",
-      width: 100,
+      width: 110,
       render: (v: string) => (
         <Tag
           color={STATUS_COLOR[v] || "default"}
-          style={{ borderRadius: 20, border: 0, fontWeight: 600, textTransform: "capitalize" }}
+          style={{
+            borderRadius: 20,
+            border: 0,
+            fontWeight: 600,
+            textTransform: "capitalize",
+          }}
         >
-          {v}
+          {v === "disbursed" ? "Paid" : v === "pending" ? "Not generated" : v}
         </Tag>
       ),
     },
@@ -249,8 +330,41 @@ export default function MonthlySalaryPage() {
       <RepHeader
         {...HRMS_BACK.salary}
         title="Monthly Salary"
-        subtitle={`${cycleLabel} · CTC breakdown, leave deductions & net payable`}
+        subtitle={`${cycleLabel} · Monthly CTC employees from HR records`}
       />
+
+      <div className="attendance-kpi-grid attendance-kpi-grid--auto">
+        <StatCard
+          icon={TeamOutlined}
+          label="Monthly employees"
+          value={String(summary.total)}
+          hint={cycleLabel}
+        />
+        <StatCard
+          icon={CheckCircleOutlined}
+          label="Paid (disbursed)"
+          value={String(summary.paid)}
+          hint={`${summary.approved} approved · ${summary.pending} not generated`}
+          hintTone="positive"
+        />
+        <StatCard
+          icon={DollarOutlined}
+          label="Total gross"
+          value={fmt(summary.totalGross)}
+          hint="Before deductions"
+        />
+        <StatCard
+          icon={WalletOutlined}
+          label="Net paid out"
+          value={fmt(summary.paidNet || summary.totalNet)}
+          hint={
+            summary.paid > 0
+              ? `${summary.paid} employees disbursed`
+              : "Disbursal amount"
+          }
+          hintTone="positive"
+        />
+      </div>
 
       <div className="arf-panel ap-filters-panel">
         <div className="arf-head">
@@ -259,16 +373,36 @@ export default function MonthlySalaryPage() {
         </div>
         <div className="arf-body">
           <div className="arf-controls ap-filters-controls ap-filters-controls--toolbar-inline">
+            <div className="arf-item ap-filters-search-field">
+              <span className="arf-label">Search</span>
+              <Input
+                allowClear
+                placeholder="Employee ID, name, department…"
+                prefix={<SearchOutlined style={{ color: "var(--fg-muted)" }} />}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
             <div className="arf-item ap-filters-toolbar-field">
-              <span className="arf-label">Pay cycle</span>
-              <DatePicker.RangePicker
+              <span className="arf-label">Pay month</span>
+              <DatePicker
                 className="w-full"
-                value={range}
+                picker="month"
+                value={month}
                 onChange={(v) => {
-                  if (v && v[0] && v[1]) setRange([v[0], v[1]]);
+                  if (v) setMonth(v);
                 }}
                 allowClear={false}
-                format="DD MMM YYYY"
+                format="MMMM YYYY"
+              />
+            </div>
+            <div className="arf-item ap-filters-toolbar-field">
+              <span className="arf-label">Payment status</span>
+              <Select
+                className="w-full"
+                value={statusFilter}
+                options={STATUS_OPTIONS}
+                onChange={setStatusFilter}
               />
             </div>
             <div className="ap-filters-toolbar-actions">
@@ -287,7 +421,11 @@ export default function MonthlySalaryPage() {
                 icon={<ThunderboltOutlined />}
                 onClick={generate}
                 loading={generating}
-                style={{ background: "#7c3aed", borderColor: "#7c3aed", color: "#fff" }}
+                style={{
+                  background: "#7c3aed",
+                  borderColor: "#7c3aed",
+                  color: "#fff",
+                }}
               >
                 Generate
               </Button>
@@ -295,7 +433,11 @@ export default function MonthlySalaryPage() {
                 icon={<CheckOutlined />}
                 onClick={bulkApprove}
                 loading={approving}
-                style={{ background: "#059669", borderColor: "#059669", color: "#fff" }}
+                style={{
+                  background: "#059669",
+                  borderColor: "#059669",
+                  color: "#fff",
+                }}
               >
                 {selectedRowKeys.length > 0
                   ? `Approve (${selectedRowKeys.length})`
@@ -304,7 +446,10 @@ export default function MonthlySalaryPage() {
               <Button
                 icon={<DownloadOutlined />}
                 onClick={() =>
-                  window.open(`/api/hrms/salary/export.csv?cycle=${cycleKey}`, "_blank")
+                  window.open(
+                    `/api/hrms/salary/export.csv?cycle=${cycleKey}`,
+                    "_blank"
+                  )
                 }
               >
                 Export CSV
@@ -314,46 +459,19 @@ export default function MonthlySalaryPage() {
         </div>
       </div>
 
-      {/* KPI cards */}
-      <div className="attendance-kpi-grid attendance-kpi-grid--auto">
-        <StatCard
-          icon={TeamOutlined}
-          label="Total employees"
-          value={String(summary.total)}
-          hint={cycleLabel}
-        />
-        <StatCard
-          icon={CheckCircleOutlined}
-          label="Approved"
-          value={String(summary.approved)}
-          hint={`${summary.total - summary.approved} pending`}
-          hintTone="positive"
-        />
-        <StatCard
-          icon={DollarOutlined}
-          label="Total gross"
-          value={fmt(summary.totalGross)}
-          hint="Before deductions"
-        />
-        <StatCard
-          icon={WalletOutlined}
-          label="Net payable"
-          value={fmt(summary.totalNet)}
-          hint="Disbursal amount"
-          hintTone="positive"
-        />
-      </div>
-
-      {/* Salary sheets table */}
       <ReportSection
-        title={`Salary sheets — ${cycleLabel}`}
-        meta={`${sheets.length} employees · hover cells for breakdown`}
+        title={`Monthly paid employees — ${cycleLabel}`}
+        meta={
+          search.trim()
+            ? `${filteredSheets.length} of ${sheets.length} employees · ${summary.paid} paid`
+            : `${sheets.length} monthly CTC employees · ${summary.paid} paid`
+        }
         flush
       >
         <CommonTable
           {...ERP_TABLE_PROPS}
           loading={loading}
-          dataSource={sheets}
+          dataSource={filteredSheets}
           columns={columns}
           rowKey="_id"
           size="middle"
@@ -361,6 +479,11 @@ export default function MonthlySalaryPage() {
           rowSelection={{
             selectedRowKeys,
             onChange: (keys) => setSelectedRowKeys(keys as string[]),
+            getCheckboxProps: (record: SalaryRow) => ({
+              disabled:
+                record.status === "pending" ||
+                String(record._id).startsWith("pending-"),
+            }),
           }}
           pagination={{
             pageSize: 20,
@@ -372,10 +495,14 @@ export default function MonthlySalaryPage() {
             emptyText: (
               <div className="py-12 text-center">
                 <p className="font-semibold text-zinc-500 m-0">
-                  No salary sheets for this period
+                  {search.trim()
+                    ? "No employees match your search"
+                    : "No monthly CTC employees found"}
                 </p>
                 <p className="text-zinc-400 text-[12px] mt-1">
-                  Select a date range and click Generate
+                  {search.trim()
+                    ? "Try a different employee ID, name, or department"
+                    : "Add employees with Monthly CTC compensation in HRMS"}
                 </p>
               </div>
             ),
@@ -383,5 +510,19 @@ export default function MonthlySalaryPage() {
         />
       </ReportSection>
     </div>
+  );
+}
+
+export default function MonthlySalaryPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="attendance-reports-page" style={{ padding: 24 }}>
+          Loading monthly salary…
+        </div>
+      }
+    >
+      <MonthlySalaryContent />
+    </Suspense>
   );
 }

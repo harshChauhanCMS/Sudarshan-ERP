@@ -29,16 +29,19 @@ export function emptyPermissions(): PermissionsMap {
   ) as PermissionsMap;
 }
 
-function dashboardOnlyPermissions(): PermissionsMap {
-  const perms = emptyPermissions();
-  perms.dashboard = { ...emptyPerm(), view: true };
-  return perms;
-}
-
 async function ensureDefaultRoles() {
   const count = await Role.countDocuments();
   if (count === 0) {
     await Role.insertMany(DEFAULT_ROLES);
+    return;
+  }
+
+  const managerRole = DEFAULT_ROLES.find((role) => role.roleKey === "manager");
+  if (managerRole) {
+    const exists = await Role.findOne({ roleKey: "manager" }).lean();
+    if (!exists) {
+      await Role.create(managerRole);
+    }
   }
 }
 
@@ -57,7 +60,7 @@ export async function resolvePermissionsForRole(
         return fallback.permissions as PermissionsMap;
       }
     }
-    return dashboardOnlyPermissions();
+    return emptyPermissions();
   }
 
   return role.permissions as PermissionsMap;

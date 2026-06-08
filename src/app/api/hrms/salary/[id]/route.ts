@@ -1,6 +1,7 @@
 import { connectDB } from "@/lib/db";
 import { ok, fail } from "@/lib/api-response";
 import SalarySheet from "@/lib/models/SalarySheet";
+import { assertEmployeeVisibleToViewer } from "@/lib/hr-staff-visibility";
 import { getSession } from "@/lib/session";
 
 export async function PATCH(
@@ -19,6 +20,15 @@ export async function PATCH(
     // Prevent changing identity fields
     delete body.employeeId;
     delete body.cycle;
+
+    const existing = await SalarySheet.findById(id).lean();
+    if (!existing) return fail("Salary sheet not found", 404);
+
+    const access = await assertEmployeeVisibleToViewer(
+      session.user?.role,
+      String(existing.employeeId)
+    );
+    if (!access.ok) return fail(access.message, 403);
 
     const sheet = await SalarySheet.findByIdAndUpdate(id, { $set: body }, { new: true, runValidators: true });
     if (!sheet) return fail("Salary sheet not found", 404);

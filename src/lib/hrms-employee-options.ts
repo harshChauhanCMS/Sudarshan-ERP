@@ -5,6 +5,16 @@ export const EMPLOYEE_EXPERIENCE_OPTIONS = [
   { value: "Above 3 years", label: "Above 3 years" },
 ] as const;
 
+/** Department role keys where the employee is a reporting manager — no RM field needed. */
+export const DEPARTMENTS_WITHOUT_REPORTING_MANAGER = new Set(["manager"]);
+
+export function departmentSkipsReportingManager(
+  department?: string | null
+): boolean {
+  if (!department?.trim()) return false;
+  return DEPARTMENTS_WITHOUT_REPORTING_MANAGER.has(department.trim().toLowerCase());
+}
+
 export const EMPLOYEE_QUALIFICATION_OPTIONS = [
   { value: "10th", label: "10th" },
   { value: "12th", label: "12th" },

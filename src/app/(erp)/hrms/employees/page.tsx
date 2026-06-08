@@ -23,6 +23,7 @@ import EmployeeFilterPanel, {
   type EmployeeFilterValues,
 } from "@/components/hrms/EmployeeFilterPanel";
 import { HRMS_BACK } from "@/lib/hrms-nav";
+import { useSessionUser } from "@/hooks/use-session-user";
 
 type EmploymentStatus = "Active" | "Inactive";
 type AttendanceStatus = "Present" | "Late" | "On leave" | "Absent";
@@ -105,6 +106,7 @@ function isDateInRange(date: Date, from: Date, to: Date) {
 }
 
 export default function EmployeesPage() {
+  const { isManager } = useSessionUser();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<EmployeeFilterValues>(DEFAULT_FILTERS);
@@ -232,7 +234,7 @@ export default function EmployeesPage() {
 
       setStats({
         presentToday,
-        onLeave: onLeaveIds.size,
+        onLeave: mapped.filter((e) => onLeaveIds.has(e.id)).length,
         latePunches,
       });
       setEmployees(mapped);
@@ -414,13 +416,6 @@ export default function EmployeesPage() {
       key: "shift",
     },
     {
-      title: "Location / Unit",
-      dataIndex: "locationUnit",
-      key: "locationUnit",
-      width: 220,
-      ellipsis: true,
-    },
-    {
       title: "Emp. Type",
       dataIndex: "empType",
       key: "empType",
@@ -454,7 +449,7 @@ export default function EmployeesPage() {
       render: (_, record: Employee) => (
         <ViewEditActions
           viewHref={`/hrms/employees/${record.id}`}
-          editHref={`/hrms/employees/${record.id}`}
+          editHref={isManager ? undefined : `/hrms/employees/${record.id}`}
         />
       ),
       align: "right" as const,
@@ -473,21 +468,27 @@ export default function EmployeesPage() {
         compact
         {...HRMS_BACK.dashboard}
         title="Employees"
-        subtitle="HR master across both companies"
+        subtitle={
+          isManager
+            ? "Your assigned team members"
+            : "HR master across both companies"
+        }
         actions={
           <Space>
             <Button icon={<DownloadOutlined />} onClick={handleExport}>
               Export
             </Button>
-            <Link href="/hrms/employees/add">
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                style={{ background: "#374d95", border: "none" }}
-              >
-                Add employee
-              </Button>
-            </Link>
+            {!isManager ? (
+              <Link href="/hrms/employees/add">
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  style={{ background: "#374d95", border: "none" }}
+                >
+                  Add employee
+                </Button>
+              </Link>
+            ) : null}
           </Space>
         }
       />

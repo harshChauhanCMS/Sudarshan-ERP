@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Button,
   DatePicker,
@@ -20,7 +20,6 @@ import {
   UserOutlined,
   LineChartOutlined,
 } from "@ant-design/icons";
-import Link from "next/link";
 import dayjs from "dayjs";
 
 import RepHeader from "@/components/hrms/RepHeader";
@@ -32,12 +31,25 @@ import CommonTable, {
   type CommonTableColumn,
 } from "@/components/common/CommonTable";
 import {
-  getLateEarlyReportDummy,
   type LateEarlyEmployeeRow,
   type LateEarlyDeptRow,
   type LateEarlyShiftRow,
+  type LateEarlyKpi,
   type LateEarlyUnitRow,
-} from "@/lib/late-early-report-dummy";
+} from "@/lib/hrms-late-early-report";
+
+const EMPTY_KPI: LateEarlyKpi = {
+  latePunches: 0,
+  lateAvgMins: 0,
+  lateEmployeesAffected: 0,
+  earlyIncidents: 0,
+  earlyAvgMins: 0,
+  earlyEmployees: 0,
+  repeatOffenders: 0,
+  criticalOffenders: 0,
+  onTimeCount: 0,
+  totalEmployees: 0,
+};
 
 type GroupBy = "employee" | "department" | "shift" | "unit" | "trend";
 
@@ -128,7 +140,6 @@ function complianceColor(pct: number) {
 }
 
 export default function LateEarlyReportPage() {
-  const demo = getLateEarlyReportDummy();
   const [range, setRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs().startOf("month"),
     dayjs().endOf("month"),
@@ -139,32 +150,81 @@ export default function LateEarlyReportPage() {
   const [reportType, setReportType] = useState("both");
   const [minMinutes, setMinMinutes] = useState(5);
   const [groupBy, setGroupBy] = useState<GroupBy>("employee");
+  const [loading, setLoading] = useState(true);
+  const [kpi, setKpi] = useState<LateEarlyKpi>(EMPTY_KPI);
+  const [employees, setEmployees] = useState<LateEarlyEmployeeRow[]>([]);
+  const [departments, setDepartments] = useState<LateEarlyDeptRow[]>([]);
+  const [shifts, setShifts] = useState<LateEarlyShiftRow[]>([]);
+  const [units, setUnits] = useState<LateEarlyUnitRow[]>([]);
+  const [filterDepartments, setFilterDepartments] = useState<string[]>([]);
   const [applied, setApplied] = useState({
     dept: "all",
     shift: "all",
+    company: "all",
+    reportType: "both",
     minMinutes: 5,
+    range: [
+      dayjs().startOf("month"),
+      dayjs().endOf("month"),
+    ] as [dayjs.Dayjs, dayjs.Dayjs],
   });
 
-  const employees = useMemo(() => {
-    return demo.employees.filter((e) => {
-      if (applied.dept !== "all" && e.department !== applied.dept) return false;
-      if (applied.shift !== "all" && !e.shift.includes(applied.shift)) {
-        return false;
-      }
-      if (
-        e.avgLateMins < applied.minMinutes &&
-        e.totalEarlyMins < applied.minMinutes
-      ) {
-        return false;
-      }
-      if (reportType === "late" && e.latePunches === 0) return false;
-      if (reportType === "early" && e.earlyGoing === 0) return false;
-      if (reportType === "both" && e.latePunches === 0 && e.earlyGoing === 0) {
-        return false;
-      }
-      return true;
-    });
-  }, [demo.employees, applied, reportType]);
+  const loadReport = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        from: applied.range[0].format("YYYY-MM-DD"),
+        to: applied.range[1].format("YYYY-MM-DD"),
+        reportType: applied.reportType,
+        minMinutes: String(applied.minMinutes),
+      });
+      if (applied.dept !== "all") params.set("department", applied.dept);
+      if (applied.shift !== "all") params.set("shift", applied.shift);
+      if (applied.company !== "all") params.set("unit", applied.company);
+
+      const res = await fetch(
+        `/api/hrms/attendance/report/late-early?${params}`
+      );
+      const json = await res.json();
+      if (!res.ok || json?.error) throw new Error(json?.error ?? "Failed");
+
+      setKpi(json.data?.kpi ?? EMPTY_KPI);
+      setEmployees(json.data?.employees ?? []);
+      setDepartments(json.data?.departments ?? []);
+      setShifts(json.data?.shifts ?? []);
+      setUnits(json.data?.units ?? []);
+      setFilterDepartments(json.data?.filterDepartments ?? []);
+    } catch {
+      setKpi(EMPTY_KPI);
+      setEmployees([]);
+      setDepartments([]);
+      setShifts([]);
+      setUnits([]);
+      setFilterDepartments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [applied]);
+
+  useEffect(() => {
+    void loadReport();
+  }, [loadReport]);
+
+  const unitOptions = useMemo(() => {
+    const fromData = [...new Set(units.map((u) => u.unit).filter((u) => u !== "—"))];
+    return [
+      { value: "all", label: "All units" },
+      ...fromData.map((u) => ({ value: u, label: u })),
+    ];
+  }, [units]);
+
+  const shiftOptions = useMemo(() => {
+    const fromData = shifts.map((s) => s.shift).filter(Boolean);
+    return [
+      { value: "all", label: "All shifts" },
+      ...fromData.map((s) => ({ value: s, label: s })),
+    ];
+  }, [shifts]);
 
   const tableProps = {
     bordered: true as const,
@@ -332,7 +392,13 @@ export default function LateEarlyReportPage() {
     },
   ];
 
-  const { kpi } = demo;
+  const emptyLocale = {
+    emptyText: (
+      <div className="py-8 text-center text-zinc-400 font-medium">
+        No late or early-going records in this period
+      </div>
+    ),
+  };
 
   return (
     <div className="attendance-reports-page">
@@ -386,11 +452,7 @@ export default function LateEarlyReportPage() {
               className="w-full"
               value={company}
               onChange={setCompany}
-              options={[
-                { value: "all", label: "All units" },
-                { value: "udaipur", label: "Udaipur" },
-                { value: "makrana", label: "Makrana" },
-              ]}
+              options={unitOptions}
             />
           </div>
           <div className="arf-item">
@@ -401,7 +463,7 @@ export default function LateEarlyReportPage() {
               onChange={setDept}
               options={[
                 { value: "all", label: "All departments" },
-                ...demo.filterDepartments.map((d) => ({ value: d, label: d })),
+                ...filterDepartments.map((d) => ({ value: d, label: d })),
               ]}
             />
           </div>
@@ -411,13 +473,7 @@ export default function LateEarlyReportPage() {
               className="w-full"
               value={shift}
               onChange={setShift}
-              options={[
-                { value: "all", label: "All shifts" },
-                { value: "Shift A", label: "Shift A" },
-                { value: "Shift B", label: "Shift B" },
-                { value: "Shift C", label: "Shift C" },
-                { value: "General", label: "General" },
-              ]}
+              options={shiftOptions}
             />
           </div>
           <div className="arf-item">
@@ -466,7 +522,16 @@ export default function LateEarlyReportPage() {
             <Button
               type="primary"
               icon={<FilterOutlined />}
-              onClick={() => setApplied({ dept, shift, minMinutes })}
+              onClick={() =>
+                setApplied({
+                  dept,
+                  shift,
+                  company,
+                  reportType,
+                  minMinutes,
+                  range: [...range] as [dayjs.Dayjs, dayjs.Dayjs],
+                })
+              }
             >
               Apply filters
             </Button>
@@ -489,15 +554,17 @@ export default function LateEarlyReportPage() {
       {(groupBy === "employee" || groupBy === "trend") && (
         <ReportSection
           title="Employee-wise"
-          meta={`${range[0].format("DD MMM")} – ${range[1].format("DD MMM YYYY")} · ${employees.length} rows`}
+          meta={`${applied.range[0].format("DD MMM")} – ${applied.range[1].format("DD MMM YYYY")} · ${employees.length} rows`}
           flush
         >
           <CommonTable
             {...tableProps}
+            loading={loading}
             columns={employeeColumns}
             dataSource={employees}
             rowKey="employeeId"
             pagination={{ pageSize: 10, showSizeChanger: true }}
+            locale={emptyLocale}
           />
         </ReportSection>
       )}
@@ -506,10 +573,12 @@ export default function LateEarlyReportPage() {
         <ReportSection title="Department-wise summary" flush>
           <CommonTable
             {...tableProps}
+            loading={loading}
             columns={deptColumns}
-            dataSource={demo.departments}
+            dataSource={departments}
             rowKey="department"
             pagination={false}
+            locale={emptyLocale}
           />
         </ReportSection>
       )}
@@ -519,10 +588,12 @@ export default function LateEarlyReportPage() {
           <ReportSection title="Shift-wise pattern" flush>
             <CommonTable
               {...tableProps}
+              loading={loading}
               columns={shiftColumns}
-              dataSource={demo.shifts}
+              dataSource={shifts}
               rowKey="shift"
               pagination={false}
+              locale={emptyLocale}
             />
           </ReportSection>
         )}
@@ -530,10 +601,12 @@ export default function LateEarlyReportPage() {
           <ReportSection title="Unit-wise pattern" flush>
             <CommonTable
               {...tableProps}
+              loading={loading}
               columns={unitColumns}
-              dataSource={demo.units}
+              dataSource={units}
               rowKey="unit"
               pagination={false}
+              locale={emptyLocale}
             />
           </ReportSection>
         )}

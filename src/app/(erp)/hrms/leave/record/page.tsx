@@ -1,24 +1,51 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button, Select, Tag } from "antd";
 import { DownloadOutlined, FilterOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
 
 import RepHeader from "@/components/hrms/RepHeader";
 import { HRMS_BACK } from "@/lib/hrms-nav";
 import CommonTable, { type CommonTableColumn } from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
-import { getLeaveDummy, type LeaveHistoryRow, type LeaveLedgerRow } from "@/lib/leave-dummy";
+import EmployeeSelect from "@/components/erp/EmployeeSelect";
+import { leaveTypeColor } from "@/lib/leave-dummy";
 
-// Color palette per leave type
-const TYPE_META: Record<string, { idle: string; idleBg: string; active: string }> = {
-  All:        { idle: "#374d95", idleBg: "#eef1fa", active: "#374d95" },
-  PL:         { idle: "#059669", idleBg: "#e3f4ea", active: "#059669" },
-  CL:         { idle: "#2563eb", idleBg: "#dbeafe", active: "#2563eb" },
-  SL:         { idle: "#dc2626", idleBg: "#fee2e2", active: "#dc2626" },
-  "Comp.Off": { idle: "#d97706", idleBg: "#fef3c7", active: "#d97706" },
-  OD:         { idle: "#7c3aed", idleBg: "#ede9fe", active: "#7c3aed" },
+type LeaveHistoryRow = {
+  id: string;
+  type: string;
+  typeColor: string;
+  from: string;
+  to: string;
+  days: number;
+  reason: string;
+  approver: string;
+  appliedOn: string;
+  status: "Approved" | "Pending" | "Cancelled";
 };
+
+const TYPE_META: Record<string, { idle: string; idleBg: string; active: string }> = {
+  All: { idle: "#374d95", idleBg: "#eef1fa", active: "#374d95" },
+  PL: { idle: "#059669", idleBg: "#e3f4ea", active: "#059669" },
+  CL: { idle: "#2563eb", idleBg: "#dbeafe", active: "#2563eb" },
+  SL: { idle: "#dc2626", idleBg: "#fee2e2", active: "#dc2626" },
+  "Comp.Off": { idle: "#d97706", idleBg: "#fef3c7", active: "#d97706" },
+  OD: { idle: "#7c3aed", idleBg: "#ede9fe", active: "#7c3aed" },
+};
+
+const LEAVE_TYPE_LABEL: Record<string, string> = {
+  casual: "CL",
+  sick: "SL",
+  earned: "PL",
+  unpaid: "Unpaid",
+};
+
+const STATUS_COLOR = {
+  Approved: "success",
+  Pending: "processing",
+  Cancelled: "error",
+} as const;
 
 function LeaveTypeFilter({
   value,
@@ -28,14 +55,16 @@ function LeaveTypeFilter({
   onChange: (v: string) => void;
 }) {
   return (
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      flexWrap: "wrap",
-      padding: "14px 20px 10px",
-      borderBottom: "1px solid var(--border)",
-    }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        flexWrap: "wrap",
+        padding: "14px 20px 10px",
+        borderBottom: "1px solid var(--border)",
+      }}
+    >
       {Object.entries(TYPE_META).map(([type, meta]) => {
         const active = value === type;
         return (
@@ -67,77 +96,141 @@ function LeaveTypeFilter({
   );
 }
 
-const STATUS_COLOR = {
-  Approved: "success",
-  Pending:  "processing",
-  Cancelled: "error",
-} as const;
+function mapLeaveStatus(status: string): LeaveHistoryRow["status"] {
+  if (status === "approved") return "Approved";
+  if (status === "pending" || status === "rolled_back") return "Pending";
+  return "Cancelled";
+}
 
 export default function LeaveRecordPage() {
-  const demo = getLeaveDummy();
-  const [company, setCompany]   = useState("smi");
-  const [employee, setEmployee] = useState("EMP-2048");
-  const [year, setYear]         = useState("2025");
+  const [employee, setEmployee] = useState<string | undefined>(undefined);
+  const [year, setYear] = useState(String(dayjs().year()));
   const [typeFilter, setTypeFilter] = useState("All");
+  const [leaves, setLeaves] = useState<Record<string, unknown>[]>([]);
+  const [employees, setEmployees] = useState<
+    { employeeId: string; fullName: string; department?: string; designation?: string }[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([
+      fetch("/api/hrms/leave").then((r) => r.json()),
+      fetch("/api/hrms/employees").then((r) => r.json()),
+    ])
+      .then(([leaveJson, empJson]) => {
+        if (cancelled) return;
+        setLeaves(Array.isArray(leaveJson?.data) ? leaveJson.data : []);
+        const emps = Array.isArray(empJson?.data) ? empJson.data : [];
+        setEmployees(emps);
+        if (!employee && emps[0]?.employeeId) {
+          setEmployee(String(emps[0].employeeId));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLeaves([]);
+          setEmployees([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const selectedEmployee = employees.find((e) => e.employeeId === employee);
+
+  const history = useMemo((): LeaveHistoryRow[] => {
+    const yearNum = Number(year);
+    return leaves
+      .filter((l) => !employee || String(l.employeeId) === employee)
+      .filter((l) => {
+        const from = dayjs(String(l.fromDate ?? ""));
+        return !yearNum || !from.isValid() || from.year() === yearNum;
+      })
+      .map((l) => {
+        const leaveType = String(l.leaveType ?? "");
+        const typeLabel = LEAVE_TYPE_LABEL[leaveType] ?? leaveType;
+        return {
+          id: String(l._id ?? ""),
+          type: typeLabel,
+          typeColor: leaveTypeColor(leaveType),
+          from: dayjs(String(l.fromDate)).isValid()
+            ? dayjs(String(l.fromDate)).format("DD MMM YYYY")
+            : "—",
+          to: dayjs(String(l.toDate)).isValid()
+            ? dayjs(String(l.toDate)).format("DD MMM YYYY")
+            : "—",
+          days: Number(l.days ?? 0),
+          reason: String(l.reason ?? "—"),
+          approver: String(l.hrApprovedBy ?? l.reportingManager ?? "—"),
+          appliedOn: dayjs(String(l.createdAt ?? "")).isValid()
+            ? dayjs(String(l.createdAt)).format("DD MMM YYYY")
+            : "—",
+          status: mapLeaveStatus(String(l.status ?? "")),
+        };
+      });
+  }, [leaves, employee, year]);
 
   const filteredHistory =
     typeFilter === "All"
-      ? demo.history
-      : demo.history.filter((h) => h.type === typeFilter);
+      ? history
+      : history.filter((h) => h.type === typeFilter);
 
-  const tp = { bordered: true as const, size: "middle" as const, className: "attendance-report-table" };
+  const yearOptions = useMemo(() => {
+    const years = new Set<number>([dayjs().year()]);
+    for (const l of leaves) {
+      const y = dayjs(String(l.fromDate ?? "")).year();
+      if (Number.isFinite(y)) years.add(y);
+    }
+    return [...years]
+      .sort((a, b) => b - a)
+      .map((y) => ({ value: String(y), label: String(y) }));
+  }, [leaves]);
+
+  const tp = {
+    bordered: true as const,
+    size: "middle" as const,
+    className: "attendance-report-table",
+  };
 
   const historyColumns: CommonTableColumn<LeaveHistoryRow>[] = [
-    { title: "Type",       dataIndex: "type",      key: "type",    render: (t: string, r) => <Tag color={r.typeColor}>{t}</Tag> },
-    { title: "From",       dataIndex: "from",      key: "from" },
-    { title: "To",         dataIndex: "to",        key: "to" },
-    { title: "Days",       dataIndex: "days",      key: "days",   width: 60 },
-    { title: "Reason",     dataIndex: "reason",    key: "reason", ellipsis: true },
-    { title: "Approver",   dataIndex: "approver",  key: "approver" },
+    {
+      title: "Type",
+      dataIndex: "type",
+      key: "type",
+      render: (t: string, r) => <Tag color={r.typeColor}>{t}</Tag>,
+    },
+    { title: "From", dataIndex: "from", key: "from" },
+    { title: "To", dataIndex: "to", key: "to" },
+    { title: "Days", dataIndex: "days", key: "days", width: 60 },
+    { title: "Reason", dataIndex: "reason", key: "reason", ellipsis: true },
+    { title: "Approver", dataIndex: "approver", key: "approver" },
     { title: "Applied on", dataIndex: "appliedOn", key: "applied" },
     {
-      title: "Status", dataIndex: "status", key: "status",
-      render: (s: LeaveHistoryRow["status"]) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      render: (s: LeaveHistoryRow["status"]) => (
+        <Tag color={STATUS_COLOR[s]}>{s}</Tag>
+      ),
     },
   ];
-
-  const ledgerColumns: CommonTableColumn<LeaveLedgerRow>[] = [
-    { title: "Type",            dataIndex: "type",     key: "type",    render: (t: string, r) => <Tag color={r.typeColor}>{t}</Tag> },
-    { title: "Opening (1-Apr)", dataIndex: "opening",  key: "open" },
-    { title: "Earned",          dataIndex: "earned",   key: "earned" },
-    { title: "Used",            dataIndex: "used",     key: "used" },
-    { title: "Encashed",        dataIndex: "encashed", key: "enc" },
-    { title: "Lapsed",          dataIndex: "lapsed",   key: "lap" },
-    { title: "Carry-fwd",       dataIndex: "carryFwd", key: "cf" },
-    { title: "Closing",         dataIndex: "closing",  key: "close", render: (v) => <span className="font-bold">{v}</span> },
-  ];
-
-  const { employee: emp } = demo;
 
   return (
     <div className="attendance-reports-page">
       <RepHeader
         {...HRMS_BACK.dashboard}
         title="Leave Record"
-        subtitle="Leave balance, history and year-on-year ledger"
+        subtitle="Leave history for your team"
         actions={<Button icon={<DownloadOutlined />}>Export</Button>}
       />
 
-      {/* Balance cards */}
-      <div className="lv-balance-grid">
-        {demo.balances.map((b) => (
-          <div key={b.code} className="lv-balance-card">
-            <p className="lv-balance-card__name">{b.name}</p>
-            <p className="lv-balance-card__value" style={{ color: b.color }}>{b.balance}</p>
-            <p className="lv-balance-card__detail">{b.detail}</p>
-            <div className="lv-balance-bar">
-              <div className="lv-balance-bar__fill" style={{ width: `${b.progress}%`, background: b.color }} />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Filters */}
       <div className="arf-panel ap-filters-panel">
         <div className="arf-head">
           <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
@@ -146,48 +239,66 @@ export default function LeaveRecordPage() {
         <div className="arf-body">
           <div className="arf-controls ap-filters-controls">
             <div className="arf-item">
-              <span className="arf-label">Company / unit</span>
-              <Select className="w-full" value={company} onChange={setCompany} options={demo.companies} />
-            </div>
-            <div className="arf-item">
               <span className="arf-label">Employee</span>
-              <Select className="w-full" value={employee} onChange={setEmployee} options={demo.employees} />
+              <EmployeeSelect value={employee} onChange={(v) => setEmployee(v)} />
             </div>
             <div className="arf-item">
               <span className="arf-label">Leave year</span>
-              <Select className="w-full" value={year} onChange={setYear} options={demo.leaveYears} />
-            </div>
-            <div className="arf-item ap-filters-actions">
-              <Button type="primary" icon={<FilterOutlined />}>
-                Apply filters
-              </Button>
+              <Select
+                className="w-full"
+                value={year}
+                onChange={setYear}
+                options={yearOptions}
+              />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Employee profile */}
-      <div className="lv-emp-card">
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
-            <h2 className="lv-emp-card__name">{emp.name}</h2>
-            <Tag color="green">{emp.badge}</Tag>
+      {selectedEmployee ? (
+        <div className="lv-emp-card">
+          <div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+                marginBottom: 4,
+              }}
+            >
+              <h2 className="lv-emp-card__name">{selectedEmployee.fullName}</h2>
+            </div>
+            <p className="lv-emp-card__meta">
+              {selectedEmployee.employeeId}
+              {selectedEmployee.department
+                ? ` · ${selectedEmployee.department}`
+                : ""}
+              {selectedEmployee.designation
+                ? ` · ${selectedEmployee.designation}`
+                : ""}
+            </p>
           </div>
-          <p className="lv-emp-card__meta">
-            {emp.id} · {emp.department} · {emp.shift} · DOJ {emp.doj} · Confirmed {emp.confirmed}
-          </p>
         </div>
-      </div>
+      ) : null}
 
-      {/* Leave history */}
       <ReportSection title="Leave history" meta={`FY ${year}`} flush>
         <LeaveTypeFilter value={typeFilter} onChange={setTypeFilter} />
-        <CommonTable {...tp} columns={historyColumns} dataSource={filteredHistory} rowKey="id" pagination={false} />
-      </ReportSection>
-
-      {/* Year ledger */}
-      <ReportSection title="Year-on-year ledger" meta="Carry-forward, encashment and lapsing" flush>
-        <CommonTable {...tp} columns={ledgerColumns} dataSource={demo.ledger} rowKey="type" pagination={false} />
+        <CommonTable
+          {...tp}
+          loading={loading}
+          columns={historyColumns}
+          dataSource={filteredHistory}
+          rowKey="id"
+          pagination={{ pageSize: 15, showTotal: (n) => `${n} records` }}
+          locale={{
+            emptyText: (
+              <div className="py-8 text-center text-zinc-400 font-medium">
+                No leave records found
+              </div>
+            ),
+          }}
+        />
       </ReportSection>
     </div>
   );

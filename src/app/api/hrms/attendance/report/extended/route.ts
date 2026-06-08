@@ -2,6 +2,12 @@ import { connectDB } from "@/lib/db";
 import Employee from "@/lib/models/Employee";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import { ok, fail } from "@/lib/api-response";
+import {
+  assertManagerCanAccessEmployee,
+  managerTeamEmployeeFilter,
+  resolveManagerScope,
+} from "@/lib/manager-scope";
+import { getSession } from "@/lib/session";
 
 function parseDateParam(v: string | null): Date | null {
   if (!v) return null;
@@ -33,6 +39,16 @@ export async function GET(request: Request) {
     const department = url.searchParams.get("department")?.trim() || null;
     const shift      = url.searchParams.get("shift")?.trim() || null;
     const employeeId = url.searchParams.get("employeeId")?.trim() || null;
+    const session = await getSession();
+    const managerScope = await resolveManagerScope(session.user);
+
+    if (employeeId && managerScope.restricted) {
+      const access = await assertManagerCanAccessEmployee(
+        session.user,
+        employeeId
+      );
+      if (!access.ok) return fail(access.message, 403);
+    }
 
     const fromD = startOfDay(from);
     const toD   = endOfDay(to);
@@ -41,11 +57,16 @@ export async function GET(request: Request) {
     const empQuery: Record<string, any> = {};
     if (department) empQuery.department = department;
     if (shift)      empQuery.primaryShift = { $regex: shift, $options: "i" };
-    if (employeeId) empQuery.employeeId = employeeId;
+    if (employeeId) {
+      empQuery.employeeId = employeeId;
+    } else {
+      const teamFilter = managerTeamEmployeeFilter(managerScope);
+      if (teamFilter) Object.assign(empQuery, teamFilter);
+    }
 
     const employees = await Employee.find(empQuery)
       .select({ employeeId:1, fullName:1, department:1, designation:1, locationUnit:1,
-                primaryShift:1, workingHours:1, overtimeApplicable:1 })
+                primaryShift:1, workingHours:1, overtimeApplicable:1, dateJoining:1 })
       .lean();
 
     const empIds = employees.map((e) => String(e.employeeId));
@@ -148,6 +169,7 @@ export async function GET(request: Request) {
           employeeId: eid, employeeName: emp.fullName,
           department: emp.department, designation: emp.designation,
           locationUnit: emp.locationUnit, primaryShift: emp.primaryShift,
+          dateJoining: emp.dateJoining,
           totalDays: 0, presentDays: 0, absentDays: 0, lateDays: 0,
           totalWorkedHours: 0, totalShortfall: 0, totalOvertime: 0,
         };

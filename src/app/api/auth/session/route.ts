@@ -14,10 +14,14 @@ export async function GET() {
         session.user.permissions = await resolvePermissionsForRole(session.user.role);
       }
       const dbUser = await User.findOne({ email: session.user.email })
-        .select("requiresPasswordReset")
+        .select("requiresPasswordReset employeeId role")
         .lean();
       if (dbUser) {
         session.user.mustResetPassword = Boolean(dbUser.requiresPasswordReset);
+        session.user.employeeId = dbUser.employeeId
+          ? String(dbUser.employeeId)
+          : undefined;
+        session.user.role = dbUser.role || session.user.role;
       }
       await session.save();
     } catch {

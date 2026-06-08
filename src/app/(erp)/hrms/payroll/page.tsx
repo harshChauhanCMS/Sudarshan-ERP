@@ -18,9 +18,9 @@ import {
 
 export default function PayrollPage() {
   const payrollData = [
-    { key: "1", cycle: "May 2026", employees: 306, amount: "₹42,84,200", status: "Processing (95%)", date: "May 31, 2026" },
-    { key: "2", cycle: "April 2026", employees: 302, amount: "₹42,28,000", status: "Disbursed", date: "April 30, 2026" },
-    { key: "3", cycle: "March 2026", employees: 298, amount: "₹41,72,500", status: "Disbursed", date: "March 31, 2026" },
+    { key: "1", cycle: "May 2026", cycleKey: "2026-05", employees: 306, amount: "₹42,84,200", status: "Processing (95%)", date: "May 31, 2026" },
+    { key: "2", cycle: "April 2026", cycleKey: "2026-04", employees: 302, amount: "₹42,28,000", status: "Disbursed", date: "April 30, 2026" },
+    { key: "3", cycle: "March 2026", cycleKey: "2026-03", employees: 298, amount: "₹41,72,500", status: "Disbursed", date: "March 31, 2026" },
   ];
 
   const columns = [
@@ -44,11 +44,15 @@ export default function PayrollPage() {
       key: "action",
       width: 72,
       align: "center" as const,
-      render: () => (
+      render: (_: unknown, row: { cycleKey?: string }) => (
         <TableActionIcon
           label="View details"
           icon={<EyeOutlined />}
-          href="/hrms/salary/monthly"
+          href={
+            row.cycleKey
+              ? `/hrms/salary/monthly?cycle=${row.cycleKey}`
+              : "/hrms/salary/monthly"
+          }
         />
       ),
     },

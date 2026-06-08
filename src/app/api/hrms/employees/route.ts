@@ -7,12 +7,31 @@ import {
   findEmployeeUniqueConflict,
 } from "@/lib/hrms-employee-uniqueness";
 import { provisionEmployeeLoginAndSendWelcomeEmail } from "@/lib/hrms-employee-welcome";
+import { filterRowsForHrViewer } from "@/lib/hr-staff-visibility";
+import {
+  filterByManagerScope,
+  isManagerRole,
+  resolveManagerScope,
+} from "@/lib/manager-scope";
+import { getSession } from "@/lib/session";
 
 export async function GET() {
   try {
     await connectDB();
-    const employees = await Employee.find({}).sort({ createdAt: -1 });
-    return NextResponse.json({ success: true, count: employees.length, data: employees });
+    const session = await getSession();
+    const scope = await resolveManagerScope(session.user);
+    const employees = await Employee.find({}).sort({ createdAt: -1 }).lean();
+    let visible = employees.map((emp) => ({
+      ...emp,
+      employeeId: String(emp.employeeId),
+    }));
+    visible = filterByManagerScope(visible, scope);
+    visible = await filterRowsForHrViewer(visible, session.user?.role);
+    return NextResponse.json({
+      success: true,
+      count: visible.length,
+      data: visible,
+    });
   } catch (error: any) {
     console.error("GET Employees API Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
@@ -22,6 +41,13 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     await connectDB();
+    const session = await getSession();
+    if (isManagerRole(session.user?.role)) {
+      return NextResponse.json(
+        { error: "Managers cannot add employees." },
+        { status: 403 }
+      );
+    }
     const payload = await req.json();
 
     const requiredFields = [
@@ -29,7 +55,6 @@ export async function POST(req: Request) {
       "primaryContact",
       "department",
       "designation",
-      "locationUnit",
       "employmentType",
       "dateJoining",
       "compensationType",

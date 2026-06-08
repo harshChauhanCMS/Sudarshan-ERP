@@ -5,6 +5,12 @@ import {
   employeeUniqueConflictMessage,
   findEmployeeUniqueConflict,
 } from "@/lib/hrms-employee-uniqueness";
+import { assertEmployeeVisibleToViewer } from "@/lib/hr-staff-visibility";
+import {
+  assertManagerCanAccessEmployee,
+  isManagerRole,
+} from "@/lib/manager-scope";
+import { getSession } from "@/lib/session";
 
 export async function GET(
   req: Request,
@@ -13,6 +19,15 @@ export async function GET(
   try {
     await connectDB();
     const { id } = await params;
+    const session = await getSession();
+    const managerAccess = await assertManagerCanAccessEmployee(session.user, id);
+    if (!managerAccess.ok) {
+      return NextResponse.json({ error: managerAccess.message }, { status: 403 });
+    }
+    const access = await assertEmployeeVisibleToViewer(session.user?.role, id);
+    if (!access.ok) {
+      return NextResponse.json({ error: access.message }, { status: 403 });
+    }
 
     const employee = await Employee.findOne({ employeeId: id });
     if (!employee) {
@@ -39,6 +54,22 @@ export async function PUT(
   try {
     await connectDB();
     const { id } = await params;
+    const session = await getSession();
+    if (isManagerRole(session.user?.role)) {
+      return NextResponse.json(
+        { error: "Managers can view team profiles but cannot edit employee records." },
+        { status: 403 }
+      );
+    }
+    const managerAccess = await assertManagerCanAccessEmployee(session.user, id);
+    if (!managerAccess.ok) {
+      return NextResponse.json({ error: managerAccess.message }, { status: 403 });
+    }
+    const access = await assertEmployeeVisibleToViewer(session.user?.role, id);
+    if (!access.ok) {
+      return NextResponse.json({ error: access.message }, { status: 403 });
+    }
+
     const payload = await req.json();
 
     const employee = await Employee.findOne({ employeeId: id });
@@ -63,7 +94,6 @@ export async function PUT(
       "primaryContact",
       "department",
       "designation",
-      "locationUnit",
       "employmentType",
       "dateJoining",
       "compensationType",

@@ -48,6 +48,7 @@ export async function POST(request: Request) {
       email: user.email,
       name: user.name,
       role: user.role,
+      employeeId: user.employeeId ? String(user.employeeId) : undefined,
       permissions,
       mustResetPassword,
     };

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import SalarySheet from "@/lib/models/SalarySheet";
 import { fail } from "@/lib/api-response";
+import { filterRowsForHrViewer } from "@/lib/hr-staff-visibility";
+import { getSession } from "@/lib/session";
 
 function csvEscape(v: unknown): string {
   const s = v == null ? "" : String(v);
@@ -16,7 +18,16 @@ export async function GET(request: Request) {
     const cycle = url.searchParams.get("cycle");
     if (!cycle) return fail("cycle param is required", 400);
 
-    const sheets = await SalarySheet.find({ cycle }).sort({ employeeName: 1 }).lean();
+    const session = await getSession();
+    const sheets = await filterRowsForHrViewer(
+      (
+        await SalarySheet.find({ cycle }).sort({ employeeName: 1 }).lean()
+      ).map((sheet) => ({
+        ...sheet,
+        employeeId: String(sheet.employeeId),
+      })),
+      session.user?.role
+    );
 
     const header = [
       "employeeId", "employeeName", "department", "designation", "cycle",

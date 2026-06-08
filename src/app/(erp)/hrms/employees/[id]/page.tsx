@@ -34,9 +34,12 @@ import {
   latestAllowedEmployeeDob,
 } from "@/lib/hrms-dob";
 import {
+  departmentSkipsReportingManager,
   EMPLOYEE_EXPERIENCE_OPTIONS,
   EMPLOYEE_QUALIFICATION_OPTIONS,
 } from "@/lib/hrms-employee-options";
+import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
+import { useSessionUser } from "@/hooks/use-session-user";
 
 const { Panel } = Collapse;
 
@@ -46,7 +49,20 @@ export default function EmployeeDetailsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const { isManager } = useSessionUser();
   const [form] = Form.useForm();
+  const department = Form.useWatch("department", form);
+  const showReportingManager = !departmentSkipsReportingManager(department);
+
+  useEffect(() => {
+    if (isManager) setIsEditing(false);
+  }, [isManager]);
+
+  useEffect(() => {
+    if (!showReportingManager) {
+      form.setFieldValue("reportingManager", undefined);
+    }
+  }, [showReportingManager, form]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -62,6 +78,9 @@ export default function EmployeeDetailsPage({
   const [avatarInitials, setAvatarInitials] = useState("");
   const [avatarColors, setAvatarColors] = useState({ bg: "#dbeafe", fg: "#1d4ed8" });
   const [departmentOptions, setDepartmentOptions] = useState<{ value: string; label: string }[]>([]);
+  const [reportingManagerOptions, setReportingManagerOptions] = useState<
+    { value: string; label: string }[]
+  >([]);
 
   useEffect(() => {
     fetch("/api/system/roles")
@@ -72,6 +91,20 @@ export default function EmployeeDetailsPage({
         }
       })
       .catch(() => {});
+
+    fetch("/api/hrms/employees")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && Array.isArray(d.data)) {
+          setReportingManagerOptions(
+            d.data.map((emp: { employeeId: string; fullName: string }) => ({
+              value: formatReportingManagerLabel(emp.employeeId, emp.fullName),
+              label: formatReportingManagerLabel(emp.employeeId, emp.fullName),
+            }))
+          );
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -79,6 +112,11 @@ export default function EmployeeDetailsPage({
       try {
         setLoading(true);
         const response = await fetch(`/api/hrms/employees/${id}`);
+        if (response.status === 403) {
+          messageApi.error("You do not have access to this employee profile.");
+          window.location.href = "/hrms/employees";
+          return;
+        }
         if (!response.ok) {
           const errData = await response.json();
           throw new Error(errData.error || "Failed to load employee details");
@@ -154,6 +192,9 @@ export default function EmployeeDetailsPage({
 
     const formattedValues = {
       ...values,
+      reportingManager: departmentSkipsReportingManager(values.department)
+        ? ""
+        : values.reportingManager,
       dob: values.dob ? values.dob.format("DD/MM/YYYY") : undefined,
       dateJoining: values.dateJoining ? values.dateJoining.format("DD/MM/YYYY") : undefined,
       dateConfirmation: values.dateConfirmation ? values.dateConfirmation.format("DD/MM/YYYY") : undefined,
@@ -240,10 +281,14 @@ export default function EmployeeDetailsPage({
           compact
           {...HRMS_BACK.employees}
           title="Employee profile"
-          subtitle={`Detailed view and editing panel for employee ${id}`}
+          subtitle={
+            isManager
+              ? `Team member profile · ${id}`
+              : `Detailed view and editing panel for employee ${id}`
+          }
           actions={
             <Space>
-              {!isEditing ? (
+              {!isManager && !isEditing ? (
                 <Button
                   type="primary"
                   icon={<EditOutlined />}
@@ -259,7 +304,7 @@ export default function EmployeeDetailsPage({
                 >
                   Edit Details
                 </Button>
-              ) : (
+              ) : !isManager ? (
                 <Space>
                   <Button
                     icon={<CloseOutlined />}
@@ -287,7 +332,7 @@ export default function EmployeeDetailsPage({
                     Save Changes
                   </Button>
                 </Space>
-              )}
+              ) : null}
             </Space>
           }
         />
@@ -587,15 +632,18 @@ export default function EmployeeDetailsPage({
                     ]}
                   />
                 </Form.Item>
-                <Form.Item name="reportingManager" label="Reporting Manager">
-                  <Select
-                    disabled={!isEditing}
-                    options={[
-                      { value: "EMP-2010 — Sunil Mehra (Plant Head)", label: "EMP-2010 — Sunil Mehra (Plant Head)" },
-                      { value: "EMP-2014 — Rajiv Mehta (Owner)", label: "EMP-2014 — Rajiv Mehta (Owner)" },
-                    ]}
-                  />
-                </Form.Item>
+                {showReportingManager ? (
+                  <Form.Item name="reportingManager" label="Reporting Manager">
+                    <Select
+                      disabled={!isEditing}
+                      options={reportingManagerOptions}
+                      loading={reportingManagerOptions.length === 0}
+                      showSearch
+                      allowClear
+                      optionFilterProp="label"
+                    />
+                  </Form.Item>
+                ) : null}
 
                 <Form.Item name="employmentType" label="Employment Type" rules={[{ required: true, message: "Required" }]}>
                   <Select

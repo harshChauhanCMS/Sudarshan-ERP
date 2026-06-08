@@ -31,9 +31,11 @@ import {
   latestAllowedEmployeeDob,
 } from "@/lib/hrms-dob";
 import {
+  departmentSkipsReportingManager,
   EMPLOYEE_EXPERIENCE_OPTIONS,
   EMPLOYEE_QUALIFICATION_OPTIONS,
 } from "@/lib/hrms-employee-options";
+import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
 
 const DRAFT_KEY = "hrms_employee_draft";
 
@@ -45,12 +47,31 @@ const EMPLOYEE_COMPANY_OPTIONS = [
 const digitsOnlyRule = { pattern: /^\d+$/, message: "Numbers only" };
 
 const STEP_META = [
-  { title: "Profile Details", description: "Personal information, DOB and background — employee ID is assigned automatically" },
-  { title: "Contact & Address", description: "Phone numbers, email and residential address" },
-  { title: "Identity & Bank", description: "Aadhar, PAN, PF/UAN and bank account" },
-  { title: "Employment", description: "Department, designation, company access and joining" },
-  { title: "Shift Assignment", description: "Shift mode, working hours and weekly off" },
-  { title: "Salary Structure", description: "Monthly CTC or daily wage compensation" },
+  {
+    title: "Profile Details",
+    description:
+      "Personal information, DOB and background — employee ID is assigned automatically",
+  },
+  {
+    title: "Contact & Address",
+    description: "Phone numbers, email and residential address",
+  },
+  {
+    title: "Identity & Bank",
+    description: "Aadhar, PAN, PF/UAN and bank account",
+  },
+  {
+    title: "Employment",
+    description: "Department, designation, company access and joining",
+  },
+  {
+    title: "Shift Assignment",
+    description: "Shift mode, working hours and weekly off",
+  },
+  {
+    title: "Salary Structure",
+    description: "Monthly CTC or daily wage compensation",
+  },
 ];
 
 export default function AddEmployeePage() {
@@ -59,9 +80,23 @@ export default function AddEmployeePage() {
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [messageApi, contextHolder] = message.useMessage();
-  const compensationType = Form.useWatch("compensationType", form) ?? "Monthly CTC";
-  const [departmentOptions, setDepartmentOptions] = useState<{ value: string; label: string }[]>([]);
+  const compensationType =
+    Form.useWatch("compensationType", form) ?? "Monthly CTC";
+  const department = Form.useWatch("department", form);
+  const showReportingManager = !departmentSkipsReportingManager(department);
+  const [departmentOptions, setDepartmentOptions] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const [reportingManagerOptions, setReportingManagerOptions] = useState<
+    { value: string; label: string }[]
+  >([]);
   const [nextEmployeeId, setNextEmployeeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showReportingManager) {
+      form.setFieldValue("reportingManager", undefined);
+    }
+  }, [showReportingManager, form]);
 
   useEffect(() => {
     fetch("/api/hrms/employees/next-id")
@@ -75,11 +110,30 @@ export default function AddEmployeePage() {
       .then((r) => r.json())
       .then((d) => {
         if (d.success) {
-          setDepartmentOptions(d.data.map((role: any) => ({ value: role.roleKey, label: role.label })));
+          setDepartmentOptions(
+            d.data.map((role: any) => ({
+              value: role.roleKey,
+              label: role.label,
+            })),
+          );
         }
       })
       .catch(() => {});
-      
+
+    fetch("/api/hrms/employees")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && Array.isArray(d.data)) {
+          setReportingManagerOptions(
+            d.data.map((emp: { employeeId: string; fullName: string }) => ({
+              value: formatReportingManagerLabel(emp.employeeId, emp.fullName),
+              label: formatReportingManagerLabel(emp.employeeId, emp.fullName),
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+
     // Load draft if it exists
     const draft = localStorage.getItem(DRAFT_KEY);
     if (draft) {
@@ -87,9 +141,11 @@ export default function AddEmployeePage() {
         const parsedDraft = JSON.parse(draft);
         delete parsedDraft.employeeId;
         if (parsedDraft.dob) parsedDraft.dob = dayjs(parsedDraft.dob);
-        if (parsedDraft.dateJoining) parsedDraft.dateJoining = dayjs(parsedDraft.dateJoining);
-        if (parsedDraft.dateConfirmation) parsedDraft.dateConfirmation = dayjs(parsedDraft.dateConfirmation);
-        
+        if (parsedDraft.dateJoining)
+          parsedDraft.dateJoining = dayjs(parsedDraft.dateJoining);
+        if (parsedDraft.dateConfirmation)
+          parsedDraft.dateConfirmation = dayjs(parsedDraft.dateConfirmation);
+
         form.setFieldsValue(parsedDraft);
         messageApi.info("Draft loaded successfully.");
       } catch (e) {
@@ -125,10 +181,20 @@ export default function AddEmployeePage() {
     const { employeeId: _omit, ...rest } = values;
     const formattedValues = {
       ...rest,
-      fullName: typeof values.fullName === "string" ? values.fullName.trim() : values.fullName,
+      reportingManager: departmentSkipsReportingManager(values.department)
+        ? ""
+        : values.reportingManager,
+      fullName:
+        typeof values.fullName === "string"
+          ? values.fullName.trim()
+          : values.fullName,
       dob: values.dob ? values.dob.format("DD/MM/YYYY") : undefined,
-      dateJoining: values.dateJoining ? values.dateJoining.format("DD/MM/YYYY") : undefined,
-      dateConfirmation: values.dateConfirmation ? values.dateConfirmation.format("DD/MM/YYYY") : undefined,
+      dateJoining: values.dateJoining
+        ? values.dateJoining.format("DD/MM/YYYY")
+        : undefined,
+      dateConfirmation: values.dateConfirmation
+        ? values.dateConfirmation.format("DD/MM/YYYY")
+        : undefined,
       overtimeApplicable: !!values.overtimeApplicable,
     };
 
@@ -159,7 +225,7 @@ export default function AddEmployeePage() {
           : `Employee created successfully!${emailNote} Redirecting…`,
         duration: emailNote ? 3 : 1.5,
       });
-      
+
       localStorage.removeItem(DRAFT_KEY);
 
       setTimeout(() => {
@@ -174,39 +240,49 @@ export default function AddEmployeePage() {
       setLoading(false);
     }
   };
-  
+
+  const employmentFields = (fields: string[]) =>
+    fields.filter(
+      (field) =>
+        field !== "reportingManager" || showReportingManager
+    );
+
   const handleNext = async () => {
     try {
-      const fieldsToValidate = steps[currentStep].fields;
+      const fieldsToValidate = employmentFields(steps[currentStep].fields);
       await form.validateFields(fieldsToValidate);
       setCurrentStep((prev) => prev + 1);
     } catch (error) {
       // Validation failed
     }
   };
-  
+
   const handlePrev = () => {
     setCurrentStep((prev) => prev - 1);
   };
 
   const handleCreateEmployee = async () => {
     try {
-      const allFields = steps.flatMap((step) => step.fields);
+      const allFields = steps.flatMap((step) => employmentFields(step.fields));
       await form.validateFields(allFields);
       form.submit();
     } catch {
       messageApi.error("Please complete all required fields in every step.");
     }
   };
-  
+
   const handleSaveDraft = () => {
     const values = form.getFieldsValue(true);
     const { employeeId: _omit, ...rest } = values;
     const draftValues = {
       ...rest,
       dob: values.dob ? values.dob.toISOString() : undefined,
-      dateJoining: values.dateJoining ? values.dateJoining.toISOString() : undefined,
-      dateConfirmation: values.dateConfirmation ? values.dateConfirmation.toISOString() : undefined,
+      dateJoining: values.dateJoining
+        ? values.dateJoining.toISOString()
+        : undefined,
+      dateConfirmation: values.dateConfirmation
+        ? values.dateConfirmation.toISOString()
+        : undefined,
     };
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draftValues));
     messageApi.success("Draft saved successfully.");
@@ -215,10 +291,22 @@ export default function AddEmployeePage() {
   const steps = [
     {
       title: "Profile",
-      fields: ["fullName", "fatherName", "dob", "gender", "qualification", "experience", "castCategory"],
+      fields: [
+        "fullName",
+        "fatherName",
+        "dob",
+        "gender",
+        "qualification",
+        "experience",
+        "castCategory",
+      ],
       content: (
         <div className="emp-form-grid">
-          <Form.Item name="fullName" label="Full Name" rules={[{ required: true, message: "Required" }]}>
+          <Form.Item
+            name="fullName"
+            label="Full Name"
+            rules={[{ required: true, message: "Required" }]}
+          >
             <Input />
           </Form.Item>
           <Form.Item name="fatherName" label="Father's Name">
@@ -271,11 +359,22 @@ export default function AddEmployeePage() {
             />
           </Form.Item>
         </div>
-      )
+      ),
     },
     {
       title: "Contact",
-      fields: ["primaryContact", "personalEmail", "alternateContact", "emergencyContact", "emergencyNameRelation", "officialEmail", "currentAddress", "currentStatePin", "permanentAddress", "permanentStatePin"],
+      fields: [
+        "primaryContact",
+        "personalEmail",
+        "alternateContact",
+        "emergencyContact",
+        "emergencyNameRelation",
+        "officialEmail",
+        "currentAddress",
+        "currentStatePin",
+        "permanentAddress",
+        "permanentStatePin",
+      ],
       content: (
         <>
           <div className="emp-form-grid">
@@ -290,7 +389,11 @@ export default function AddEmployeePage() {
             >
               <NumericInput maxDigits={10} />
             </Form.Item>
-            <Form.Item name="personalEmail" label="Personal Email" className="emp-form-no-optional">
+            <Form.Item
+              name="personalEmail"
+              label="Personal Email"
+              className="emp-form-no-optional"
+            >
               <Input />
             </Form.Item>
             <Form.Item
@@ -314,7 +417,10 @@ export default function AddEmployeePage() {
             >
               <Input placeholder="e.g. Ramesh Kumar — Father" />
             </Form.Item>
-            <Form.Item name="officialEmail" label="Official Email (if assigned)">
+            <Form.Item
+              name="officialEmail"
+              label="Official Email (if assigned)"
+            >
               <Input />
             </Form.Item>
           </div>
@@ -327,7 +433,9 @@ export default function AddEmployeePage() {
                 className="emp-form-address-pin emp-form-no-optional"
                 name="currentStatePin"
                 label="State / PIN Code"
-                rules={[{ pattern: /^\d*$/, message: "PIN must be numbers only" }]}
+                rules={[
+                  { pattern: /^\d*$/, message: "PIN must be numbers only" },
+                ]}
               >
                 <NumericInput maxDigits={6} />
               </Form.Item>
@@ -337,8 +445,14 @@ export default function AddEmployeePage() {
                 name="permanentAddress"
                 label={
                   <div className="emp-form-address-header">
-                    <span className="emp-form-address-label">Permanent Address</span>
-                    <Checkbox onChange={(e) => handleCurrentAddressCopy(e.target.checked)}>
+                    <span className="emp-form-address-label">
+                      Permanent Address
+                    </span>
+                    <Checkbox
+                      onChange={(e) =>
+                        handleCurrentAddressCopy(e.target.checked)
+                      }
+                    >
                       Same as current
                     </Checkbox>
                   </div>
@@ -350,24 +464,36 @@ export default function AddEmployeePage() {
                 className="emp-form-address-pin emp-form-no-optional"
                 name="permanentStatePin"
                 label="State / PIN Code"
-                rules={[{ pattern: /^\d*$/, message: "PIN must be numbers only" }]}
+                rules={[
+                  { pattern: /^\d*$/, message: "PIN must be numbers only" },
+                ]}
               >
                 <NumericInput maxDigits={6} />
               </Form.Item>
             </div>
           </div>
         </>
-      )
+      ),
     },
     {
       title: "Identity",
-      fields: ["aadhar", "pan", "pfUan", "esiIp", "bankName", "accountNo", "ifscCode"],
+      fields: [
+        "aadhar",
+        "pan",
+        "pfUan",
+        "esiIp",
+        "bankName",
+        "accountNo",
+        "ifscCode",
+      ],
       content: (
         <div className="emp-form-grid">
           <Form.Item
             name="aadhar"
             label="Aadhar No."
-            rules={[{ pattern: /^\d{0,12}$/, message: "Aadhar must be 12 digits" }]}
+            rules={[
+              { pattern: /^\d{0,12}$/, message: "Aadhar must be 12 digits" },
+            ]}
           >
             <NumericInput maxDigits={12} />
           </Form.Item>
@@ -394,7 +520,12 @@ export default function AddEmployeePage() {
           <Form.Item
             name="accountNo"
             label="Account No."
-            rules={[{ pattern: /^\d*$/, message: "Account number must be numbers only" }]}
+            rules={[
+              {
+                pattern: /^\d*$/,
+                message: "Account number must be numbers only",
+              },
+            ]}
           >
             <NumericInput maxDigits={18} />
           </Form.Item>
@@ -402,18 +533,34 @@ export default function AddEmployeePage() {
             <Input />
           </Form.Item>
         </div>
-      )
+      ),
     },
     {
       title: "Employment",
-      fields: ["companies", "department", "designation", "locationUnit", "reportingManager", "employmentType", "dateJoining", "dateConfirmation", "probationMonths"],
+      fields: [
+        "companies",
+        "department",
+        "designation",
+        "reportingManager",
+        "employmentType",
+        "dateJoining",
+        "dateConfirmation",
+        "probationMonths",
+      ],
       content: (
         <div className="emp-form-grid">
           <Form.Item
             name="companies"
             label="Companies"
             className="emp-form-grid__full"
-            rules={[{ required: true, type: "array", min: 1, message: "Select at least one company" }]}
+            rules={[
+              {
+                required: true,
+                type: "array",
+                min: 1,
+                message: "Select at least one company",
+              },
+            ]}
           >
             <Select
               mode="multiple"
@@ -423,34 +570,41 @@ export default function AddEmployeePage() {
               maxTagCount="responsive"
             />
           </Form.Item>
-          <Form.Item name="department" label="Department" rules={[{ required: true, message: "Required" }]}>
+          <Form.Item
+            name="department"
+            label="Department"
+            rules={[{ required: true, message: "Required" }]}
+          >
             <Select
               options={departmentOptions}
               loading={departmentOptions.length === 0}
               showSearch
             />
           </Form.Item>
-          <Form.Item name="designation" label="Designation" rules={[{ required: true, message: "Required" }]}>
+          <Form.Item
+            name="designation"
+            label="Designation"
+            rules={[{ required: true, message: "Required" }]}
+          >
             <Input />
           </Form.Item>
-          <Form.Item name="locationUnit" label="Location / Unit" rules={[{ required: true, message: "Required" }]}>
-            <Select
-              options={[
-                { value: "Sudarshan Minerals (Udaipur — Plant 1)", label: "Sudarshan Minerals (Udaipur — Plant 1)" },
-                { value: "Sudarshan Minerals (Udaipur — Plant 2)", label: "Sudarshan Minerals (Udaipur — Plant 2)" },
-                { value: "Sudarshan Microns (Udaipur)", label: "Sudarshan Microns (Udaipur)" },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="reportingManager" label="Reporting Manager">
-            <Select
-              options={[
-                { value: "EMP-2010 — Sunil Mehra (Plant Head)", label: "EMP-2010 — Sunil Mehra (Plant Head)" },
-                { value: "EMP-2014 — Rajiv Mehta (Owner)", label: "EMP-2014 — Rajiv Mehta (Owner)" },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="employmentType" label="Employment Type" rules={[{ required: true, message: "Required" }]}>
+
+          {showReportingManager ? (
+            <Form.Item name="reportingManager" label="Reporting Manager">
+              <Select
+                options={reportingManagerOptions}
+                loading={reportingManagerOptions.length === 0}
+                showSearch
+                allowClear
+                optionFilterProp="label"
+              />
+            </Form.Item>
+          ) : null}
+          <Form.Item
+            name="employmentType"
+            label="Employment Type"
+            rules={[{ required: true, message: "Required" }]}
+          >
             <Select
               options={[
                 { value: "Permanent", label: "Permanent" },
@@ -459,7 +613,11 @@ export default function AddEmployeePage() {
               ]}
             />
           </Form.Item>
-          <Form.Item name="dateJoining" label="Date of Joining" rules={[{ required: true, message: "Required" }]}>
+          <Form.Item
+            name="dateJoining"
+            label="Date of Joining"
+            rules={[{ required: true, message: "Required" }]}
+          >
             <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
           </Form.Item>
           <Form.Item name="dateConfirmation" label="Confirmation Date">
@@ -469,27 +627,49 @@ export default function AddEmployeePage() {
             <InputNumber style={{ width: "100%" }} min={0} />
           </Form.Item>
         </div>
-      )
+      ),
     },
     {
       title: "Shift",
-      fields: ["shiftMode", "primaryShift", "rotationPattern", "workingHours", "weeklyOff", "overtimeApplicable"],
+      fields: [
+        "shiftMode",
+        "primaryShift",
+        "rotationPattern",
+        "workingHours",
+        "weeklyOff",
+        "overtimeApplicable",
+      ],
       content: (
         <div className="emp-form-grid">
           <Form.Item name="shiftMode" label="Shift Mode">
             <Select
               options={[
-                { value: "Single shift (fixed)", label: "Single shift (fixed)" },
-                { value: "Multiple shifts (rotating)", label: "Multiple shifts (rotating)" },
+                {
+                  value: "Single shift (fixed)",
+                  label: "Single shift (fixed)",
+                },
+                {
+                  value: "Multiple shifts (rotating)",
+                  label: "Multiple shifts (rotating)",
+                },
               ]}
             />
           </Form.Item>
           <Form.Item name="primaryShift" label="Primary Shift">
             <Select
               options={[
-                { value: "Shift A — 06:00 to 14:00", label: "Shift A — 06:00 to 14:00" },
-                { value: "Shift B — 14:00 to 22:00", label: "Shift B — 14:00 to 22:00" },
-                { value: "Shift C — 22:00 to 06:00", label: "Shift C — 22:00 to 06:00" },
+                {
+                  value: "Shift A — 06:00 to 14:00",
+                  label: "Shift A — 06:00 to 14:00",
+                },
+                {
+                  value: "Shift B — 14:00 to 22:00",
+                  label: "Shift B — 14:00 to 22:00",
+                },
+                {
+                  value: "Shift C — 22:00 to 06:00",
+                  label: "Shift C — 22:00 to 06:00",
+                },
               ]}
             />
           </Form.Item>
@@ -498,7 +678,10 @@ export default function AddEmployeePage() {
               options={[
                 { value: "None", label: "None" },
                 { value: "Weekly rotation", label: "Weekly rotation" },
-                { value: "Fortnightly rotation", label: "Fortnightly rotation" },
+                {
+                  value: "Fortnightly rotation",
+                  label: "Fortnightly rotation",
+                },
               ]}
             />
           </Form.Item>
@@ -514,15 +697,35 @@ export default function AddEmployeePage() {
               ]}
             />
           </Form.Item>
-          <Form.Item name="overtimeApplicable" label="Overtime Applicability" valuePropName="checked">
+          <Form.Item
+            name="overtimeApplicable"
+            label="Overtime Applicability"
+            valuePropName="checked"
+          >
             <Checkbox>Eligible for Overtime (OT)</Checkbox>
           </Form.Item>
         </div>
-      )
+      ),
     },
     {
       title: "Salary",
-      fields: ["compensationType", "annualCtc", "monthlyGross", "basicSalary", "da", "hra", "otherConveyance", "specialBonus", "reimbursementCap", "dailyWageRate", "skillCategory", "tradeJobRole", "engagedVia", "payFrequency", "paymentMode"],
+      fields: [
+        "compensationType",
+        "annualCtc",
+        "monthlyGross",
+        "basicSalary",
+        "da",
+        "hra",
+        "otherConveyance",
+        "specialBonus",
+        "reimbursementCap",
+        "dailyWageRate",
+        "skillCategory",
+        "tradeJobRole",
+        "engagedVia",
+        "payFrequency",
+        "paymentMode",
+      ],
       content: (
         <div className="emp-form-compensation">
           <Form.Item
@@ -543,28 +746,115 @@ export default function AddEmployeePage() {
               </div>
               <div className="emp-form-grid">
                 <Form.Item name="annualCtc" label="Annual CTC (₹)">
-                  <InputNumber style={{ width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} onChange={handleAnnualCtcChange} />
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                    onChange={handleAnnualCtcChange}
+                  />
                 </Form.Item>
                 <Form.Item name="monthlyGross" label="Monthly Gross (₹)">
-                  <InputNumber style={{ width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
                 <Form.Item name="basicSalary" label="Basic Salary (₹/mo)">
-                  <InputNumber style={{ width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
                 <Form.Item name="da" label="DA (₹/mo)">
-                  <InputNumber style={{ width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
                 <Form.Item name="hra" label="HRA (₹/mo)">
-                  <InputNumber style={{ width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
-                <Form.Item name="otherConveyance" label="Other / Conveyance (₹/mo)">
-                  <InputNumber style={{ width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                <Form.Item
+                  name="otherConveyance"
+                  label="Other / Conveyance (₹/mo)"
+                >
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
                 <Form.Item name="specialBonus" label="Special / Bonus (₹/mo)">
-                  <InputNumber style={{ width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
-                <Form.Item name="reimbursementCap" label="Reimbursement Cap (₹/mo)">
-                  <InputNumber style={{ width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                <Form.Item
+                  name="reimbursementCap"
+                  label="Reimbursement Cap (₹/mo)"
+                >
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
               </div>
             </div>
@@ -577,11 +867,21 @@ export default function AddEmployeePage() {
                   <SecurityScanOutlined style={{ color: "#d97706" }} />
                   <span>Labor / Daily Wage Grid</span>
                 </div>
-                <span className="emp-form-subpanel__badge">Hourly calculation enabled</span>
+                <span className="emp-form-subpanel__badge">
+                  Hourly calculation enabled
+                </span>
               </div>
               <div className="emp-form-grid">
                 <Form.Item name="dailyWageRate" label="Daily Wage Rate (₹/day)">
-                  <InputNumber style={{ width: "100%" }} formatter={v => `₹ ${v}`} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) => `₹ ${v}`}
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
                 <Form.Item name="skillCategory" label="Skill Category">
                   <Select
@@ -599,7 +899,10 @@ export default function AddEmployeePage() {
                   <Select
                     options={[
                       { value: "Direct (on-roll)", label: "Direct (on-roll)" },
-                      { value: "Contractor (off-roll)", label: "Contractor (off-roll)" },
+                      {
+                        value: "Contractor (off-roll)",
+                        label: "Contractor (off-roll)",
+                      },
                     ]}
                   />
                 </Form.Item>
@@ -625,17 +928,19 @@ export default function AddEmployeePage() {
               <div className="emp-form-note">
                 <CalculatorOutlined />
                 <div>
-                  <strong>Auto-formula details</strong>: Net pay = (Daily rate × Days worked) + (OT hrs × 2 × Hourly rate) − PF/ESI − Advance.
+                  <strong>Auto-formula details</strong>: Net pay = (Daily rate ×
+                  Days worked) + (OT hrs × 2 × Hourly rate) − PF/ESI − Advance.
                   <span className="emp-form-note__hint">
-                    Example: For ₹540/day at 26 days + 8 OT hrs = ₹14,040 + ₹1,080 = ₹15,120 gross.
+                    Example: For ₹540/day at 26 days + 8 OT hrs = ₹14,040 +
+                    ₹1,080 = ₹15,120 gross.
                   </span>
                 </div>
               </div>
             </div>
           )}
         </div>
-      )
-    }
+      ),
+    },
   ];
 
   return (

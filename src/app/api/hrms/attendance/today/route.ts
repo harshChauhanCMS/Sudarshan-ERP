@@ -2,8 +2,13 @@ import { connectDB } from "@/lib/db";
 import Employee from "@/lib/models/Employee";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import { ok, fail } from "@/lib/api-response";
+import { resolveManagerScope } from "@/lib/manager-scope";
 import { getSession } from "@/lib/session";
 import { enrichLocation, shortAddressFromLocation, type GeoLocation } from "@/lib/reverse-geocode";
+import {
+  isPunchInLateAbsent,
+  PUNCH_IN_LATE_ABSENT_MESSAGE,
+} from "@/lib/hrms-shift-utils";
 
 function formatTime(d: Date): string {
   return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
@@ -37,7 +42,8 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const mineOnly = url.searchParams.get("mine") === "1";
-    const session = mineOnly ? await getSession() : null;
+    const session = await getSession();
+    const managerScope = await resolveManagerScope(session.user);
     if (mineOnly && (!session?.isLoggedIn || !session.user?.email)) {
       return fail("Unauthorized", 401);
     }
@@ -170,14 +176,21 @@ export async function GET(request: Request) {
     }
 
     let people = Array.from(byPerson.values());
-    if (mineOnly && sessionEmail) {
-      const sessionEmployee = await Employee.findOne({
+    let sessionEmployee: { employeeId?: string; primaryShift?: string } | null =
+      null;
+    if (managerScope.restricted) {
+      const allowed = new Set(managerScope.teamEmployeeIds);
+      people = people.filter(
+        (p) => p.employeeId && allowed.has(String(p.employeeId))
+      );
+    } else if (mineOnly && sessionEmail) {
+      sessionEmployee = await Employee.findOne({
         $or: [
           { officialEmail: sessionEmail },
           { personalEmail: sessionEmail },
         ],
       })
-        .select({ employeeId: 1 })
+        .select({ employeeId: 1, primaryShift: 1 })
         .lean();
       const myEmpId = sessionEmployee?.employeeId
         ? String(sessionEmployee.employeeId)
@@ -214,7 +227,29 @@ export async function GET(request: Request) {
       };
     });
 
-    return ok({ date: start.toISOString().slice(0, 10), rows });
+    let punchMeta: {
+      punchInBlocked: boolean;
+      punchInBlockReason: string | null;
+      primaryShift: string | null;
+    } | undefined;
+
+    if (mineOnly && sessionEmail) {
+      const primaryShift = sessionEmployee?.primaryShift
+        ? String(sessionEmployee.primaryShift)
+        : null;
+      const punchInBlocked = isPunchInLateAbsent(now, primaryShift);
+      punchMeta = {
+        punchInBlocked,
+        punchInBlockReason: punchInBlocked ? PUNCH_IN_LATE_ABSENT_MESSAGE : null,
+        primaryShift,
+      };
+    }
+
+    return ok({
+      date: start.toISOString().slice(0, 10),
+      rows,
+      ...(punchMeta ? { meta: punchMeta } : {}),
+    });
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Failed to load today attendance", 500);
   }

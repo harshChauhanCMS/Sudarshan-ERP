@@ -4,6 +4,7 @@ import { ok, fail } from "@/lib/api-response";
 import { getSession } from "@/lib/session";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import { enrichLocation } from "@/lib/reverse-geocode";
+import { notifyAttendancePunch } from "@/lib/hrms-punch-notifications";
 
 type LocationPayload = {
   lat: number; lng: number; accuracy?: number;
@@ -94,6 +95,16 @@ export async function POST(request: Request) {
       source,
       location,
       notes: punchNotes || undefined,
+    });
+
+    void notifyAttendancePunch({
+      employeeId: employee?.employeeId ? String(employee.employeeId) : undefined,
+      employeeName: employee?.fullName ? String(employee.fullName) : undefined,
+      userEmail: email,
+      punchType: "out",
+      punchedAt: now,
+      source,
+      punchId: String(created._id),
     });
 
     return ok({ punch: created }, 201);

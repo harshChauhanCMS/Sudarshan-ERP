@@ -7,6 +7,7 @@ export type AttendanceSummaryRow = {
   designation: string;
   locationUnit: string;
   primaryShift: string;
+  dateJoining?: string;
   totalDays: number;
   presentDays: number;
   absentDays: number;

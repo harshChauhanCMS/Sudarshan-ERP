@@ -7,6 +7,7 @@ export type SessionUser = {
   email: string;
   name: string;
   role: string;
+  employeeId?: string;
   permissions?: PermissionsMap;
   mustResetPassword?: boolean;
 };

@@ -4,6 +4,22 @@ import {
   type ModulePermission,
   type PermissionsMap,
 } from "@/lib/permission-types";
+import {
+  isManagerBlockedRoute,
+  isManagerRole,
+} from "@/lib/manager-scope-shared";
+
+export const DASHBOARD_ALLOWED_ROLES = new Set(["admin", "owner"]);
+
+export function isDashboardRoute(path: string): boolean {
+  const normalized = path.split("?")[0];
+  return normalized === "/dashboard" || normalized.startsWith("/dashboard/");
+}
+
+export function canAccessDashboard(role: string | undefined): boolean {
+  if (!role) return false;
+  return DASHBOARD_ALLOWED_ROLES.has(role.toLowerCase());
+}
 
 type RouteRule = { prefix: string; module: ModuleKey; action?: keyof ModulePermission };
 
@@ -28,6 +44,7 @@ const ROUTE_RULES: RouteRule[] = (
     { prefix: "/hrms/leave", module: "hr" },
     { prefix: "/hrms/holidays", module: "hr" },
     { prefix: "/hrms/employees", module: "hr" },
+    { prefix: "/hrms/notifications", module: "hr" },
     { prefix: "/hrms/attendance", module: "hr" },
     { prefix: "/hrms", module: "hr" },
     { prefix: "/dashboard", module: "dashboard" },
@@ -55,8 +72,18 @@ export function getRoutePermission(path: string): {
 
 export function canAccessRoute(
   path: string,
-  permissions: PermissionsMap | undefined
+  permissions: PermissionsMap | undefined,
+  role?: string
 ): boolean {
+  if (isDashboardRoute(path) && !canAccessDashboard(role)) {
+    return false;
+  }
+
+  const normalized = path.split("?")[0];
+  if (isManagerRole(role) && isManagerBlockedRoute(normalized)) {
+    return false;
+  }
+
   const requirement = getRoutePermission(path);
   if (!requirement) return false;
   return canPerform(permissions, requirement.module, requirement.action);
@@ -77,29 +104,35 @@ type NavSection = {
 
 function filterNavItem(
   item: NavItem,
-  permissions: PermissionsMap | undefined
+  permissions: PermissionsMap | undefined,
+  role?: string
 ): NavItem | null {
   if (Array.isArray(item.items)) {
     const children = item.items
-      .map((child) => filterNavItem(child, permissions))
+      .map((child) => filterNavItem(child, permissions, role))
       .filter(Boolean) as NavItem[];
     if (!children.length) return null;
     return { ...item, items: children };
   }
 
-  return canAccessRoute(item.id, permissions) ? item : null;
+  return canAccessRoute(item.id, permissions, role) ? item : null;
 }
 
 export function filterNavByPermissions(
   nav: NavSection[],
-  permissions: PermissionsMap | undefined
+  permissions: PermissionsMap | undefined,
+  role?: string
 ): NavSection[] {
   if (!permissions) return [];
 
   return nav
     .map((section) => {
+      if (section.id === "dashboards" && !canAccessDashboard(role)) {
+        return null;
+      }
+
       const items = section.items
-        .map((item) => filterNavItem(item, permissions))
+        .map((item) => filterNavItem(item, permissions, role))
         .filter(Boolean) as NavItem[];
       if (!items.length) return null;
       return { ...section, items };
@@ -108,8 +141,22 @@ export function filterNavByPermissions(
 }
 
 export function getDefaultLandingRoute(
-  permissions: PermissionsMap | undefined
+  permissions: PermissionsMap | undefined,
+  role?: string
 ): string {
+  if (isManagerRole(role)) {
+    const managerCandidates = [
+      "/hrms/leave/approval",
+      "/hrms/attendance",
+      "/hrms/employees",
+      "/hrms/leave/record",
+      "/hrms/reports/attendance",
+    ];
+    for (const path of managerCandidates) {
+      if (canAccessRoute(path, permissions, role)) return path;
+    }
+  }
+
   const candidates = [
     "/dashboard/master",
     "/hrms/employees",
@@ -121,7 +168,7 @@ export function getDefaultLandingRoute(
   ];
 
   for (const path of candidates) {
-    if (canAccessRoute(path, permissions)) return path;
+    if (canAccessRoute(path, permissions, role)) return path;
   }
 
   return "/select-company";

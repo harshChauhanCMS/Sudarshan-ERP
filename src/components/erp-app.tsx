@@ -8,8 +8,6 @@ import { ErpDataProvider, useErpData } from "@/context/erp-data-provider";
 import type { ErpData } from "@/lib/seed-data";
 import { Login, Forgot, CompanySelect, ResetPassword } from "@/components/erp/auth";
 import { Sidebar, Topbar } from "@/components/layout";
-import { Btn } from "@/components/ui";
-import { Icon } from "@/components/erp/icons";
 import { renderErpRoute } from "@/components/erp/render-route";
 import { ERP_ROUTES, pathToRoute } from "@/lib/erp-routes";
 import {
@@ -25,139 +23,6 @@ import {
 } from "@/lib/group-brand-routes";
 
 type Company = ErpData["COMPANIES"][number] & { group?: boolean };
-
-const NotifsPanel = ({
-  open,
-  onClose,
-  navigate,
-}: {
-  open: boolean;
-  onClose: () => void;
-  navigate: (path: string) => void;
-}) => {
-  const { data } = useErpData();
-  if (!open) return null;
-  return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60 }}>
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          position: "absolute",
-          top: 56,
-          right: 16,
-          width: 380,
-          background: "var(--bg-elev)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          boxShadow: "var(--shadow-pop)",
-          maxHeight: "calc(100vh - 80px)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          animation: "pop 120ms var(--ease-out)",
-        }}
-      >
-        <div
-          style={{
-            padding: "12px 14px",
-            borderBottom: "1px solid var(--border)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "var(--font-display)",
-              fontWeight: 600,
-              fontSize: 13,
-            }}
-          >
-            Notifications
-          </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <Btn variant="ghost" size="sm">
-              Mark all read
-            </Btn>
-            <button className="tb-iconbtn" onClick={onClose}>
-              <Icon name="x" size={14} />
-            </button>
-          </div>
-        </div>
-        <div style={{ overflowY: "auto" }}>
-          {data.NOTIFS.map((n) => (
-            <div
-              key={n.id}
-              onClick={() => {
-                navigate(n.target);
-                onClose();
-              }}
-              style={{
-                padding: "12px 14px",
-                borderBottom: "1px solid var(--border)",
-                display: "flex",
-                gap: 10,
-                cursor: "pointer",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--bg-sunken)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "";
-              }}
-            >
-              <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 8,
-                  flexShrink: 0,
-                  display: "grid",
-                  placeItems: "center",
-                  background:
-                    n.type === "alert"
-                      ? "var(--danger-soft)"
-                      : n.type === "success"
-                        ? "var(--success-soft)"
-                        : "var(--info-soft)",
-                  color:
-                    n.type === "alert"
-                      ? "var(--danger)"
-                      : n.type === "success"
-                        ? "var(--success)"
-                        : "var(--info)",
-                }}
-              >
-                <Icon
-                  name={
-                    n.type === "alert"
-                      ? "alert"
-                      : n.type === "success"
-                        ? "check"
-                        : "info"
-                  }
-                  size={14}
-                />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, color: "var(--fg)" }}>{n.text}</div>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "var(--fg-subtle)",
-                    marginTop: 4,
-                  }}
-                >
-                  {n.time} ago
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 function ErpAppInner({ segments, children }: { segments?: string[], children?: React.ReactNode }) {
   const pathname = usePathname();
@@ -177,11 +42,12 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
             segments ?? pathname.replace(/^\//, "").split("/").filter(Boolean)
           );
   const [company, setCompany] = useState<Company | null>(null);
-  const [notifsOpen, setNotifsOpen] = useState(false);
+  const [notifUnreadCount, setNotifUnreadCount] = useState(0);
   const [sessionUser, setSessionUser] = useState<{
     email: string;
     name: string;
     role: string;
+    employeeId?: string;
     permissions?: PermissionsMap;
     mustResetPassword?: boolean;
   } | null>(null);
@@ -223,6 +89,16 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
     };
   }, [mobileSidebarOpen]);
 
+  const loadNotificationBadge = () => {
+    if (!sessionUser?.email) return;
+    fetch("/api/notifications?limit=1")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data) setNotifUnreadCount(j.data.unreadCount ?? 0);
+      })
+      .catch(() => {});
+  };
+
   useEffect(() => {
     fetch("/api/auth/session")
       .then((r) => r.json())
@@ -231,6 +107,19 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!sessionUser?.email) return;
+    loadNotificationBadge();
+    const timer = setInterval(loadNotificationBadge, 60000);
+    return () => clearInterval(timer);
+  }, [sessionUser?.email]);
+
+  useEffect(() => {
+    if (route === "/hrms/notifications" && sessionUser?.email) {
+      loadNotificationBadge();
+    }
+  }, [route, sessionUser?.email]);
 
   useEffect(() => {
     const authedRoute = !["/login", "/select-company", "/forgot"].includes(route);
@@ -249,8 +138,11 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   useEffect(() => {
     if (!sessionUser?.permissions) return;
     if (["/login", "/select-company", "/forgot", "/reset-password"].includes(route)) return;
-    if (canAccessRoute(route, sessionUser.permissions)) return;
-    const fallback = getDefaultLandingRoute(sessionUser.permissions);
+    if (canAccessRoute(route, sessionUser.permissions, sessionUser.role)) return;
+    const fallback = getDefaultLandingRoute(
+      sessionUser.permissions,
+      sessionUser.role
+    );
     if (fallback !== route) {
       message.warning("You do not have access to that page.");
       navigate(fallback);
@@ -333,7 +225,12 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
         userEmail={sessionUser?.email}
         onSelect={(c) => {
           setCompany(c);
-          navigate(getDefaultLandingRoute(sessionUser?.permissions));
+          navigate(
+            getDefaultLandingRoute(
+              sessionUser?.permissions,
+              sessionUser?.role
+            )
+          );
         }}
         onLogout={handleLogout}
       />
@@ -385,22 +282,18 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
       <div className="main">
         <Topbar
           route={route}
-          onNotifClick={() => setNotifsOpen((v) => !v)}
+          onNotifClick={() => navigate("/hrms/notifications")}
           onMobileClick={() => window.open("/mobile", "_blank")}
           onLogout={handleLogout}
           onMenuClick={() => setMobileSidebarOpen((v) => !v)}
           menuOpen={mobileSidebarOpen}
+          notifUnreadCount={notifUnreadCount}
         />
         <div className="content">
           <PageShell loading={loading} error={error} meta={meta}>
             {children ? children : renderErpRoute(route, navigate)}
           </PageShell>
         </div>
-        <NotifsPanel
-          open={notifsOpen}
-          onClose={() => setNotifsOpen(false)}
-          navigate={navigate}
-        />
       </div>
     </div>
   );
