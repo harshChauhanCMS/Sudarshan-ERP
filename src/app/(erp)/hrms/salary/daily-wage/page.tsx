@@ -14,8 +14,10 @@ import {
 
 import RepHeader from "@/components/hrms/RepHeader";
 import { HRMS_BACK } from "@/lib/hrms-nav";
+import CommonTable from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
 import StatCard from "@/components/common/StatCard";
+import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 import {
   getDailyWageWorkers,
   filterWorkers,
@@ -444,7 +446,8 @@ export default function DailyWagePayrollPage() {
         meta={`${workers.length} labourers · ${formatLakhs(kpi.totalPayout)}`}
         flush
       >
-        <Table
+        <CommonTable
+          {...ERP_TABLE_PROPS}
           dataSource={tableData}
           columns={columns}
           rowKey="key"
@@ -495,7 +498,8 @@ export default function DailyWagePayrollPage() {
       {/* Trade + disbursement summary */}
       <div className="daily-wage-bottom-grid">
         <ReportSection title="Trade-wise summary" flush>
-          <Table
+          <CommonTable
+            {...ERP_TABLE_PROPS}
             dataSource={tradeRows}
             rowKey="trade"
             size="small"
@@ -534,7 +538,8 @@ export default function DailyWagePayrollPage() {
         </ReportSection>
 
         <ReportSection title="Disbursement summary" flush>
-          <Table
+          <CommonTable
+            {...ERP_TABLE_PROPS}
             dataSource={disbursementRows}
             rowKey="mode"
             size="small"

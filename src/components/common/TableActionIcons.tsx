@@ -104,3 +104,24 @@ export function TableActionIcon({
     </Space>
   );
 }
+
+/** Icon-only view action for ERP / HRMS data tables */
+export function ErpViewAction({
+  onClick,
+  href,
+  label = "View",
+}: {
+  onClick?: () => void;
+  href?: string;
+  label?: string;
+}) {
+  return (
+    <ViewEditActions
+      showEdit={false}
+      showView
+      onView={onClick ?? (href ? undefined : () => {})}
+      viewHref={href}
+      viewLabel={label}
+    />
+  );
+}

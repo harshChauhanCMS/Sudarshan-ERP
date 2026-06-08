@@ -1,10 +1,12 @@
 "use client";
 
-import { Table, Badge, Button } from "antd";
+import { Badge, Button } from "antd";
 import RepHeader from "@/components/hrms/RepHeader";
+import CommonTable from "@/components/common/CommonTable";
 import StatCard from "@/components/common/StatCard";
 import ReportSection from "@/components/hrms/ReportSection";
 import { TableActionIcon } from "@/components/common/TableActionIcons";
+import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 import { HRMS_BACK } from "@/lib/hrms-nav";
 import {
   WalletOutlined,
@@ -38,10 +40,10 @@ export default function PayrollPage() {
     },
     { title: "Payment Date", dataIndex: "date", key: "date" },
     {
-      title: "",
+      title: "Actions",
       key: "action",
-      width: 56,
-      align: "right" as const,
+      width: 72,
+      align: "center" as const,
       render: () => (
         <TableActionIcon
           label="View details"
@@ -95,7 +97,8 @@ export default function PayrollPage() {
       </div>
 
       <ReportSection title="Salary disbursements" flush>
-        <Table
+        <CommonTable
+          {...ERP_TABLE_PROPS}
           dataSource={payrollData}
           columns={columns}
           pagination={false}

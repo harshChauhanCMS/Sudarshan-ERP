@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Table,
   Tag,
   Button,
   Select,
@@ -29,8 +28,10 @@ import Link from "next/link";
 
 import RepHeader from "@/components/hrms/RepHeader";
 import { HRMS_BACK } from "@/lib/hrms-nav";
+import CommonTable from "@/components/common/CommonTable";
 import StatCard from "@/components/common/StatCard";
 import EmployeeSelect from "@/components/erp/EmployeeSelect";
+import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 import { getLeaveDummy, leaveTypeColor } from "@/lib/leave-dummy";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -435,7 +436,8 @@ export default function LeaveApprovalPage() {
             label: t.label,
             children: (
               <div style={{ paddingBottom: 16 }}>
-                <Table
+                <CommonTable
+                  {...ERP_TABLE_PROPS}
                   loading={loading}
                   dataSource={tableData}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any

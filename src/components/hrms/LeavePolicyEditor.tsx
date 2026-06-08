@@ -1,8 +1,10 @@
 "use client";
 
-import { Table, Button, Modal, Form, Input, InputNumber, Switch, Select, message, Tag, Tooltip } from "antd";
+import { Button, Modal, Form, Input, InputNumber, Switch, Select, message, Tag, Tooltip } from "antd";
 import { PlusOutlined, EditOutlined } from "@ant-design/icons";
 import { useEffect, useState } from "react";
+import CommonTable from "@/components/common/CommonTable";
+import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 
 const LEAVE_TYPE_LABEL: Record<string, string> = {
   casual: "Casual", sick: "Sick", earned: "Earned", unpaid: "Unpaid",
@@ -74,7 +76,7 @@ export function LeavePolicyEditor() {
     { title: "Applicable To", dataIndex: "applicableTo", key: "app", render: (v: string) => <Tag style={{ borderRadius: 20, border: 0, textTransform: "capitalize" }}>{v}</Tag> },
     { title: "Active", dataIndex: "isActive", key: "active", render: (v: boolean) => <Tag color={v ? "green" : "red"} style={{ borderRadius: 20, border: 0 }}>{v ? "Active" : "Inactive"}</Tag> },
     {
-      title: "", key: "actions", width: 80,
+      title: "Actions", key: "actions", width: 80, align: "center" as const,
       render: (_: any, row: any) => (
         <Tooltip title="Edit">
           <Button
@@ -100,7 +102,7 @@ export function LeavePolicyEditor() {
       </div>
 
       <div style={{ background: "#fff", border: "1px solid #e4e4e7", borderRadius: 12, overflow: "hidden" }}>
-        <Table loading={loading} dataSource={policies} columns={columns as any} rowKey="_id" pagination={false} size="middle" style={{ padding: 4 }} />
+        <CommonTable loading={loading} {...ERP_TABLE_PROPS} dataSource={policies} columns={columns as any} rowKey="_id" pagination={false} size="middle" style={{ padding: 4 }} />
       </div>
 
       <Modal title={editing ? "Edit Policy" : "New Leave Policy"} open={open} onCancel={() => { setOpen(false); form.resetFields(); }} footer={null} width={480}>

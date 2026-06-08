@@ -48,7 +48,12 @@ const Badge = ({ tone = "default", dot, children, sq, className = "" }) => {
   if (dot) classes.push("dot");
   if (sq) classes.push("sq");
   if (className) classes.push(className);
-  return <span className={classes.join(" ")}>{children}</span>;
+  return (
+    <span className={classes.join(" ")}>
+      {dot ? <span className="badge-dot" aria-hidden="true" /> : null}
+      {children}
+    </span>
+  );
 };
 
 const StatusBadge = ({ status }) => {

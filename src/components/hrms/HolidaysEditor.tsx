@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Table,
   Button,
   Modal,
   Form,
@@ -17,8 +16,10 @@ import {
 import { PlusOutlined, DeleteOutlined, FilePdfOutlined } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 
+import CommonTable from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
 import { ViewEditActions } from "@/components/common/TableActionIcons";
+import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 import { downloadHolidayCalendarPdf } from "@/lib/holiday-calendar-pdf";
 
 export type HolidayRecord = {
@@ -196,10 +197,10 @@ export function HolidaysEditor({ companyName = "Sudarshan Group" }: HolidaysEdit
       render: (v: string) => v || "—",
     },
     {
-      title: "",
+      title: "Actions",
       key: "actions",
       width: 100,
-      align: "right" as const,
+      align: "center" as const,
       render: (_: unknown, row: HolidayRecord) => (
         <Space size={2}>
           <ViewEditActions
@@ -271,7 +272,8 @@ export function HolidaysEditor({ companyName = "Sudarshan Group" }: HolidaysEdit
         meta={`${holidays.length} holidays in ${year}`}
         flush
       >
-        <Table
+        <CommonTable
+          {...ERP_TABLE_PROPS}
           loading={loading}
           dataSource={holidays}
           columns={columns}
