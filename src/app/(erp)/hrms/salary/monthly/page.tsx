@@ -1,6 +1,6 @@
 "use client";
 
-import { Table, Button, Tag, message, Tooltip, DatePicker } from "antd";
+import { Button, Tag, message, Tooltip, DatePicker } from "antd";
 import {
   DownloadOutlined,
   ThunderboltOutlined,
@@ -17,8 +17,10 @@ import { useEffect, useState } from "react";
 
 import RepHeader from "@/components/hrms/RepHeader";
 import { HRMS_BACK } from "@/lib/hrms-nav";
+import CommonTable from "@/components/common/CommonTable";
 import StatCard from "@/components/common/StatCard";
 import ReportSection from "@/components/hrms/ReportSection";
+import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 
 const STATUS_COLOR: Record<string, string> = {
   draft: "orange",
@@ -348,7 +350,8 @@ export default function MonthlySalaryPage() {
         meta={`${sheets.length} employees · hover cells for breakdown`}
         flush
       >
-        <Table
+        <CommonTable
+          {...ERP_TABLE_PROPS}
           loading={loading}
           dataSource={sheets}
           columns={columns}

@@ -2,7 +2,11 @@
 'use client';
 
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+import { Button as AntButton } from "antd";
+import { MoreOutlined } from "@ant-design/icons";
+import CommonTable from "@/components/common/CommonTable";
+import { ERP_TABLE_PROPS, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
@@ -88,6 +92,106 @@ const SparePartsInventory = () => {
   const critCount = DATA.SPARE_PARTS.filter(p => p.status === "critical").length;
   const criticalSKUs = DATA.SPARE_PARTS.filter(p => p.critical).length;
 
+  const columns = useMemo(
+    () => [
+      {
+        title: "SKU",
+        dataIndex: "code",
+        key: "code",
+        render: (code, p) => (
+          <span className="mono strong" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            {code}
+            {p.critical ? <span title="Critical for plant uptime" style={{ color: "var(--danger)" }}>●</span> : null}
+          </span>
+        ),
+      },
+      {
+        title: "Part",
+        dataIndex: "name",
+        key: "name",
+        render: (name) => <span className="strong">{name}</span>,
+      },
+      {
+        title: "Category",
+        dataIndex: "category",
+        key: "category",
+        render: (category) => <Badge tone="default">{category}</Badge>,
+      },
+      {
+        title: "Vendor",
+        dataIndex: "vendor",
+        key: "vendor",
+        render: (v) => <span className="muted">{v}</span>,
+      },
+      {
+        title: "Location",
+        dataIndex: "location",
+        key: "location",
+        render: (v) => <span className="muted" style={{ fontSize: 12 }}>{v}</span>,
+      },
+      {
+        title: "Stock",
+        key: "stock",
+        align: "right",
+        render: (_, p) => (
+          <>
+            <span className="mono strong">{p.stock}</span>{" "}
+            <span className="subtle" style={{ fontSize: 11 }}>{p.unit}</span>
+          </>
+        ),
+      },
+      {
+        title: "Reorder at",
+        key: "reorder",
+        render: (_, p) => <span className="mono subtle">{p.reorder} {p.unit}</span>,
+      },
+      {
+        title: "Coverage",
+        key: "coverage",
+        width: 120,
+        render: (_, p) => {
+          const tone = p.status === "critical" ? "danger" : p.status === "low" ? "warning" : "success";
+          const pct = Math.min(100, (p.stock / Math.max(1, p.reorder * 3)) * 100);
+          return <Bar value={pct} tone={tone} />;
+        },
+      },
+      {
+        title: "Value",
+        dataIndex: "value",
+        key: "value",
+        align: "right",
+        render: (v) => <span className="num">{v > 0 ? fmtINRFull(v) : "—"}</span>,
+      },
+      {
+        title: "Last issued",
+        dataIndex: "lastIssued",
+        key: "lastIssued",
+        render: (v) => <span className="muted">{v}</span>,
+      },
+      {
+        title: "Status",
+        dataIndex: "status",
+        key: "status",
+        render: (status) => inventoryStatusBadge(status),
+      },
+      {
+        title: "Actions",
+        key: "actions",
+        width: 110,
+        align: "center",
+        render: (_, p) => (
+          <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "center" }}>
+            <AntButton type="link" size="small" onClick={() => setIssueOpen(p)}>
+              Issue
+            </AntButton>
+            <AntButton type="text" size="small" icon={<MoreOutlined />} aria-label="More actions" />
+          </div>
+        ),
+      },
+    ],
+    []
+  );
+
   return (
     <>
       <DashHead title="Spare Parts Inventory" sub="Mechanical, electrical & instrumentation spares · reorder & breakdown alerts">
@@ -118,57 +222,20 @@ const SparePartsInventory = () => {
             <input className="input" placeholder="Search SKU, part name…" style={{ height: 30, width: 220 }} />
           </div>
         </div>
-        <div style={{ overflowX: "auto" }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>SKU</th><th>Part</th><th>Category</th><th>Vendor</th><th>Location</th>
-                <th style={{ textAlign: "right" }}>Stock</th><th>Reorder at</th><th>Coverage</th>
-                <th style={{ textAlign: "right" }}>Value</th><th>Last issued</th><th>Status</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={12} className="muted" style={{ textAlign: "center", padding: 32 }}>
-                    No spare parts in the database. Run <code>npm run seed</code> or add items via the API.
-                  </td>
-                </tr>
-              ) : null}
-              {filtered.map((p) => {
-                const tone = p.status === "critical" ? "danger" : p.status === "low" ? "warning" : "success";
-                const pct = Math.min(100, (p.stock / Math.max(1, p.reorder * 3)) * 100);
-                return (
-                  <tr key={p.code}>
-                    <td className="mono strong">
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        {p.code}
-                        {p.critical && <span title="Critical for plant uptime" style={{ color: "var(--danger)" }}>●</span>}
-                      </div>
-                    </td>
-                    <td className="strong">{p.name}</td>
-                    <td><Badge tone="default">{p.category}</Badge></td>
-                    <td className="muted">{p.vendor}</td>
-                    <td className="muted" style={{ fontSize: 12 }}>{p.location}</td>
-                    <td style={{ textAlign: "right" }}>
-                      <span className="mono strong">{p.stock}</span> <span className="subtle" style={{ fontSize: 11 }}>{p.unit}</span>
-                    </td>
-                    <td className="mono subtle">{p.reorder} {p.unit}</td>
-                    <td style={{ width: 110 }}><Bar value={pct} tone={tone} /></td>
-                    <td className="num">{p.value > 0 ? fmtINRFull(p.value) : "—"}</td>
-                    <td className="muted">{p.lastIssued}</td>
-                    <td><StatusBadge status={p.status} /></td>
-                    <td>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <Btn variant="ghost" size="sm" onClick={() => setIssueOpen(p)}>Issue</Btn>
-                        <button className="tb-iconbtn"><Icon name="moreV" size={14} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div style={{ padding: 16 }}>
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            columns={columns}
+            dataSource={filtered}
+            rowKey="code"
+            locale={{
+              emptyText: (
+                <span className="muted">
+                  No spare parts in the database. Run <code>npm run seed</code> or add items via the API.
+                </span>
+              ),
+            }}
+          />
         </div>
       </div>
 

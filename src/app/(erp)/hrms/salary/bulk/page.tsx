@@ -1,6 +1,6 @@
 "use client";
 
-import { Table, Button, Tag, Select, DatePicker } from "antd";
+import { Button, Tag, Select, DatePicker } from "antd";
 import {
   DownloadOutlined,
   ReloadOutlined,
@@ -14,7 +14,9 @@ import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 
 import RepHeader from "@/components/hrms/RepHeader";
+import CommonTable from "@/components/common/CommonTable";
 import { TableActionIcon } from "@/components/common/TableActionIcons";
+import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 import { HRMS_BACK } from "@/lib/hrms-nav";
 import ReportSection from "@/components/hrms/ReportSection";
 import StatCard from "@/components/common/StatCard";
@@ -288,7 +290,8 @@ export default function PayrollBulkPage() {
         meta={`${filtered.length} employees · scroll horizontally for all columns`}
         flush
       >
-        <Table<PayrollSheetRow>
+        <CommonTable<PayrollSheetRow>
+          {...ERP_TABLE_PROPS}
           dataSource={filtered}
           columns={columns}
           rowKey="id"

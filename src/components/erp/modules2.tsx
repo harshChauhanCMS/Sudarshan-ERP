@@ -2,8 +2,12 @@
 'use client';
 
 
-import React, { useState } from "react";
-import { Select, DatePicker, Button } from "antd";
+import React, { useMemo, useState } from "react";
+import { Select, DatePicker, Button as AntButton } from "antd";
+import CommonTable from "@/components/common/CommonTable";
+import { ERP_TABLE_PROPS, erpStatusBadge, customerStatusBadge, invoiceStatusBadge } from "@/components/common/erpStatusBadges";
+import { ErpViewAction, TableActionIcon } from "@/components/common/TableActionIcons";
+import { EyeOutlined } from "@ant-design/icons";
 import { FilterOutlined, UnorderedListOutlined, LineChartOutlined, FileTextOutlined, TeamOutlined, EnvironmentOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { Icon } from "./icons";
@@ -91,6 +95,74 @@ const Customers = () => {
     setOpen(false);
   };
 
+  const customerColumns = useMemo(
+    () => [
+      {
+        title: "ID",
+        dataIndex: "id",
+        key: "id",
+        render: (id) => <span className="mono strong">{id}</span>,
+      },
+      {
+        title: "Customer",
+        dataIndex: "name",
+        key: "name",
+        render: (name, _row, index) => (
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Avatar name={name} color={(index % 5) + 1} />
+            <div className="strong">{name}</div>
+          </div>
+        ),
+      },
+      {
+        title: "City",
+        dataIndex: "city",
+        key: "city",
+        render: (city) => <span className="muted">{city}</span>,
+      },
+      {
+        title: "Terms",
+        dataIndex: "terms",
+        key: "terms",
+        render: (terms) => <Badge sq>{terms}</Badge>,
+      },
+      {
+        title: "Orders",
+        dataIndex: "orders",
+        key: "orders",
+        align: "right",
+        render: (orders) => <span className="num">{orders}</span>,
+      },
+      {
+        title: "YTD revenue",
+        dataIndex: "ytd",
+        key: "ytd",
+        align: "right",
+        render: (ytd) => <span className="num">{fmtINR(ytd)}</span>,
+      },
+      {
+        title: "Open AR",
+        key: "openAr",
+        align: "right",
+        render: (_, c) => <span className="num">{fmtINR(Math.round(c.ytd * 0.18))}</span>,
+      },
+      {
+        title: "Status",
+        dataIndex: "status",
+        key: "status",
+        render: (status) => customerStatusBadge(status),
+      },
+      {
+        title: "Actions",
+        key: "actions",
+        width: 72,
+        align: "center",
+        render: () => <ErpViewAction />,
+      },
+    ],
+    []
+  );
+
   return (
     <>
       <DashHead title="Customers" sub="Customer master · contacts · credit terms · order history">
@@ -118,53 +190,20 @@ const Customers = () => {
             <Btn size="sm" icon="filter">Filter</Btn>
           </div>
         </div>
-        <div style={{ overflowX: "auto" }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Customer</th>
-                <th>City</th>
-                <th>Terms</th>
-                <th style={{ textAlign: "right" }}>Orders</th>
-                <th style={{ textAlign: "right" }}>YTD revenue</th>
-                <th style={{ textAlign: "right" }}>Open AR</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="muted" style={{ textAlign: "center", padding: 24 }}>No customers yet. Add one or run npm run seed.</td></tr>
-              ) : null}
-              {filtered.map((c, i) => (
-                <tr key={c.id}>
-                  <td className="mono strong">{c.id}</td>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <Avatar name={c.name} color={(i % 5) + 1} />
-                      <div className="strong">{c.name}</div>
-                    </div>
-                  </td>
-                  <td className="muted">{c.city}</td>
-                  <td><Badge sq>{c.terms}</Badge></td>
-                  <td className="num">{c.orders}</td>
-                  <td className="num">{fmtINR(c.ytd)}</td>
-                  <td className="num">{fmtINR(Math.round(c.ytd * 0.18))}</td>
-                  <td>
-                    {c.status === "hold"
-                      ? <Badge tone="warning" dot>Hold</Badge>
-                      : c.status === "prospect"
-                        ? <Badge tone="info" dot>Prospect</Badge>
-                        : <Badge tone="success" dot>Active</Badge>}
-                  </td>
-                  <td>
-                    <Btn variant="ghost" size="sm" iconRight="chevRight">View</Btn>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ padding: 16 }}>
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            columns={customerColumns}
+            dataSource={filtered}
+            rowKey="id"
+            locale={{
+              emptyText: (
+                <span className="muted">
+                  No customers yet. Add one or run <code>npm run seed</code>.
+                </span>
+              ),
+            }}
+          />
         </div>
       </div>
 
@@ -288,6 +327,72 @@ const CustomerOrders = () => {
     });
   };
 
+  const orderColumns = useMemo(
+    () => [
+      {
+        title: "SO #",
+        dataIndex: "id",
+        key: "id",
+        render: (id) => <span className="mono strong">{id}</span>,
+      },
+      { title: "Customer", dataIndex: "customer", key: "customer" },
+      {
+        title: "Product",
+        dataIndex: "product",
+        key: "product",
+        render: (product) => <span className="muted">{product}</span>,
+      },
+      {
+        title: "Qty",
+        dataIndex: "qty",
+        key: "qty",
+        align: "right",
+        render: (qty) => <span className="num">{qty}</span>,
+      },
+      {
+        title: "Value",
+        dataIndex: "value",
+        key: "value",
+        align: "right",
+        render: (value) => <span className="num">{fmtINRFull(value)}</span>,
+      },
+      {
+        title: "Due",
+        dataIndex: "due",
+        key: "due",
+        render: (due) => <span className="num nowrap">{due}</span>,
+      },
+      {
+        title: "Progress",
+        dataIndex: "progress",
+        key: "progress",
+        width: 140,
+        render: (progress) => (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Bar value={progress} tone={progress === 100 ? "success" : "primary"} />
+            <span className="mono" style={{ fontSize: 11, width: 32, textAlign: "right" }}>
+              {progress}%
+            </span>
+          </div>
+        ),
+      },
+      {
+        title: "Status",
+        dataIndex: "status",
+        key: "status",
+        render: (status) => erpStatusBadge(status),
+      },
+      {
+        title: "Actions",
+        key: "actions",
+        width: 72,
+        align: "center",
+        render: () => <ErpViewAction label="Open" />,
+      },
+    ],
+    []
+  );
+
   return (
     <>
       <DashHead title="Customer Orders" sub="Sales orders across both companies">
@@ -323,42 +428,13 @@ const CustomerOrders = () => {
             <Btn size="sm" icon="sort">Sort</Btn>
           </div>
         </div>
-        <div style={{ overflowX: "auto" }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>SO #</th>
-                <th>Customer</th>
-                <th>Product</th>
-                <th>Qty</th>
-                <th style={{ textAlign: "right" }}>Value</th>
-                <th>Due</th>
-                <th>Progress</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((o) => (
-                <tr key={o.id}>
-                  <td className="mono strong">{o.id}</td>
-                  <td>{o.customer}</td>
-                  <td className="muted">{o.product}</td>
-                  <td className="num">{o.qty}</td>
-                  <td className="num">{fmtINRFull(o.value)}</td>
-                  <td className="num nowrap">{o.due}</td>
-                  <td style={{ width: 140 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <Bar value={o.progress} tone={o.progress === 100 ? "success" : "primary"} />
-                      <span className="mono" style={{ fontSize: 11, width: 32, textAlign: "right" }}>{o.progress}%</span>
-                    </div>
-                  </td>
-                  <td><StatusBadge status={o.status} /></td>
-                  <td><Btn variant="ghost" size="sm" iconRight="chevRight">Open</Btn></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ padding: 16 }}>
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            columns={orderColumns}
+            dataSource={filtered}
+            rowKey="id"
+          />
         </div>
       </div>
 
@@ -566,10 +642,6 @@ const FieldSales = () => {
               <div className="card-head">
                 <div className="card-title">
                   <Icon name="map" size={14} /> Field locations · Rajasthan &amp; MP
-                </div>
-                <div className="row">
-                  <Badge tone="success" dot>3 in field</Badge>
-                  <Badge tone="primary" dot>2 completed</Badge>
                 </div>
               </div>
               <div className="card-body" style={{ padding: 0 }}>
@@ -898,6 +970,92 @@ const InvoiceVerify = () => {
     setUploadForm({ po: "", vendor: "", invAmt: "", poAmt: "" });
   };
 
+  const invoiceColumns = useMemo(
+    () => [
+      {
+        title: "Invoice #",
+        dataIndex: "id",
+        key: "id",
+        render: (id) => <span className="mono strong">{id}</span>,
+      },
+      {
+        title: "PO",
+        dataIndex: "po",
+        key: "po",
+        render: (po) => <span className="mono">{po}</span>,
+      },
+      { title: "Vendor", dataIndex: "vendor", key: "vendor" },
+      {
+        title: "Invoice date",
+        dataIndex: "invDate",
+        key: "invDate",
+        render: (v) => <span className="muted">{v}</span>,
+      },
+      {
+        title: "Invoice ₹",
+        dataIndex: "invAmt",
+        key: "invAmt",
+        align: "right",
+        render: (v) => <span className="num">{fmtINRFull(v)}</span>,
+      },
+      {
+        title: "PO ₹",
+        dataIndex: "poAmt",
+        key: "poAmt",
+        align: "right",
+        render: (v) => <span className="num">{fmtINRFull(v)}</span>,
+      },
+      {
+        title: "Diff",
+        key: "diff",
+        align: "right",
+        render: (_, inv) => {
+          const diff = inv.invAmt - inv.poAmt;
+          return (
+            <span
+              className="num"
+              style={{ color: diff > 0 ? "var(--danger)" : "var(--fg-muted)", fontWeight: diff > 0 ? 600 : 400 }}
+            >
+              {diff > 0 ? `+₹${diff.toLocaleString("en-IN")}` : "—"}
+            </span>
+          );
+        },
+      },
+      {
+        title: "Reason",
+        dataIndex: "reason",
+        key: "reason",
+        render: (v) => <span className="muted" style={{ fontSize: 12 }}>{v}</span>,
+      },
+      {
+        title: "Status",
+        dataIndex: "status",
+        key: "status",
+        render: (status) => invoiceStatusBadge(status),
+      },
+      {
+        title: "Actions",
+        key: "actions",
+        width: 72,
+        align: "center",
+        render: (_, inv) => (
+          <div onClick={(e) => e.stopPropagation()}>
+            {inv.status === "matched" ? (
+              <ErpViewAction onClick={() => setOpen(inv)} />
+            ) : (
+              <TableActionIcon
+                icon={<EyeOutlined />}
+                label="Review"
+                onClick={() => setOpen(inv)}
+              />
+            )}
+          </div>
+        ),
+      },
+    ],
+    []
+  );
+
   return (
     <>
       <DashHead title="Invoice Verification" sub="Auto-match invoices to POs · flag mismatches">
@@ -921,52 +1079,24 @@ const InvoiceVerify = () => {
             <span className="tab">Auto-matched <span className="tab-count">{INVOICES.filter(i => i.status === "matched").length}</span></span>
           </div>
         </div>
-        <div className="card-body flush" style={{ overflowX: "auto" }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Invoice #</th><th>PO</th><th>Vendor</th><th>Invoice date</th>
-                <th style={{ textAlign: "right" }}>Invoice ₹</th>
-                <th style={{ textAlign: "right" }}>PO ₹</th>
-                <th style={{ textAlign: "right" }}>Diff</th>
-                <th>Reason</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {INVOICES.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="muted" style={{ textAlign: "center", padding: 32 }}>
-                    No invoices in the database. Run <code>npm run seed</code> to load demo data.
-                  </td>
-                </tr>
-              ) : null}
-              {INVOICES.map((inv) => {
-                const diff = inv.invAmt - inv.poAmt;
-                return (
-                  <tr key={inv.id} onClick={() => setOpen(inv)} style={{ cursor: "pointer" }}>
-                    <td className="mono strong">{inv.id}</td>
-                    <td className="mono">{inv.po}</td>
-                    <td>{inv.vendor}</td>
-                    <td className="muted">{inv.invDate}</td>
-                    <td className="num">{fmtINRFull(inv.invAmt)}</td>
-                    <td className="num">{fmtINRFull(inv.poAmt)}</td>
-                    <td className="num" style={{ color: diff > 0 ? "var(--danger)" : "var(--fg-muted)", fontWeight: diff > 0 ? 600 : 400 }}>
-                      {diff > 0 ? `+₹${diff.toLocaleString("en-IN")}` : "—"}
-                    </td>
-                    <td className="muted" style={{ fontSize: 12 }}>{inv.reason}</td>
-                    <td><StatusBadge status={inv.status === "matched" ? "verified" : "mismatch"} /></td>
-                    <td>
-                      {inv.status === "matched"
-                        ? <Btn variant="ghost" size="sm">View</Btn>
-                        : <Btn variant="primary" size="sm">Review</Btn>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div style={{ padding: 16 }}>
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            columns={invoiceColumns}
+            dataSource={INVOICES}
+            rowKey="id"
+            onRow={(inv) => ({
+              onClick: () => setOpen(inv),
+              style: { cursor: "pointer" },
+            })}
+            locale={{
+              emptyText: (
+                <span className="muted">
+                  No invoices in the database. Run <code>npm run seed</code> to load demo data.
+                </span>
+              ),
+            }}
+          />
         </div>
       </div>
 
@@ -1122,7 +1252,39 @@ const FIELD_BEATS = [
   },
 ];
 
-const FieldVisitsBeatTracking = () => (
+const FieldVisitsBeatTracking = () => {
+  const fieldCheckinColumns = useMemo(
+    () => [
+      {
+        title: "Employee",
+        dataIndex: "employee",
+        key: "employee",
+        render: (employee) => <span className="strong">{employee}</span>,
+      },
+      { title: "Beat / area", dataIndex: "beat", key: "beat" },
+      {
+        title: "Last check-in",
+        dataIndex: "checkIn",
+        key: "checkIn",
+        render: (checkIn) => <span className="muted">{checkIn}</span>,
+      },
+      {
+        title: "Location",
+        dataIndex: "location",
+        key: "location",
+        render: (location) => <span className="field-beat-location">{location}</span>,
+      },
+      {
+        title: "Status",
+        dataIndex: "status",
+        key: "status",
+        render: (status) => erpStatusBadge(status),
+      },
+    ],
+    []
+  );
+
+  return (
   <>
     <DashHead
       title="Field Visits & Beat Tracking"
@@ -1141,35 +1303,14 @@ const FieldVisitsBeatTracking = () => (
 
       <div className="field-beat-card">
         <div className="field-beat-card__head">Today&apos;s field check-ins</div>
-        <div className="field-beat-card__body flush">
-          <table className="tbl field-beat-table">
-            <thead>
-              <tr>
-                <th>Employee</th>
-                <th>Beat / area</th>
-                <th>Last check-in</th>
-                <th>Location</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {FIELD_CHECKINS.map((row) => (
-                <tr key={row.employee}>
-                  <td className="strong">{row.employee}</td>
-                  <td>{row.beat}</td>
-                  <td className="muted">{row.checkIn}</td>
-                  <td>
-                    <span className="field-beat-location">{row.location}</span>
-                  </td>
-                  <td>
-                    <span className={`field-beat-status field-beat-status--${row.status}`}>
-                      {row.statusLabel}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ padding: 16 }}>
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            className="field-beat-table"
+            columns={fieldCheckinColumns}
+            dataSource={FIELD_CHECKINS}
+            rowKey="employee"
+          />
         </div>
       </div>
 
@@ -1198,7 +1339,8 @@ const FieldVisitsBeatTracking = () => (
       </div>
     </div>
   </>
-);
+  );
+};
 
 /* ============================================================
    FIELD VISIT LOG (Employee view)
@@ -1503,6 +1645,67 @@ const FieldVisitHistory = () => {
 
   const selected = FIELD_VISIT_HISTORY_ROWS.find((r) => r.id === selectedId) ?? FIELD_VISIT_HISTORY_ROWS[0];
 
+  const visitHistoryColumns = useMemo(
+    () => [
+      {
+        title: "Date",
+        dataIndex: "date",
+        key: "date",
+        render: (date) => <span className="muted">{date}</span>,
+      },
+      {
+        title: "Employee",
+        dataIndex: "employee",
+        key: "employee",
+        render: (employee) => <span className="strong">{employee}</span>,
+      },
+      { title: "Party", dataIndex: "party", key: "party" },
+      {
+        title: "Visit type",
+        dataIndex: "visitType",
+        key: "visitType",
+        render: (visitType) => (
+          <span className={`field-visit-history-type field-visit-history-type--${visitTypeClass(visitType)}`}>
+            {visitType}
+          </span>
+        ),
+      },
+      {
+        title: "Start / end",
+        key: "startEnd",
+        render: (_, row) => (
+          <span className="muted">
+            {row.start} / {row.end}
+          </span>
+        ),
+      },
+      {
+        title: "Duration",
+        dataIndex: "duration",
+        key: "duration",
+        render: (duration) => <span className="muted">{duration}</span>,
+      },
+      { title: "Area", dataIndex: "area", key: "area" },
+      {
+        title: "Outcome",
+        dataIndex: "outcome",
+        key: "outcome",
+        render: (outcome, row) => (
+          <span className={`field-visit-history-outcome field-visit-history-outcome--${row.outcomeTone}`}>
+            {outcome}
+          </span>
+        ),
+      },
+      {
+        title: "Follow-up",
+        dataIndex: "followUp",
+        key: "followUp",
+        render: (followUp) => <span className="muted">{followUp}</span>,
+      },
+    ],
+    [selectedId]
+  );
+
   return (
     <>
       <DashHead
@@ -1589,9 +1792,9 @@ const FieldVisitHistory = () => {
               </div>
               <div className="ap-filters-spacer" aria-hidden="true" />
               <div className="arf-item ap-filters-actions">
-                <Button type="primary" icon={<FilterOutlined />}>
+                <AntButton type="primary" icon={<FilterOutlined />}>
                   Apply filters
-                </Button>
+                </AntButton>
               </div>
             </div>
           </div>
@@ -1605,51 +1808,19 @@ const FieldVisitHistory = () => {
             </div>
             <span className="field-visit-history-table-hint">Click a row to see notes</span>
           </div>
-          <div className="field-beat-card__body flush">
-            <table className="tbl field-visit-history-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Employee</th>
-                  <th>Party</th>
-                  <th>Visit type</th>
-                  <th>Start / end</th>
-                  <th>Duration</th>
-                  <th>Area</th>
-                  <th>Outcome</th>
-                  <th>Follow-up</th>
-                </tr>
-              </thead>
-              <tbody>
-                {FIELD_VISIT_HISTORY_ROWS.map((row) => (
-                  <tr
-                    key={row.id}
-                    className={selectedId === row.id ? "field-visit-history-row--selected" : ""}
-                    onClick={() => setSelectedId(row.id)}
-                  >
-                    <td className="muted">{row.date}</td>
-                    <td className="strong">{row.employee}</td>
-                    <td>{row.party}</td>
-                    <td>
-                      <span className={`field-visit-history-type field-visit-history-type--${visitTypeClass(row.visitType)}`}>
-                        {row.visitType}
-                      </span>
-                    </td>
-                    <td className="muted">
-                      {row.start} / {row.end}
-                    </td>
-                    <td className="muted">{row.duration}</td>
-                    <td>{row.area}</td>
-                    <td>
-                      <span className={`field-visit-history-outcome field-visit-history-outcome--${row.outcomeTone}`}>
-                        {row.outcome}
-                      </span>
-                    </td>
-                    <td className="muted">{row.followUp}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ padding: 16 }}>
+            <CommonTable
+              {...ERP_TABLE_PROPS}
+              className="field-visit-history-table"
+              columns={visitHistoryColumns}
+              dataSource={FIELD_VISIT_HISTORY_ROWS}
+              rowKey="id"
+              rowClassName={(row) => (selectedId === row.id ? "field-visit-history-row--selected" : "")}
+              onRow={(row) => ({
+                onClick: () => setSelectedId(row.id),
+                style: { cursor: "pointer" },
+              })}
+            />
           </div>
         </div>
 
@@ -1745,7 +1916,45 @@ const BEAT_TERRITORY_SUMMARY = [
   { employee: "Karthik N.", territory: "Market / expansion", customers: 15, target: 10, completed: 3, status: "Behind target", statusTone: "behind" },
 ];
 
-const FieldBeatTerritory = () => (
+const FieldBeatTerritory = () => {
+  const territorySummaryColumns = useMemo(
+    () => [
+      {
+        title: "Employee",
+        dataIndex: "employee",
+        key: "employee",
+        render: (employee) => <span className="strong">{employee}</span>,
+      },
+      { title: "Territory", dataIndex: "territory", key: "territory" },
+      {
+        title: "Assigned customers",
+        dataIndex: "customers",
+        key: "customers",
+        render: (customers) => <span className="tabular">{customers}</span>,
+      },
+      {
+        title: "Weekly target visits",
+        dataIndex: "target",
+        key: "target",
+        render: (target) => <span className="tabular">{target}</span>,
+      },
+      {
+        title: "Completed visits",
+        dataIndex: "completed",
+        key: "completed",
+        render: (completed) => <span className="tabular">{completed}</span>,
+      },
+      {
+        title: "Status",
+        dataIndex: "statusTone",
+        key: "status",
+        render: (statusTone) => erpStatusBadge(statusTone),
+      },
+    ],
+    []
+  );
+
+  return (
   <>
     <DashHead
       title="Beat Territory Management"
@@ -1824,39 +2033,19 @@ const FieldBeatTerritory = () => (
           </div>
           <span className="field-visit-history-table-hint">Week of 04–10 Mar 2025</span>
         </div>
-        <div className="field-beat-card__body flush">
-          <table className="tbl field-beat-territory-table">
-            <thead>
-              <tr>
-                <th>Employee</th>
-                <th>Territory</th>
-                <th>Assigned customers</th>
-                <th>Weekly target visits</th>
-                <th>Completed visits</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {BEAT_TERRITORY_SUMMARY.map((row) => (
-                <tr key={row.employee}>
-                  <td className="strong">{row.employee}</td>
-                  <td>{row.territory}</td>
-                  <td className="tabular">{row.customers}</td>
-                  <td className="tabular">{row.target}</td>
-                  <td className="tabular">{row.completed}</td>
-                  <td>
-                    <span className={`field-beat-territory-status field-beat-territory-status--${row.statusTone}`}>
-                      {row.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ padding: 16 }}>
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            className="field-beat-territory-table"
+            columns={territorySummaryColumns}
+            dataSource={BEAT_TERRITORY_SUMMARY}
+            rowKey="employee"
+          />
         </div>
       </div>
     </div>
   </>
-);
+  );
+};
 
 export { Customers, CustomerOrders, FieldSales, FieldVisitsBeatTracking, FieldVisitLog, FieldVisitHistory, FieldBeatTerritory, InvoiceVerify };

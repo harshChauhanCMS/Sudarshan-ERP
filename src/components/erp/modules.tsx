@@ -2,7 +2,12 @@
 'use client';
 
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+import { Button as AntButton } from "antd";
+import { DownloadOutlined, MoreOutlined } from "@ant-design/icons";
+import CommonTable from "@/components/common/CommonTable";
+import { ERP_TABLE_PROPS, erpStatusBadge, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
+import { ErpViewAction, TableActionIcon } from "@/components/common/TableActionIcons";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
@@ -77,6 +82,79 @@ const RawMaterialInventory = () => {
   const lowCount = DATA.RAW_MATERIALS.filter(r => r.status === "low").length;
   const critCount = DATA.RAW_MATERIALS.filter(r => r.status === "critical").length;
 
+  const columns = useMemo(
+    () => [
+      {
+        title: "SKU",
+        dataIndex: "code",
+        key: "code",
+        render: (code) => <span className="mono strong">{code}</span>,
+      },
+      {
+        title: "Material",
+        dataIndex: "name",
+        key: "name",
+        render: (name) => <span className="strong">{name}</span>,
+      },
+      { title: "Grade", dataIndex: "grade", key: "grade", render: (v) => <span className="muted">{v}</span> },
+      { title: "Location", dataIndex: "location", key: "location", render: (v) => <span className="muted">{v}</span> },
+      {
+        title: "Stock",
+        key: "stock",
+        align: "right",
+        render: (_, r) => (
+          <>
+            <span className="mono strong">{r.stock}</span>{" "}
+            <span className="subtle" style={{ fontSize: 11 }}>{r.unit}</span>
+          </>
+        ),
+      },
+      {
+        title: "Reorder at",
+        key: "reorder",
+        render: (_, r) => <span className="mono subtle">{r.reorder} {r.unit}</span>,
+      },
+      {
+        title: "Stock level",
+        key: "level",
+        width: 120,
+        render: (_, r) => {
+          const pct = Math.min(100, (r.stock / (r.reorder * 3)) * 100);
+          const tone = r.status === "critical" ? "danger" : r.status === "low" ? "warning" : "success";
+          return <Bar value={pct} tone={tone} />;
+        },
+      },
+      {
+        title: "Value",
+        dataIndex: "value",
+        key: "value",
+        align: "right",
+        render: (v) => <span className="mono">{fmtINR(v)}</span>,
+      },
+      {
+        title: "Status",
+        dataIndex: "status",
+        key: "status",
+        render: (status) => inventoryStatusBadge(status),
+      },
+      {
+        title: "Actions",
+        key: "actions",
+        width: 110,
+        align: "center",
+        render: (_, r) => (
+          <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "center" }}>
+            <AntButton type="link" size="small" onClick={() => setAdjustOpen(r)}>
+              Adjust
+            </AntButton>
+            <AntButton type="text" size="small" icon={<MoreOutlined />} aria-label="More actions" />
+          </div>
+        ),
+      },
+    ],
+    []
+  );
+
   return (
     <>
       <DashHead title="Raw Material Inventory" sub="Minerals and chemicals · live stock & alerts">
@@ -124,56 +202,13 @@ const RawMaterialInventory = () => {
             <Btn size="sm" icon="sort">Sort</Btn>
           </div>
         </div>
-        <div style={{ overflowX: "auto" }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th style={{ width: 28 }}><input type="checkbox" /></th>
-                <th>SKU</th>
-                <th>Material</th>
-                <th>Grade</th>
-                <th>Location</th>
-                <th style={{ textAlign: "right" }}>Stock</th>
-                <th>Reorder at</th>
-                <th>Stock level</th>
-                <th style={{ textAlign: "right" }}>Value</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {DATA.RAW_MATERIALS.map((r) => {
-                const pct = Math.min(100, (r.stock / (r.reorder * 3)) * 100);
-                const tone = r.status === "critical" ? "danger" : r.status === "low" ? "warning" : "success";
-                return (
-                  <tr key={r.code}>
-                    <td><input type="checkbox" /></td>
-                    <td className="mono strong">{r.code}</td>
-                    <td>
-                      <div className="strong">{r.name}</div>
-                    </td>
-                    <td className="muted">{r.grade}</td>
-                    <td className="muted">{r.location}</td>
-                    <td style={{ textAlign: "right" }}>
-                      <span className="mono strong">{r.stock}</span> <span className="subtle" style={{ fontSize: 11 }}>{r.unit}</span>
-                    </td>
-                    <td className="mono subtle">{r.reorder} {r.unit}</td>
-                    <td style={{ width: 110 }}>
-                      <Bar value={pct} tone={tone} />
-                    </td>
-                    <td style={{ textAlign: "right" }} className="mono">{fmtINR(r.value)}</td>
-                    <td><StatusBadge status={r.status} /></td>
-                    <td>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <Btn variant="ghost" size="sm" onClick={() => setAdjustOpen(r)}>Adjust</Btn>
-                        <button className="tb-iconbtn"><Icon name="moreV" size={14} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div style={{ padding: 16 }}>
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            columns={columns}
+            dataSource={DATA.RAW_MATERIALS}
+            rowKey="code"
+          />
         </div>
       </div>
 
@@ -252,6 +287,142 @@ const Vendors = () => {
     setCreatePO(false);
   };
 
+  const vendorColumns = useMemo(
+    () => [
+      {
+        title: "ID",
+        dataIndex: "id",
+        key: "id",
+        render: (id) => <span className="mono strong">{id}</span>,
+      },
+      {
+        title: "Vendor",
+        dataIndex: "name",
+        key: "name",
+        render: (name, row, index) => (
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Avatar name={name} color={(index % 5) + 1} />
+            <div>
+              <div className="strong">{name}</div>
+              <div className="subtle" style={{ fontSize: 11 }}>
+                {row.city}
+              </div>
+            </div>
+          </div>
+        ),
+      },
+      {
+        title: "Category",
+        dataIndex: "category",
+        key: "category",
+        render: (category) => (
+          <Badge
+            tone={
+              category === "Raw Material"
+                ? "primary"
+                : category === "Chemical"
+                  ? "info"
+                  : category === "Packaging"
+                    ? "gold"
+                    : "default"
+            }
+          >
+            {category}
+          </Badge>
+        ),
+      },
+      {
+        title: "Rating",
+        dataIndex: "rating",
+        key: "rating",
+        align: "center",
+        render: (rating) => (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <span style={{ color: "var(--secondary)" }}>★</span>
+            <span className="mono strong">{rating}</span>
+          </div>
+        ),
+      },
+      {
+        title: "POs YTD",
+        dataIndex: "poCount",
+        key: "poCount",
+        render: (poCount) => <span className="mono">{poCount}</span>,
+      },
+      {
+        title: "YTD Spend",
+        dataIndex: "ytd",
+        key: "ytd",
+        align: "right",
+        render: (ytd) => <span className="num">{fmtINR(ytd)}</span>,
+      },
+      {
+        title: "Actions",
+        key: "actions",
+        width: 72,
+        align: "center",
+        render: () => <ErpViewAction />,
+      },
+    ],
+    []
+  );
+
+  const poColumns = useMemo(
+    () => [
+      {
+        title: "PO #",
+        dataIndex: "id",
+        key: "id",
+        render: (id) => <span className="mono strong">{id}</span>,
+      },
+      { title: "Vendor", dataIndex: "vendor", key: "vendor" },
+      {
+        title: "Items",
+        dataIndex: "items",
+        key: "items",
+        render: (items) => <span className="mono subtle">{items} items</span>,
+      },
+      {
+        title: "Date",
+        dataIndex: "date",
+        key: "date",
+        render: (date) => <span className="muted">{date}</span>,
+      },
+      {
+        title: "Total",
+        dataIndex: "total",
+        key: "total",
+        align: "right",
+        render: (total) => <span className="num">{fmtINRFull(total)}</span>,
+      },
+      {
+        title: "Status",
+        dataIndex: "status",
+        key: "status",
+        render: (status) => erpStatusBadge(status),
+      },
+      {
+        title: "Invoice",
+        dataIndex: "invoice",
+        key: "invoice",
+        render: (invoice) => erpStatusBadge(invoice),
+      },
+      {
+        title: "Actions",
+        key: "actions",
+        width: 88,
+        align: "center",
+        render: () => (
+          <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
+            <ErpViewAction label="View purchase order" />
+            <TableActionIcon icon={<DownloadOutlined />} label="Download purchase order" />
+          </div>
+        ),
+      },
+    ],
+    []
+  );
+
   return (
     <>
       <DashHead title="Vendors & Procurement" sub="Manage vendors, purchase orders, and supplier history">
@@ -299,76 +470,23 @@ const Vendors = () => {
           </div>
         </div>
         {tab === "vendors" && (
-          <div style={{ overflowX: "auto" }}>
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>ID</th><th>Vendor</th><th>Category</th><th style={{ textAlign: "center" }}>Rating</th><th>POs YTD</th><th style={{ textAlign: "right" }}>YTD Spend</th><th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {DATA.VENDORS.map((v, i) => (
-                  <tr key={v.id}>
-                    <td className="mono strong">{v.id}</td>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <Avatar name={v.name} color={(i % 5) + 1} />
-                        <div>
-                          <div className="strong">{v.name}</div>
-                          <div className="subtle" style={{ fontSize: 11 }}>{v.city}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <Badge tone={v.category === "Raw Material" ? "primary" : v.category === "Chemical" ? "info" : v.category === "Packaging" ? "gold" : "default"}>
-                        {v.category}
-                      </Badge>
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                        <span style={{ color: "var(--secondary)" }}>★</span>
-                        <span className="mono strong">{v.rating}</span>
-                      </div>
-                    </td>
-                    <td className="mono">{v.poCount}</td>
-                    <td className="num" style={{ textAlign: "right" }}>{fmtINR(v.ytd)}</td>
-                    <td>
-                      <Btn variant="ghost" size="sm" iconRight="chevRight">View</Btn>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ padding: 16 }}>
+            <CommonTable
+              {...ERP_TABLE_PROPS}
+              columns={vendorColumns}
+              dataSource={DATA.VENDORS}
+              rowKey="id"
+            />
           </div>
         )}
         {tab === "po" && (
-          <div style={{ overflowX: "auto" }}>
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>PO #</th><th>Vendor</th><th>Items</th><th>Date</th><th style={{ textAlign: "right" }}>Total</th><th>Status</th><th>Invoice</th><th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {DATA.PURCHASE_ORDERS.map((p) => (
-                  <tr key={p.id}>
-                    <td className="mono strong">{p.id}</td>
-                    <td>{p.vendor}</td>
-                    <td className="mono subtle">{p.items} items</td>
-                    <td className="muted">{p.date}</td>
-                    <td className="num" style={{ textAlign: "right" }}>{fmtINRFull(p.total)}</td>
-                    <td><StatusBadge status={p.status} /></td>
-                    <td><StatusBadge status={p.invoice} /></td>
-                    <td>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <Btn variant="ghost" size="sm" icon="eye"></Btn>
-                        <Btn variant="ghost" size="sm" icon="download"></Btn>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ padding: 16 }}>
+            <CommonTable
+              {...ERP_TABLE_PROPS}
+              columns={poColumns}
+              dataSource={DATA.PURCHASE_ORDERS}
+              rowKey="id"
+            />
           </div>
         )}
       </div>
@@ -438,6 +556,92 @@ const DispatchTracking = () => {
 
   const inTransit = DATA.DISPATCHES.filter((d) => d.status === "in-transit").length;
 
+  const dispatchColumns = useMemo(
+    () => [
+      {
+        title: "Dispatch",
+        dataIndex: "id",
+        key: "id",
+        render: (id) => <span className="mono strong">{id}</span>,
+      },
+      {
+        title: "Vehicle",
+        dataIndex: "vehicle",
+        key: "vehicle",
+        render: (vehicle) => <span className="mono">{vehicle}</span>,
+      },
+      {
+        title: "Driver",
+        dataIndex: "driver",
+        key: "driver",
+        render: (driver, row) => (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Avatar name={driver} color={(row.id.charCodeAt(row.id.length - 1) % 5) + 1} />
+            <div>{driver}</div>
+          </div>
+        ),
+      },
+      {
+        title: "Customer",
+        dataIndex: "customer",
+        key: "customer",
+        render: (customer) => <span className="muted">{customer}</span>,
+      },
+      {
+        title: "Route",
+        dataIndex: "route",
+        key: "route",
+        render: (route) => <span className="muted" style={{ fontSize: 12 }}>{route}</span>,
+      },
+      {
+        title: "Load",
+        dataIndex: "loaded",
+        key: "loaded",
+        render: (loaded) => <span className="num">{loaded}</span>,
+      },
+      {
+        title: "Progress",
+        dataIndex: "progress",
+        key: "progress",
+        width: 130,
+        render: (progress, row) => (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Bar value={progress} tone={row.status === "near-delivery" ? "gold" : row.status === "delivered" ? "success" : "primary"} />
+            <span className="mono" style={{ fontSize: 11, width: 30, textAlign: "right" }}>
+              {progress}%
+            </span>
+          </div>
+        ),
+      },
+      {
+        title: "ETA",
+        dataIndex: "eta",
+        key: "eta",
+        render: (eta) => <span className="mono" style={{ fontSize: 12 }}>{eta}</span>,
+      },
+      {
+        title: "Update",
+        dataIndex: "lastUpdate",
+        key: "lastUpdate",
+        render: (lastUpdate) => <span className="subtle" style={{ fontSize: 11 }}>{lastUpdate}</span>,
+      },
+      {
+        title: "Status",
+        dataIndex: "status",
+        key: "status",
+        render: (status) => erpStatusBadge(status),
+      },
+      {
+        title: "Actions",
+        key: "actions",
+        width: 72,
+        align: "center",
+        render: () => <ErpViewAction label="View dispatch" />,
+      },
+    ],
+    []
+  );
+
   return (
     <>
       <DashHead title="Dispatch & Vehicle Tracking" sub="Live deliveries, ETAs and driver communication">
@@ -493,41 +697,17 @@ const DispatchTracking = () => {
             <Btn size="sm" icon="filter">Filter</Btn>
           </div>
         </div>
-        <div className="card-body flush" style={{ overflowX: "auto" }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Dispatch</th><th>Vehicle</th><th>Driver</th><th>Customer</th><th>Route</th><th>Load</th><th>Progress</th><th>ETA</th><th>Update</th><th>Status</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {DATA.DISPATCHES.map((d) => (
-                <tr key={d.id} style={{ cursor: "pointer" }} onClick={() => setOpenTrack(d)}>
-                  <td className="mono strong">{d.id}</td>
-                  <td className="mono">{d.vehicle}</td>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <Avatar name={d.driver} color={(d.id.charCodeAt(d.id.length - 1) % 5) + 1} />
-                      <div>{d.driver}</div>
-                    </div>
-                  </td>
-                  <td className="muted">{d.customer}</td>
-                  <td className="muted" style={{ fontSize: 12 }}>{d.route}</td>
-                  <td className="num">{d.loaded}</td>
-                  <td style={{ width: 130 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <Bar value={d.progress} tone={d.status === "near-delivery" ? "gold" : d.status === "delivered" ? "success" : "primary"} />
-                      <span className="mono" style={{ fontSize: 11, width: 30, textAlign: "right" }}>{d.progress}%</span>
-                    </div>
-                  </td>
-                  <td className="mono" style={{ fontSize: 12 }}>{d.eta}</td>
-                  <td className="subtle" style={{ fontSize: 11 }}>{d.lastUpdate}</td>
-                  <td><StatusBadge status={d.status} /></td>
-                  <td><Icon name="chevRight" size={14} className="subtle" /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ padding: 16 }}>
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            columns={dispatchColumns}
+            dataSource={DATA.DISPATCHES}
+            rowKey="id"
+            onRow={(dispatch) => ({
+              onClick: () => setOpenTrack(dispatch),
+              style: { cursor: "pointer" },
+            })}
+          />
         </div>
       </div>
 

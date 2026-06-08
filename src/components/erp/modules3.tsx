@@ -2,7 +2,7 @@
 'use client';
 
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
@@ -19,8 +19,11 @@ import { DashHead, SectionH } from "./dashboards";
 /* ============================================================
    EMPLOYEES (HR master)
    ============================================================ */
-import { Table, Button as AntButton, Badge as AntBadge, Avatar as AntAvatar } from "antd";
-import { TeamOutlined, UserAddOutlined, ExportOutlined, WarningOutlined, RightOutlined, CalendarOutlined, DownloadOutlined, PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, EnvironmentOutlined, ThunderboltOutlined, EyeOutlined, MailOutlined, FilterOutlined, AlertOutlined, MoneyCollectOutlined, FileTextOutlined, CheckOutlined, CloseOutlined } from "@ant-design/icons";
+import { Button as AntButton, Badge as AntBadge, Avatar as AntAvatar } from "antd";
+import { TeamOutlined, UserAddOutlined, ExportOutlined, WarningOutlined, RightOutlined, CalendarOutlined, DownloadOutlined, PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, EnvironmentOutlined, ThunderboltOutlined, MailOutlined, FilterOutlined, AlertOutlined, MoneyCollectOutlined, FileTextOutlined, CheckOutlined, CloseOutlined, MoreOutlined } from "@ant-design/icons";
+import CommonTable from "@/components/common/CommonTable";
+import { ERP_TABLE_PROPS, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
+import { ErpViewAction } from "@/components/common/TableActionIcons";
 
 
 const Employees = () => {
@@ -57,7 +60,7 @@ const Employees = () => {
     { title: "Joined", dataIndex: "since", key: "since", render: (text) => <span className="muted">{text}</span> },
     { title: "Reporting to", key: "reporting", render: (_, __, i) => <span className="muted">{i === 0 ? "—" : i < 3 ? "Rajiv Mehta" : "Priya Sharma"}</span> },
     { title: "Status", key: "status", render: () => <AntBadge status="success" text="Active" /> },
-    { title: "", key: "action", width: 48, render: () => <AntButton type="text" size="small" icon={<EyeOutlined />} aria-label="View" title="View" /> },
+    { title: "Actions", key: "action", width: 72, align: "center", render: () => <ErpViewAction /> },
   ];
 
   return (
@@ -100,7 +103,7 @@ const Employees = () => {
           </div>
         </div>
         <div style={{ padding: 16 }}>
-          <Table dataSource={DATA.EMPLOYEES} columns={columns} pagination={false} rowKey="id" />
+          <CommonTable {...ERP_TABLE_PROPS} dataSource={DATA.EMPLOYEES} columns={columns} rowKey="id" />
         </div>
       </div>
 
@@ -256,7 +259,12 @@ const Attendance = () => {
           </div>
         </div>
         <div className="card-body flush" style={{ overflowX: "auto", padding: 16 }}>
-          <Table dataSource={dataSource} columns={columns} pagination={false} rowKey="id" />
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            columns={columns}
+            dataSource={dataSource}
+            rowKey="id"
+          />
         </div>
       </div>
 
@@ -315,7 +323,7 @@ const Payroll = () => {
     { title: "PF", dataIndex: "pf", key: "pf", align: "right", render: (v) => <span className="num" style={{ color: "var(--fg-muted)" }}>−{fmtINRFull(v)}</span> },
     { title: "TDS", dataIndex: "tds", key: "tds", align: "right", render: (v) => <span className="num" style={{ color: "var(--fg-muted)" }}>−{fmtINRFull(v)}</span> },
     { title: "Net pay", dataIndex: "net", key: "net", align: "right", render: (v) => <span className="num strong" style={{ fontWeight: 600 }}>{fmtINRFull(v)}</span> },
-    { title: "", key: "action", width: 48, render: () => <AntButton type="text" size="small" icon={<EyeOutlined />} aria-label="View payslip" title="View payslip" /> },
+    { title: "Actions", key: "action", width: 72, align: "center", render: () => <ErpViewAction label="View payslip" /> },
   ];
 
   return (
@@ -385,12 +393,12 @@ const Payroll = () => {
           </div>
         </div>
         <div style={{ padding: 16, overflowX: "auto" }}>
-          <Table 
-            dataSource={PAYROLL} 
-            columns={columns} 
-            pagination={false} 
-            rowKey="id" 
-            onRow={(record) => ({ onClick: () => setOpenSlip(record), style: { cursor: "pointer" } })} 
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            dataSource={PAYROLL}
+            columns={columns}
+            rowKey="id"
+            onRow={(record) => ({ onClick: () => setOpenSlip(record), style: { cursor: "pointer" } })}
           />
         </div>
       </div>
@@ -623,55 +631,133 @@ const ReportShell = ({ title, sub, children }) => (
   </div>
 );
 
-const ProfitReport = () => (
-  <ReportShell title="Profit Analysis · May 2026" sub="Revenue, COGS, gross margin by product line — both companies">
-    <div className="grid grid-4" style={{ marginBottom: 20 }}>
-      <Kpi icon="money" label="Revenue" value={fmtINR(11_82_00_000)} delta={12.4} spark={[8,9,10,10,11,11,12]} />
-      <Kpi icon="layers" label="COGS"    value={fmtINR(7_70_00_000)} delta={9.1}  spark={[5,6,6,6,7,7,8]} sparkColor="var(--danger)" />
-      <Kpi icon="chart" label="Gross profit" value={fmtINR(4_12_00_000)} delta={20.5} spark={[2,2,3,3,4,4,4]} sparkColor="var(--success)" />
-      <Kpi icon="bolt"  label="Gross margin"  value="34.8" unit="%" delta={2.4} spark={[31,32,33,34,34,34,35]} sparkColor="var(--success)" />
-    </div>
-    <table className="tbl">
-      <thead>
-        <tr>
-          <th>Product line</th>
-          <th style={{ textAlign: "right" }}>Revenue</th>
-          <th style={{ textAlign: "right" }}>COGS</th>
-          <th style={{ textAlign: "right" }}>GP</th>
-          <th style={{ textAlign: "right" }}>GM%</th>
-          <th>vs Apr</th>
-        </tr>
-      </thead>
-      <tbody>
-        {[
-          { name: "Talcum Powder",      r: 3_22_00_000, c: 2_05_00_000, m: 36.3, d: 8.4 },
-          { name: "Calcium Carbonate",  r: 2_45_00_000, c: 1_64_00_000, m: 33.1, d: 4.2 },
-          { name: "China Clay",         r: 1_96_00_000, c: 1_28_00_000, m: 34.7, d: -1.8 },
-          { name: "Dolomite & Quartz",  r: 1_58_00_000, c: 1_18_00_000, m: 25.3, d: 2.4 },
-          { name: "Chemicals",          r: 1_32_00_000, c: 87_00_000,   m: 34.1, d: 6.7 },
-          { name: "FIBC + PP Woven",    r: 2_87_00_000, c: 1_84_00_000, m: 35.9, d: 14.2 },
-          { name: "BOPP & Fabrics",     r: 1_42_00_000, c: 94_00_000,   m: 33.8, d: 4.8 },
-        ].map((r) => (
-          <tr key={r.name}>
-            <td className="strong">{r.name}</td>
-            <td className="num">{fmtINR(r.r)}</td>
-            <td className="num">{fmtINR(r.c)}</td>
-            <td className="num strong">{fmtINR(r.r - r.c)}</td>
-            <td className="num">{r.m}%</td>
-            <td>
-              <span style={{ fontSize: 12, color: r.d >= 0 ? "var(--success)" : "var(--danger)", fontWeight: 500 }}>
-                {r.d >= 0 ? "↑" : "↓"} {Math.abs(r.d)}%
-              </span>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </ReportShell>
-);
+const ProfitReport = () => {
+  const profitRows = [
+    { name: "Talcum Powder", r: 3_22_00_000, c: 2_05_00_000, m: 36.3, d: 8.4 },
+    { name: "Calcium Carbonate", r: 2_45_00_000, c: 1_64_00_000, m: 33.1, d: 4.2 },
+    { name: "China Clay", r: 1_96_00_000, c: 1_28_00_000, m: 34.7, d: -1.8 },
+    { name: "Dolomite & Quartz", r: 1_58_00_000, c: 1_18_00_000, m: 25.3, d: 2.4 },
+    { name: "Chemicals", r: 1_32_00_000, c: 87_00_000, m: 34.1, d: 6.7 },
+    { name: "FIBC + PP Woven", r: 2_87_00_000, c: 1_84_00_000, m: 35.9, d: 14.2 },
+    { name: "BOPP & Fabrics", r: 1_42_00_000, c: 94_00_000, m: 33.8, d: 4.8 },
+  ];
+  const profitColumns = [
+    {
+      title: "Product line",
+      dataIndex: "name",
+      key: "name",
+      render: (name) => <span className="strong">{name}</span>,
+    },
+    {
+      title: "Revenue",
+      dataIndex: "r",
+      key: "revenue",
+      align: "right",
+      render: (r) => <span className="num">{fmtINR(r)}</span>,
+    },
+    {
+      title: "COGS",
+      dataIndex: "c",
+      key: "cogs",
+      align: "right",
+      render: (c) => <span className="num">{fmtINR(c)}</span>,
+    },
+    {
+      title: "GP",
+      key: "gp",
+      align: "right",
+      render: (_, r) => <span className="num strong">{fmtINR(r.r - r.c)}</span>,
+    },
+    {
+      title: "GM%",
+      dataIndex: "m",
+      key: "gm",
+      align: "right",
+      render: (m) => <span className="num">{m}%</span>,
+    },
+    {
+      title: "vs Apr",
+      dataIndex: "d",
+      key: "vsApr",
+      render: (d) => (
+        <span style={{ fontSize: 12, color: d >= 0 ? "var(--success)" : "var(--danger)", fontWeight: 500 }}>
+          {d >= 0 ? "↑" : "↓"} {Math.abs(d)}%
+        </span>
+      ),
+    },
+  ];
+
+  return (
+    <ReportShell title="Profit Analysis · May 2026" sub="Revenue, COGS, gross margin by product line — both companies">
+      <div className="grid grid-4" style={{ marginBottom: 20 }}>
+        <Kpi icon="money" label="Revenue" value={fmtINR(11_82_00_000)} delta={12.4} spark={[8, 9, 10, 10, 11, 11, 12]} />
+        <Kpi icon="layers" label="COGS" value={fmtINR(7_70_00_000)} delta={9.1} spark={[5, 6, 6, 6, 7, 7, 8]} sparkColor="var(--danger)" />
+        <Kpi icon="chart" label="Gross profit" value={fmtINR(4_12_00_000)} delta={20.5} spark={[2, 2, 3, 3, 4, 4, 4]} sparkColor="var(--success)" />
+        <Kpi icon="bolt" label="Gross margin" value="34.8" unit="%" delta={2.4} spark={[31, 32, 33, 34, 34, 34, 35]} sparkColor="var(--success)" />
+      </div>
+      <CommonTable
+        {...ERP_TABLE_PROPS}
+        columns={profitColumns}
+        dataSource={profitRows}
+        rowKey="name"
+      />
+    </ReportShell>
+  );
+};
 
 const InventoryReport = () => {
   const DATA = useDATA();
+  const inventoryRows = DATA.RAW_MATERIALS.map((r, i) => ({
+    ...r,
+    classCode: i < 3 ? "A" : i < 7 ? "B" : "C",
+    movementCode: i % 3 === 0 ? "fast" : i % 3 === 1 ? "medium" : "slow",
+  }));
+  const inventoryColumns = [
+    {
+      title: "SKU",
+      dataIndex: "code",
+      key: "sku",
+      render: (code) => <span className="mono strong">{code}</span>,
+    },
+    {
+      title: "Material",
+      dataIndex: "name",
+      key: "material",
+    },
+    {
+      title: "Stock",
+      key: "stock",
+      align: "right",
+      render: (_, r) => <span className="num">{r.stock} {r.unit}</span>,
+    },
+    {
+      title: "Value",
+      dataIndex: "value",
+      key: "value",
+      align: "right",
+      render: (value) => <span className="num">{fmtINR(value)}</span>,
+    },
+    {
+      title: "Class",
+      dataIndex: "classCode",
+      key: "classCode",
+      render: (classCode) => <Badge tone={classCode === "A" ? "primary" : classCode === "B" ? "info" : "default"}>{classCode}</Badge>,
+    },
+    {
+      title: "Movement",
+      dataIndex: "movementCode",
+      key: "movementCode",
+      render: (movementCode) => <Badge tone={movementCode === "fast" ? "success" : movementCode === "medium" ? "warning" : "default"} dot>{movementCode}</Badge>,
+    },
+    {
+      title: "Last 30d",
+      key: "last30d",
+      width: 90,
+      render: (_, __, i) => (
+        <Sparkline values={[20 + i * 3, 22, 18, 24, 28, 26, 30 + i * 2]} w={70} h={20} color="var(--primary)" />
+      ),
+    },
+  ];
   return (
   <ReportShell title="Inventory Report · As of May 21" sub="Stock value, ABC analysis, ageing">
     <div className="grid grid-3" style={{ marginBottom: 20 }}>
@@ -679,30 +765,12 @@ const InventoryReport = () => {
       <Kpi icon="loader" label="Inventory turns (annualized)" value="6.2x" delta={0.4} spark={[5.5,5.7,5.9,6.0,6.0,6.1,6.2]} sparkColor="var(--success)" />
       <Kpi icon="alert" label="Slow-moving SKUs" value="3" delta={0} spark={[3,3,3,3,3,3,3]} sparkColor="var(--warning)" />
     </div>
-    <table className="tbl">
-      <thead>
-        <tr><th>SKU</th><th>Material</th><th style={{ textAlign: "right" }}>Stock</th><th style={{ textAlign: "right" }}>Value</th><th>Class</th><th>Movement</th><th>Last 30d</th></tr>
-      </thead>
-      <tbody>
-        {DATA.RAW_MATERIALS.map((r, i) => {
-          const cls = i < 3 ? "A" : i < 7 ? "B" : "C";
-          const mov = i % 3 === 0 ? "fast" : i % 3 === 1 ? "medium" : "slow";
-          return (
-            <tr key={r.code}>
-              <td className="mono strong">{r.code}</td>
-              <td>{r.name}</td>
-              <td className="num">{r.stock} {r.unit}</td>
-              <td className="num">{fmtINR(r.value)}</td>
-              <td><Badge tone={cls === "A" ? "primary" : cls === "B" ? "info" : "default"}>{cls}</Badge></td>
-              <td><Badge tone={mov === "fast" ? "success" : mov === "medium" ? "warning" : "default"} dot>{mov}</Badge></td>
-              <td style={{ width: 80 }}>
-                <Sparkline values={[20+i*3, 22, 18, 24, 28, 26, 30+i*2]} w={70} h={20} color="var(--primary)" />
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <CommonTable
+      {...ERP_TABLE_PROPS}
+      columns={inventoryColumns}
+      dataSource={inventoryRows}
+      rowKey="code"
+    />
   </ReportShell>
   );
 };
@@ -756,108 +824,215 @@ const ProductionReport = () => (
   </ReportShell>
 );
 
-const DispatchReport = () => (
-  <ReportShell title="Dispatch Report · May 2026" sub="On-time delivery, lead time, route P&L">
-    <div className="grid grid-4" style={{ marginBottom: 20 }}>
-      <Kpi icon="truck"  label="Vehicles dispatched" value="218" delta={11} spark={[180,190,200,205,210,215,218]} />
-      <Kpi icon="bolt"   label="On-time %" value="94.2" unit="%" delta={1.2} sparkColor="var(--success)" spark={[91,92,93,93,93,94,94]} />
-      <Kpi icon="clock"  label="Avg lead time" value="11.4" unit="hrs" delta={-4} sparkColor="var(--success)" spark={[12,12,12,11.5,11.4,11.4,11.4]} />
-      <Kpi icon="money"  label="Freight cost / MT" value="₹482" delta={-3.2} sparkColor="var(--success)" spark={[510,500,495,490,488,485,482]} />
-    </div>
-    <table className="tbl">
-      <thead>
-        <tr><th>Route</th><th style={{ textAlign: "right" }}>Trips</th><th style={{ textAlign: "right" }}>Vol (MT)</th><th style={{ textAlign: "right" }}>On-time %</th><th style={{ textAlign: "right" }}>Avg lead (hrs)</th><th style={{ textAlign: "right" }}>Freight cost</th></tr>
-      </thead>
-      <tbody>
-        {[
-          { r: "Udaipur → Mumbai",     t: 48, v: 1140, ot: 96.0, lt: 10.4, c: 21_45_000 },
-          { r: "Udaipur → Pune",       t: 22, v:  528, ot: 95.5, lt: 11.2, c: 11_84_000 },
-          { r: "Udaipur → Kolkata",    t: 14, v:  386, ot: 88.4, lt: 28.6, c: 12_40_000 },
-          { r: "Ahmedabad → Mumbai",   t: 38, v:  912, ot: 97.4, lt:  8.2, c: 12_84_000 },
-          { r: "Ahmedabad → Bhavnagar",t: 41, v:  984, ot: 98.2, lt:  3.4, c:  5_20_000 },
-          { r: "Udaipur → Gotan",      t: 12, v:  324, ot: 95.0, lt:  4.8, c:  2_60_000 },
-        ].map((r) => (
-          <tr key={r.r}>
-            <td className="strong">{r.r}</td>
-            <td className="num">{r.t}</td>
-            <td className="num">{r.v}</td>
-            <td className="num" style={{ color: r.ot >= 95 ? "var(--success)" : "var(--warning)", fontWeight: 500 }}>{r.ot}%</td>
-            <td className="num">{r.lt}</td>
-            <td className="num">{fmtINR(r.c)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </ReportShell>
-);
+const DispatchReport = () => {
+  const dispatchRows = [
+    { route: "Udaipur → Mumbai", trips: 48, volume: 1140, onTime: 96.0, leadTime: 10.4, freightCost: 21_45_000 },
+    { route: "Udaipur → Pune", trips: 22, volume: 528, onTime: 95.5, leadTime: 11.2, freightCost: 11_84_000 },
+    { route: "Udaipur → Kolkata", trips: 14, volume: 386, onTime: 88.4, leadTime: 28.6, freightCost: 12_40_000 },
+    { route: "Ahmedabad → Mumbai", trips: 38, volume: 912, onTime: 97.4, leadTime: 8.2, freightCost: 12_84_000 },
+    { route: "Ahmedabad → Bhavnagar", trips: 41, volume: 984, onTime: 98.2, leadTime: 3.4, freightCost: 5_20_000 },
+    { route: "Udaipur → Gotan", trips: 12, volume: 324, onTime: 95.0, leadTime: 4.8, freightCost: 2_60_000 },
+  ];
+  const dispatchColumns = [
+    {
+      title: "Route",
+      dataIndex: "route",
+      key: "route",
+      render: (route) => <span className="strong">{route}</span>,
+    },
+    {
+      title: "Trips",
+      dataIndex: "trips",
+      key: "trips",
+      align: "right",
+      render: (trips) => <span className="num">{trips}</span>,
+    },
+    {
+      title: "Vol (MT)",
+      dataIndex: "volume",
+      key: "volume",
+      align: "right",
+      render: (volume) => <span className="num">{volume}</span>,
+    },
+    {
+      title: "On-time %",
+      dataIndex: "onTime",
+      key: "onTime",
+      align: "right",
+      render: (onTime) => <span className="num" style={{ color: onTime >= 95 ? "var(--success)" : "var(--warning)", fontWeight: 500 }}>{onTime}%</span>,
+    },
+    {
+      title: "Avg lead (hrs)",
+      dataIndex: "leadTime",
+      key: "leadTime",
+      align: "right",
+      render: (leadTime) => <span className="num">{leadTime}</span>,
+    },
+    {
+      title: "Freight cost",
+      dataIndex: "freightCost",
+      key: "freightCost",
+      align: "right",
+      render: (freightCost) => <span className="num">{fmtINR(freightCost)}</span>,
+    },
+  ];
+
+  return (
+    <ReportShell title="Dispatch Report · May 2026" sub="On-time delivery, lead time, route P&L">
+      <div className="grid grid-4" style={{ marginBottom: 20 }}>
+        <Kpi icon="truck" label="Vehicles dispatched" value="218" delta={11} spark={[180, 190, 200, 205, 210, 215, 218]} />
+        <Kpi icon="bolt" label="On-time %" value="94.2" unit="%" delta={1.2} sparkColor="var(--success)" spark={[91, 92, 93, 93, 93, 94, 94]} />
+        <Kpi icon="clock" label="Avg lead time" value="11.4" unit="hrs" delta={-4} sparkColor="var(--success)" spark={[12, 12, 12, 11.5, 11.4, 11.4, 11.4]} />
+        <Kpi icon="money" label="Freight cost / MT" value="₹482" delta={-3.2} sparkColor="var(--success)" spark={[510, 500, 495, 490, 488, 485, 482]} />
+      </div>
+      <CommonTable
+        {...ERP_TABLE_PROPS}
+        columns={dispatchColumns}
+        dataSource={dispatchRows}
+        rowKey="route"
+      />
+    </ReportShell>
+  );
+};
 
 const VendorReport = () => {
   const DATA = useDATA();
+  const vendorRows = DATA.VENDORS.map((v, i) => ({
+    ...v,
+    rowIndex: i,
+    poMtd: Math.round(v.poCount / 6),
+    spendMtd: Math.round(v.ytd / 6),
+  }));
+  const vendorColumns = [
+    {
+      title: "Vendor",
+      dataIndex: "name",
+      key: "vendor",
+      render: (_, v) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Avatar name={v.name} color={(v.rowIndex % 5) + 1} />
+          <div><div className="strong">{v.name}</div><div className="subtle" style={{ fontSize: 11 }}>{v.city}</div></div>
+        </div>
+      ),
+    },
+    {
+      title: "Category",
+      dataIndex: "category",
+      key: "category",
+      render: (category) => <Badge tone={category === "Raw Material" ? "primary" : category === "Chemical" ? "info" : category === "Packaging" ? "gold" : "default"}>{category}</Badge>,
+    },
+    {
+      title: "POs MTD",
+      dataIndex: "poMtd",
+      key: "poMtd",
+      align: "right",
+      render: (poMtd) => <span className="num">{poMtd}</span>,
+    },
+    {
+      title: "Spend MTD",
+      dataIndex: "spendMtd",
+      key: "spendMtd",
+      align: "right",
+      render: (spendMtd) => <span className="num">{fmtINR(spendMtd)}</span>,
+    },
+    {
+      title: "YTD",
+      dataIndex: "ytd",
+      key: "ytd",
+      align: "right",
+      render: (ytd) => <span className="num">{fmtINR(ytd)}</span>,
+    },
+    {
+      title: "Rating",
+      dataIndex: "rating",
+      key: "rating",
+      render: (rating) => <><span style={{ color: "var(--secondary)" }}>★</span> <span className="mono strong">{rating}</span></>,
+    },
+    {
+      title: "Payment SLA",
+      dataIndex: "rating",
+      key: "paymentSla",
+      render: (rating) => <Badge tone={rating >= 4.5 ? "success" : "warning"} dot>{rating >= 4.5 ? "On time" : "Avg 4d late"}</Badge>,
+    },
+  ];
   return (
   <ReportShell title="Vendor Purchase Report" sub="PO volume, spend, rating, payment history">
-    <table className="tbl">
-      <thead>
-        <tr><th>Vendor</th><th>Category</th><th>POs MTD</th><th style={{ textAlign: "right" }}>Spend MTD</th><th style={{ textAlign: "right" }}>YTD</th><th>Rating</th><th>Payment SLA</th></tr>
-      </thead>
-      <tbody>
-        {DATA.VENDORS.map((v, i) => (
-          <tr key={v.id}>
-            <td>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Avatar name={v.name} color={(i % 5) + 1} />
-                <div><div className="strong">{v.name}</div><div className="subtle" style={{ fontSize: 11 }}>{v.city}</div></div>
-              </div>
-            </td>
-            <td><Badge tone={v.category === "Raw Material" ? "primary" : v.category === "Chemical" ? "info" : v.category === "Packaging" ? "gold" : "default"}>{v.category}</Badge></td>
-            <td className="num">{Math.round(v.poCount / 6)}</td>
-            <td className="num">{fmtINR(Math.round(v.ytd / 6))}</td>
-            <td className="num">{fmtINR(v.ytd)}</td>
-            <td><span style={{ color: "var(--secondary)" }}>★</span> <span className="mono strong">{v.rating}</span></td>
-            <td><Badge tone={v.rating >= 4.5 ? "success" : "warning"} dot>{v.rating >= 4.5 ? "On time" : "Avg 4d late"}</Badge></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <CommonTable
+      {...ERP_TABLE_PROPS}
+      columns={vendorColumns}
+      dataSource={vendorRows}
+      rowKey="id"
+    />
   </ReportShell>
   );
 };
 
-const HRReport = () => (
-  <ReportShell title="HR Report · May 2026" sub="Attendance, attrition, training, payroll summary">
-    <div className="grid grid-4" style={{ marginBottom: 20 }}>
-      <Kpi icon="users" label="Headcount" value="306" delta={1.3} spark={[298,300,301,303,304,305,306]} sparkColor="var(--primary)" />
-      <Kpi icon="check" label="Avg attendance" value="92.4" unit="%" delta={1.2} spark={[90,91,91,92,92,92,92]} sparkColor="var(--success)" />
-      <Kpi icon="logout" label="Attrition (YTD)" value="2.8" unit="%" delta={-0.4} spark={[3.2,3.1,3.0,3.0,2.9,2.8,2.8]} sparkColor="var(--success)" />
-      <Kpi icon="badge" label="Avg tenure" value="4.2" unit="yrs" delta={0.2} spark={[4.0,4.0,4.1,4.1,4.2,4.2,4.2]} sparkColor="var(--success)" />
-    </div>
-    <table className="tbl">
-      <thead>
-        <tr><th>Department</th><th style={{ textAlign: "right" }}>Headcount</th><th style={{ textAlign: "right" }}>Attendance %</th><th style={{ textAlign: "right" }}>Avg tenure</th><th style={{ textAlign: "right" }}>Payroll MTD</th></tr>
-      </thead>
-      <tbody>
-        {[
-          { d: "Production", h: 142, a: 91.2, t: 5.1, p: 84_00_000 },
-          { d: "Procurement", h: 14, a: 95.4, t: 4.8, p: 12_00_000 },
-          { d: "Logistics", h: 38, a: 89.6, t: 3.4, p: 22_00_000 },
-          { d: "Sales", h: 24, a: 94.8, t: 2.8, p: 18_00_000 },
-          { d: "Operations", h: 18, a: 96.2, t: 6.2, p: 24_00_000 },
-          { d: "HR", h: 8, a: 97.4, t: 4.6, p: 8_40_000 },
-          { d: "Accounts", h: 12, a: 96.0, t: 5.8, p: 11_80_000 },
-          { d: "QC & Lab", h: 22, a: 93.2, t: 3.9, p: 14_60_000 },
-          { d: "Daily wage", h: 28, a: 88.4, t: 1.2, p: 7_80_000 },
-        ].map((r) => (
-          <tr key={r.d}>
-            <td className="strong">{r.d}</td>
-            <td className="num">{r.h}</td>
-            <td className="num" style={{ color: r.a >= 95 ? "var(--success)" : r.a >= 90 ? "var(--fg-muted)" : "var(--warning)" }}>{r.a}%</td>
-            <td className="num">{r.t} yrs</td>
-            <td className="num">{fmtINR(r.p)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </ReportShell>
-);
+const HRReport = () => {
+  const hrRows = [
+    { d: "Production", h: 142, a: 91.2, t: 5.1, p: 84_00_000 },
+    { d: "Procurement", h: 14, a: 95.4, t: 4.8, p: 12_00_000 },
+    { d: "Logistics", h: 38, a: 89.6, t: 3.4, p: 22_00_000 },
+    { d: "Sales", h: 24, a: 94.8, t: 2.8, p: 18_00_000 },
+    { d: "Operations", h: 18, a: 96.2, t: 6.2, p: 24_00_000 },
+    { d: "HR", h: 8, a: 97.4, t: 4.6, p: 8_40_000 },
+    { d: "Accounts", h: 12, a: 96.0, t: 5.8, p: 11_80_000 },
+    { d: "QC & Lab", h: 22, a: 93.2, t: 3.9, p: 14_60_000 },
+    { d: "Daily wage", h: 28, a: 88.4, t: 1.2, p: 7_80_000 },
+  ];
+  const hrColumns = [
+    {
+      title: "Department",
+      dataIndex: "d",
+      key: "department",
+      render: (d) => <span className="strong">{d}</span>,
+    },
+    {
+      title: "Headcount",
+      dataIndex: "h",
+      key: "headcount",
+      align: "right",
+      render: (h) => <span className="num">{h}</span>,
+    },
+    {
+      title: "Attendance %",
+      dataIndex: "a",
+      key: "attendance",
+      align: "right",
+      render: (a) => <span className="num" style={{ color: a >= 95 ? "var(--success)" : a >= 90 ? "var(--fg-muted)" : "var(--warning)" }}>{a}%</span>,
+    },
+    {
+      title: "Avg tenure",
+      dataIndex: "t",
+      key: "avgTenure",
+      align: "right",
+      render: (t) => <span className="num">{t} yrs</span>,
+    },
+    {
+      title: "Payroll MTD",
+      dataIndex: "p",
+      key: "payrollMtd",
+      align: "right",
+      render: (p) => <span className="num">{fmtINR(p)}</span>,
+    },
+  ];
+
+  return (
+    <ReportShell title="HR Report · May 2026" sub="Attendance, attrition, training, payroll summary">
+      <div className="grid grid-4" style={{ marginBottom: 20 }}>
+        <Kpi icon="users" label="Headcount" value="306" delta={1.3} spark={[298, 300, 301, 303, 304, 305, 306]} sparkColor="var(--primary)" />
+        <Kpi icon="check" label="Avg attendance" value="92.4" unit="%" delta={1.2} spark={[90, 91, 91, 92, 92, 92, 92]} sparkColor="var(--success)" />
+        <Kpi icon="logout" label="Attrition (YTD)" value="2.8" unit="%" delta={-0.4} spark={[3.2, 3.1, 3.0, 3.0, 2.9, 2.8, 2.8]} sparkColor="var(--success)" />
+        <Kpi icon="badge" label="Avg tenure" value="4.2" unit="yrs" delta={0.2} spark={[4.0, 4.0, 4.1, 4.1, 4.2, 4.2, 4.2]} sparkColor="var(--success)" />
+      </div>
+      <CommonTable
+        {...ERP_TABLE_PROPS}
+        columns={hrColumns}
+        dataSource={hrRows}
+        rowKey="d"
+      />
+    </ReportShell>
+  );
+};
 
 /* ============================================================
    PACKAGING INVENTORY (with bag auto-calc)
@@ -898,6 +1073,83 @@ const PackagingInventory = () => {
     setCalcOpen(false);
   };
 
+  const columns = useMemo(
+    () => [
+      {
+        title: "SKU",
+        dataIndex: "code",
+        key: "code",
+        render: (code) => <span className="mono strong">{code}</span>,
+      },
+      {
+        title: "Description",
+        dataIndex: "name",
+        key: "name",
+        render: (name) => <span className="strong">{name}</span>,
+      },
+      {
+        title: "Stock",
+        key: "stock",
+        align: "right",
+        render: (_, p) => (
+          <>
+            <span className="mono strong">{fmtNum(p.stock)}</span>{" "}
+            <span className="subtle" style={{ fontSize: 11 }}>{p.unit}</span>
+          </>
+        ),
+      },
+      {
+        title: "Reorder at",
+        key: "reorder",
+        render: (_, p) => <span className="mono subtle">{fmtNum(p.reorder)} {p.unit}</span>,
+      },
+      {
+        title: "Coverage",
+        key: "coverage",
+        width: 150,
+        render: (_, p) => {
+          const tone = p.status === "low" ? "warning" : "success";
+          const cov = Math.round((p.stock / p.reorder) * 7);
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Bar value={Math.min(100, (p.stock / (p.reorder * 3)) * 100)} tone={tone} />
+              <span className="mono" style={{ fontSize: 11, width: 36, textAlign: "right" }}>{cov}d</span>
+            </div>
+          );
+        },
+      },
+      {
+        title: "Trend",
+        dataIndex: "trend",
+        key: "trend",
+        render: (trend) => (
+          <span style={{ fontSize: 12, color: trend > 0 ? "var(--success)" : "var(--danger)", fontWeight: 500 }}>
+            {trend > 0 ? "↑" : "↓"} {Math.abs(trend)}%
+          </span>
+        ),
+      },
+      {
+        title: "Status",
+        dataIndex: "status",
+        key: "status",
+        render: (status) => inventoryStatusBadge(status),
+      },
+      {
+        title: "Actions",
+        key: "actions",
+        width: 110,
+        align: "center",
+        render: () => (
+          <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "center" }}>
+            <AntButton type="link" size="small">Adjust</AntButton>
+            <AntButton type="text" size="small" icon={<MoreOutlined />} aria-label="More actions" />
+          </div>
+        ),
+      },
+    ],
+    []
+  );
+
   return (
     <>
       <DashHead title="Packaging Inventory" sub="FIBC, PP woven, BOPP — stock, bag auto-calc, alerts">
@@ -925,44 +1177,13 @@ const PackagingInventory = () => {
             <input className="input" placeholder="Search packaging…" style={{ height: 30, width: 220 }} />
           </div>
         </div>
-        <div style={{ overflowX: "auto" }}>
-          <table className="tbl">
-            <thead>
-              <tr><th>SKU</th><th>Description</th><th style={{ textAlign: "right" }}>Stock</th><th>Reorder at</th><th>Coverage</th><th>Trend</th><th>Status</th><th></th></tr>
-            </thead>
-            <tbody>
-              {DATA.PACKAGING.map((p) => {
-                const tone = p.status === "low" ? "warning" : "success";
-                const cov = Math.round((p.stock / p.reorder) * 7);
-                return (
-                  <tr key={p.code}>
-                    <td className="mono strong">{p.code}</td>
-                    <td className="strong">{p.name}</td>
-                    <td style={{ textAlign: "right" }}>
-                      <span className="mono strong">{fmtNum(p.stock)}</span> <span className="subtle" style={{ fontSize: 11 }}>{p.unit}</span>
-                    </td>
-                    <td className="mono subtle">{fmtNum(p.reorder)} {p.unit}</td>
-                    <td style={{ width: 110 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <Bar value={Math.min(100, (p.stock / (p.reorder * 3)) * 100)} tone={tone} />
-                        <span className="mono" style={{ fontSize: 11, width: 36, textAlign: "right" }}>{cov}d</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span style={{ fontSize: 12, color: p.trend > 0 ? "var(--success)" : "var(--danger)", fontWeight: 500 }}>
-                        {p.trend > 0 ? "↑" : "↓"} {Math.abs(p.trend)}%
-                      </span>
-                    </td>
-                    <td><StatusBadge status={p.status} /></td>
-                    <td><div style={{ display: "flex", gap: 4 }}>
-                      <Btn variant="ghost" size="sm">Adjust</Btn>
-                      <button className="tb-iconbtn"><Icon name="moreV" size={14} /></button>
-                    </div></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div style={{ padding: 16 }}>
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            columns={columns}
+            dataSource={DATA.PACKAGING}
+            rowKey="code"
+          />
         </div>
       </div>
 

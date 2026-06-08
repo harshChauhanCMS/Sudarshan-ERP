@@ -2,7 +2,7 @@
 'use client';
 
 
-import React from "react";
+import React, { useMemo } from "react";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import {
@@ -19,6 +19,8 @@ import {
   invoiceMismatchCount,
 } from "@/lib/erp-stats";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
+import CommonTable from "@/components/common/CommonTable";
+import { ERP_TABLE_PROPS, erpStatusBadge } from "@/components/common/erpStatusBadges";
 
 /* ============================================================
    5 DASHBOARDS
@@ -67,6 +69,44 @@ const MasterDashboard = ({ navigate }) => {
   const ordersSpark = countSpark(openOrders);
   const transitSpark = countSpark(inTransit);
   const headcountSpark = countSpark(headcount);
+  const criticalAttentionRows = useMemo(
+    () => DATA.NOTIFS.slice(0, 5),
+    [DATA.NOTIFS]
+  );
+  const criticalAttentionColumns = useMemo(
+    () => [
+      {
+        title: "",
+        key: "icon",
+        width: 42,
+        render: (_, n) => (
+          <Icon
+            name={n.type === "alert" ? "alert" : n.type === "success" ? "check" : "info"}
+            size={14}
+            style={{ color: n.type === "alert" ? "var(--danger)" : n.type === "success" ? "var(--success)" : "var(--info)" }}
+          />
+        ),
+      },
+      {
+        title: "Item",
+        dataIndex: "text",
+        key: "text",
+        render: (text) => <span className="strong">{text}</span>,
+      },
+      {
+        title: "Source",
+        key: "source",
+        render: (_, n) => <span className="muted">{n.time} ago</span>,
+      },
+      {
+        title: "Status",
+        key: "status",
+        align: "right",
+        render: () => <Icon name="chevRight" size={13} className="subtle" />,
+      },
+    ],
+    []
+  );
 
   return (
     <>
@@ -163,34 +203,18 @@ const MasterDashboard = ({ navigate }) => {
             <Btn variant="ghost" size="sm">View all <Icon name="chevRight" size={12} /></Btn>
           </div>
           <div className="card-body flush">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>Item</th>
-                  <th>Source</th>
-                  <th style={{ textAlign: "right" }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {DATA.NOTIFS.slice(0, 5).map((n) => (
-                  <tr key={n.id} onClick={() => navigate(n.target)} style={{ cursor: "pointer" }}>
-                    <td style={{ width: 26 }}>
-                      <Icon
-                        name={n.type === "alert" ? "alert" : n.type === "success" ? "check" : "info"}
-                        size={14}
-                        style={{ color: n.type === "alert" ? "var(--danger)" : n.type === "success" ? "var(--success)" : "var(--info)" }}
-                      />
-                    </td>
-                    <td className="strong">{n.text}</td>
-                    <td className="muted">{n.time} ago</td>
-                    <td style={{ textAlign: "right" }}>
-                      <Icon name="chevRight" size={13} className="subtle" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div style={{ padding: 16 }}>
+              <CommonTable
+                {...ERP_TABLE_PROPS}
+                columns={criticalAttentionColumns}
+                dataSource={criticalAttentionRows}
+                rowKey="id"
+                onRow={(n) => ({
+                  onClick: () => navigate(n.target),
+                  style: { cursor: "pointer" },
+                })}
+              />
+            </div>
           </div>
         </div>
 
@@ -444,6 +468,42 @@ const OwnerDashboard = () => {
   const DATA = useDATA();
   const revCr = revenueMtdRupees(DATA.REVENUE_DATA) / 1_00_00_000;
   const orderBookCr = orderBookRupees(DATA.ORDERS) / 1_00_00_000;
+  const topCustomerColumns = useMemo(
+    () => [
+      {
+        title: "Customer",
+        dataIndex: "name",
+        key: "customer",
+        render: (name, c, i) => (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Avatar name={name} color={(i % 5) + 1} />
+            <div>
+              <div className="strong">{name}</div>
+              <div className="subtle" style={{ fontSize: 11 }}>{c.city} · {c.terms}</div>
+            </div>
+          </div>
+        ),
+      },
+      {
+        title: "YTD",
+        dataIndex: "ytd",
+        key: "ytd",
+        align: "right",
+        render: (ytd) => <span className="num">{fmtINR(ytd)}</span>,
+      },
+      {
+        title: "Δ",
+        key: "delta",
+        align: "right",
+        render: (_, __, i) => (
+          <span style={{ color: i % 3 === 0 ? "var(--danger)" : "var(--success)", fontSize: 11, fontWeight: 500 }}>
+            {i % 3 === 0 ? "−2.4%" : `+${(4 + i * 0.7).toFixed(1)}%`}
+          </span>
+        ),
+      },
+    ],
+    []
+  );
 
   return (
   <>
@@ -499,36 +559,14 @@ const OwnerDashboard = () => {
           <Btn variant="ghost" size="sm">All</Btn>
         </div>
         <div className="card-body flush">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Customer</th>
-                <th style={{ textAlign: "right" }}>YTD</th>
-                <th style={{ textAlign: "right" }}>Δ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {DATA.CUSTOMERS.map((c, i) => (
-                <tr key={c.id}>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <Avatar name={c.name} color={(i % 5) + 1} />
-                      <div>
-                        <div className="strong">{c.name}</div>
-                        <div className="subtle" style={{ fontSize: 11 }}>{c.city} · {c.terms}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="num" style={{ textAlign: "right" }}>{fmtINR(c.ytd)}</td>
-                  <td style={{ textAlign: "right" }}>
-                    <span style={{ color: i % 3 === 0 ? "var(--danger)" : "var(--success)", fontSize: 11, fontWeight: 500 }}>
-                      {i % 3 === 0 ? "−2.4%" : `+${(4 + i * 0.7).toFixed(1)}%`}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div style={{ padding: 16 }}>
+            <CommonTable
+              {...ERP_TABLE_PROPS}
+              columns={topCustomerColumns}
+              dataSource={DATA.CUSTOMERS}
+              rowKey="id"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -597,6 +635,64 @@ const OwnerDashboard = () => {
    ============================================================ */
 const ProductionDashboard = ({ navigate }) => {
   const DATA = useDATA();
+  const activeProductionOrders = useMemo(
+    () => DATA.ORDERS.filter((o) => o.status === "in-production" || o.status === "scheduled"),
+    [DATA.ORDERS]
+  );
+  const activeProductionColumns = useMemo(
+    () => [
+      {
+        title: "Order",
+        dataIndex: "id",
+        key: "id",
+        render: (id) => <span className="mono strong">{id}</span>,
+      },
+      {
+        title: "Customer",
+        dataIndex: "customer",
+        key: "customer",
+      },
+      {
+        title: "Product",
+        dataIndex: "product",
+        key: "product",
+        render: (product) => <span className="muted">{product}</span>,
+      },
+      {
+        title: "Qty",
+        dataIndex: "qty",
+        key: "qty",
+        align: "right",
+        render: (qty) => <span className="num">{qty}</span>,
+      },
+      {
+        title: "Due",
+        dataIndex: "due",
+        key: "due",
+        align: "right",
+        render: (due) => <span className="num">{due}</span>,
+      },
+      {
+        title: "Progress",
+        dataIndex: "progress",
+        key: "progress",
+        width: 160,
+        render: (progress) => (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Bar value={progress} />
+            <span className="mono" style={{ fontSize: 11, width: 32, textAlign: "right" }}>{progress}%</span>
+          </div>
+        ),
+      },
+      {
+        title: "Status",
+        dataIndex: "status",
+        key: "status",
+        render: (status) => erpStatusBadge(status),
+      },
+    ],
+    []
+  );
   return (
   <>
     <DashHead title="Production Dashboard" sub="Live plant operations · batches, throughput, line status">
@@ -671,37 +767,14 @@ const ProductionDashboard = ({ navigate }) => {
         <Btn variant="ghost" size="sm">All orders <Icon name="chevRight" size={12} /></Btn>
       </div>
       <div className="card-body flush">
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Order</th>
-              <th>Customer</th>
-              <th>Product</th>
-              <th>Qty</th>
-              <th>Due</th>
-              <th>Progress</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {DATA.ORDERS.filter(o => o.status === "in-production" || o.status === "scheduled").map((o) => (
-              <tr key={o.id}>
-                <td className="mono strong">{o.id}</td>
-                <td>{o.customer}</td>
-                <td className="muted">{o.product}</td>
-                <td className="num">{o.qty}</td>
-                <td className="num">{o.due}</td>
-                <td style={{ width: 140 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Bar value={o.progress} />
-                    <span className="mono" style={{ fontSize: 11, width: 32, textAlign: "right" }}>{o.progress}%</span>
-                  </div>
-                </td>
-                <td><StatusBadge status={o.status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div style={{ padding: 16 }}>
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            columns={activeProductionColumns}
+            dataSource={activeProductionOrders}
+            rowKey="id"
+          />
+        </div>
       </div>
     </div>
   </>
@@ -713,6 +786,65 @@ const ProductionDashboard = ({ navigate }) => {
    ============================================================ */
 const DispatchDashboard = ({ navigate }) => {
   const DATA = useDATA();
+  const dispatchScheduleColumns = useMemo(
+    () => [
+      {
+        title: "Dispatch",
+        dataIndex: "id",
+        key: "id",
+        render: (id) => <span className="mono strong">{id}</span>,
+      },
+      {
+        title: "Vehicle",
+        dataIndex: "vehicle",
+        key: "vehicle",
+        render: (vehicle) => <span className="mono">{vehicle}</span>,
+      },
+      {
+        title: "Driver",
+        dataIndex: "driver",
+        key: "driver",
+        render: (driver, d) => (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Avatar name={driver} color={(d.id.charCodeAt(d.id.length - 1) % 5) + 1} />
+            {driver}
+          </div>
+        ),
+      },
+      {
+        title: "Customer",
+        dataIndex: "customer",
+        key: "customer",
+        render: (customer) => <span className="muted">{customer}</span>,
+      },
+      {
+        title: "Route",
+        dataIndex: "route",
+        key: "route",
+        render: (route) => <span className="muted" style={{ fontSize: 12 }}>{route}</span>,
+      },
+      {
+        title: "Load",
+        dataIndex: "loaded",
+        key: "loaded",
+        align: "right",
+        render: (loaded) => <span className="num">{loaded}</span>,
+      },
+      {
+        title: "ETA",
+        dataIndex: "eta",
+        key: "eta",
+        render: (eta) => <span className="mono" style={{ fontSize: 12 }}>{eta}</span>,
+      },
+      {
+        title: "Status",
+        dataIndex: "status",
+        key: "status",
+        render: (status) => erpStatusBadge(status),
+      },
+    ],
+    []
+  );
   return (
   <>
     <DashHead title="Dispatch Dashboard" sub="Live vehicles, deliveries & loadout planning">
@@ -775,39 +907,14 @@ const DispatchDashboard = ({ navigate }) => {
         <Btn variant="ghost" size="sm">View all <Icon name="chevRight" size={12} /></Btn>
       </div>
       <div className="card-body flush">
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Dispatch</th>
-              <th>Vehicle</th>
-              <th>Driver</th>
-              <th>Customer</th>
-              <th>Route</th>
-              <th>Load</th>
-              <th>ETA</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {DATA.DISPATCHES.map((d) => (
-              <tr key={d.id}>
-                <td className="mono strong">{d.id}</td>
-                <td className="mono">{d.vehicle}</td>
-                <td>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Avatar name={d.driver} color={(d.id.charCodeAt(d.id.length - 1) % 5) + 1} />
-                    {d.driver}
-                  </div>
-                </td>
-                <td className="muted">{d.customer}</td>
-                <td className="muted" style={{ fontSize: 12 }}>{d.route}</td>
-                <td className="num">{d.loaded}</td>
-                <td className="mono" style={{ fontSize: 12 }}>{d.eta}</td>
-                <td><StatusBadge status={d.status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div style={{ padding: 16 }}>
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            columns={dispatchScheduleColumns}
+            dataSource={DATA.DISPATCHES}
+            rowKey="id"
+          />
+        </div>
       </div>
     </div>
   </>
