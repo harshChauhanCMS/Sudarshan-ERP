@@ -7,6 +7,8 @@ const UserSchema = new Schema(
     role: { type: String, required: true },
     employeeId: { type: String },
     passwordHash: { type: String, required: true },
+    requiresPasswordReset: { type: Boolean, default: false },
+    passwordResetDeadline: { type: Date },
   },
   { timestamps: true }
 );

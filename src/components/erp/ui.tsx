@@ -45,7 +45,6 @@ const Btn = ({
 const Badge = ({ tone = "default", dot, children, sq, className = "" }) => {
   const classes = ["badge"];
   if (tone !== "default") classes.push(tone);
-  if (dot) classes.push("dot");
   if (sq) classes.push("sq");
   if (className) classes.push(className);
   return (

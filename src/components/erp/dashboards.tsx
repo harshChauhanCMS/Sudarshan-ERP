@@ -859,41 +859,41 @@ const DispatchDashboard = ({ navigate }) => {
       <Kpi icon="clock"  label="Avg transit time"          value="11.4" unit="hrs" delta={-4} spark={[12,12,11.8,11.6,11.5,11.4,11.4]} sparkColor="var(--success)" />
     </div>
 
-    <div className="grid" style={{ gridTemplateColumns: "1fr 420px", marginBottom: 20 }}>
-      <div className="card">
+    <div className="dispatch-fleet-row">
+      <div className="dispatch-fleet-map card">
         <div className="card-head">
           <div className="card-title"><Icon name="map" size={14} /> Live fleet · West & Central India</div>
-          <div className="row">
+          <div className="dispatch-fleet-badges">
             <Badge tone="info" dot>4 in-transit</Badge>
             <Badge tone="gold" dot>1 near</Badge>
           </div>
         </div>
-        <div className="card-body">
+        <div className="card-body dispatch-fleet-map__body">
           <FleetMap />
         </div>
       </div>
 
-      <div className="card">
+      <div className="dispatch-fleet-side card">
         <div className="card-head">
           <div className="card-title"><Icon name="truck" size={14} /> Active vehicles</div>
         </div>
-        <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className="card-body dispatch-fleet-vehicles">
           {DATA.DISPATCHES.slice(0, 4).map((d) => (
-            <div key={d.id} onClick={() => navigate("/dispatch")} style={{ cursor: "pointer" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            <div key={d.id} className="dispatch-fleet-vehicle" onClick={() => navigate("/dispatch")}>
+              <div className="dispatch-fleet-vehicle__head">
                 <div className="mono nowrap" style={{ fontSize: 12, fontWeight: 600 }}>{d.vehicle}</div>
                 <StatusBadge status={d.status} />
               </div>
-              <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+              <div className="dispatch-fleet-vehicle__meta">
                 <Icon name="user" size={11} />
                 <span className="nowrap">{d.driver}</span>
                 <span style={{ opacity: 0.5 }}>·</span>
                 <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.customer}</span>
               </div>
               <Bar value={d.progress} tone={d.status === "near-delivery" ? "gold" : d.status === "delivered" ? "success" : "primary"} />
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11, color: "var(--fg-subtle)" }}>
+              <div className="dispatch-fleet-vehicle__footer">
                 <span className="nowrap" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{d.route}</span>
-                <span className="mono nowrap" style={{ marginLeft: 8 }}>ETA {d.eta.split(",")[1]}</span>
+                <span className="mono nowrap">ETA {d.eta.split(",")[1]}</span>
               </div>
             </div>
           ))}
@@ -940,7 +940,7 @@ const FleetMap = () => {
     { from: [52, 38], to: [38, 90], color: "var(--success)", progress: 1.0, label: "DSP-1038" },
   ];
   return (
-    <div className="map-frame" style={{ height: 340, position: "relative" }}>
+    <div className="map-frame dispatch-fleet-map__canvas">
       {/* Landmass + route lines via SVG (stretched is OK for stylized blob + lines) */}
       <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 0 }}>
         <path

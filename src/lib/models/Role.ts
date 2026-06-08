@@ -1,27 +1,12 @@
 import mongoose, { Schema, Document } from "mongoose";
+import {
+  MODULE_KEYS,
+  type ModuleKey,
+  type ModulePermission,
+  type PermissionsMap,
+} from "@/lib/permission-types";
 
-// ─── Module Keys ─────────────────────────────────────────────────────────────
-export const MODULE_KEYS = [
-  "dashboard",
-  "hr",
-  "payroll",
-  "inventory_raw",
-  "inventory_packaging",
-  "inventory_spares",
-  "procurement_vendors",
-  "procurement_po",
-  "procurement_invoice",
-  "sales_customers",
-  "sales_orders",
-  "operations_production",
-  "operations_quality",
-  "dispatch",
-  "settings",
-  "user_management",
-  "reports",
-] as const;
-
-export type ModuleKey = (typeof MODULE_KEYS)[number];
+export { MODULE_KEYS, type ModuleKey, type ModulePermission, type PermissionsMap };
 
 export const MODULE_LABELS: Record<ModuleKey, string> = {
   dashboard: "Dashboard",
@@ -44,16 +29,6 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
 };
 
 export type PermissionAction = "view" | "add" | "edit" | "approve" | "export";
-
-export type ModulePermission = {
-  view: boolean;
-  add: boolean;
-  edit: boolean;
-  approve: boolean;
-  export: boolean;
-};
-
-export type PermissionsMap = Record<ModuleKey, ModulePermission>;
 
 // ─── Helper builders ──────────────────────────────────────────────────────────
 const none = (): ModulePermission => ({ view: false, add: false, edit: false, approve: false, export: false });

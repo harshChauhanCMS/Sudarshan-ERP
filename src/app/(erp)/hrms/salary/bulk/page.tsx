@@ -212,6 +212,36 @@ export default function PayrollBulkPage() {
         actions={<Button icon={<DownloadOutlined />}>Export</Button>}
       />
 
+      <div className="attendance-kpi-grid attendance-kpi-grid--auto">
+        <StatCard
+          icon={TeamOutlined}
+          label="Employees"
+          value={String(kpi.employees)}
+          hint={month.format("MMMM YYYY")}
+        />
+        <StatCard
+          icon={DollarOutlined}
+          label="Total gross"
+          value={formatPayrollInr(kpi.gross)}
+          hint="Before deductions"
+          hintTone="positive"
+        />
+        <StatCard
+          icon={MinusCircleOutlined}
+          label="Total deductions"
+          value={formatPayrollInr(kpi.deductions)}
+          hint="PF, ESI, TDS, LWP"
+          hintTone="warning"
+        />
+        <StatCard
+          icon={WalletOutlined}
+          label="Net pay"
+          value={formatPayrollInr(kpi.netPay)}
+          hint="Disbursal amount"
+          hintTone="positive"
+        />
+      </div>
+
       <div className="arf-panel ap-filters-panel">
         <div className="arf-head">
           <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
@@ -251,37 +281,6 @@ export default function PayrollBulkPage() {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* KPI cards */}
-      <div className="attendance-kpi-grid attendance-kpi-grid--auto">
-        <StatCard
-          icon={TeamOutlined}
-          label="Employees"
-          value={String(kpi.employees)}
-          hint={month.format("MMMM YYYY")}
-        />
-        <StatCard
-          icon={DollarOutlined}
-          label="Total gross"
-          value={formatPayrollInr(kpi.gross)}
-          hint="Before deductions"
-          hintTone="positive"
-        />
-        <StatCard
-          icon={MinusCircleOutlined}
-          label="Total deductions"
-          value={formatPayrollInr(kpi.deductions)}
-          hint="PF, ESI, TDS, LWP"
-          hintTone="warning"
-        />
-        <StatCard
-          icon={WalletOutlined}
-          label="Net pay"
-          value={formatPayrollInr(kpi.netPay)}
-          hint="Disbursal amount"
-          hintTone="positive"
-        />
       </div>
 
       {/* Payroll table */}

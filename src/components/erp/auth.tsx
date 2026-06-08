@@ -73,7 +73,7 @@ const AuthAside = () => (
 );
 
 const Login = ({ onLogin, onForgot, userEmail }) => {
-  const [email, setEmail] = useState(userEmail || "rajiv@sudarshan.co.in");
+  const [email, setEmail] = useState(userEmail || "");
   const [pwd, setPwd] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -95,6 +95,9 @@ const Login = ({ onLogin, onForgot, userEmail }) => {
             <label className="field-label">Email or employee ID</label>
             <input
               className="input lg"
+              type="email"
+              autoComplete="username"
+              placeholder="you@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -120,6 +123,8 @@ const Login = ({ onLogin, onForgot, userEmail }) => {
               <input
                 className="input lg"
                 type={showPwd ? "text" : "password"}
+                autoComplete="current-password"
+                placeholder="Enter your password"
                 value={pwd}
                 onChange={(e) => setPwd(e.target.value)}
                 style={{ paddingRight: 36 }}
@@ -187,7 +192,13 @@ const Login = ({ onLogin, onForgot, userEmail }) => {
               setSubmitting(true);
               setError("");
               try {
-                await onLogin(email, pwd || "sudarshan123");
+                if (!email.trim()) {
+                  throw new Error("Email is required");
+                }
+                if (!pwd) {
+                  throw new Error("Password is required");
+                }
+                await onLogin(email.trim(), pwd);
               } catch (e) {
                 setError(e?.message || "Sign in failed");
               } finally {
@@ -540,4 +551,175 @@ const CompanySelect = ({
   );
 };
 
-export { Login, Forgot, CompanySelect };
+const ResetPassword = ({ userEmail, userName, onComplete, onLogout }) => {
+  const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showTemporary, setShowTemporary] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const renderPasswordField = (
+    label,
+    value,
+    onChange,
+    show,
+    setShow,
+    placeholder
+  ) => (
+    <div className="field">
+      <label className="field-label">{label}</label>
+      <div style={{ position: "relative" }}>
+        <input
+          className="input lg"
+          type={show ? "text" : "password"}
+          autoComplete="new-password"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ paddingRight: 36 }}
+        />
+        <button
+          type="button"
+          onClick={() => setShow(!show)}
+          style={{
+            position: "absolute",
+            right: 12,
+            top: 13,
+            background: "none",
+            border: "none",
+            padding: 0,
+            cursor: "pointer",
+            color: "var(--fg-subtle)",
+          }}
+        >
+          <Icon name={show ? "eyeOff" : "eye"} size={14} />
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="auth-shell">
+      <AuthAside />
+      <div className="auth-form-wrap">
+        <div className="auth-form">
+          <div className="auth-form-head">
+            <h1 className="auth-form-title">Set your password</h1>
+            <div className="auth-form-sub">
+              {userName ? (
+                <>
+                  Welcome, <strong>{userName}</strong>. Use the temporary password
+                  from your email, then choose a new password. You must complete this
+                  within 1 hour of account creation.
+                </>
+              ) : (
+                "Use your temporary password, then choose a new secure password."
+              )}
+            </div>
+          </div>
+
+          {userEmail && (
+            <div
+              style={{
+                marginBottom: 16,
+                padding: "10px 12px",
+                borderRadius: 8,
+                background: "var(--bg-sunken)",
+                border: "1px solid var(--border)",
+                fontSize: 12,
+                color: "var(--fg-muted)",
+              }}
+            >
+              Signed in as <strong style={{ color: "var(--fg)" }}>{userEmail}</strong>
+            </div>
+          )}
+
+          {renderPasswordField(
+            "Temporary password",
+            temporaryPassword,
+            setTemporaryPassword,
+            showTemporary,
+            setShowTemporary,
+            "From your welcome email"
+          )}
+          {renderPasswordField(
+            "New password",
+            newPassword,
+            setNewPassword,
+            showNew,
+            setShowNew,
+            "At least 8 characters"
+          )}
+          {renderPasswordField(
+            "Confirm new password",
+            confirmPassword,
+            setConfirmPassword,
+            showConfirm,
+            setShowConfirm,
+            "Re-enter new password"
+          )}
+
+          {error && (
+            <div
+              style={{ fontSize: 12, color: "var(--danger)", marginBottom: 8 }}
+            >
+              {error}
+            </div>
+          )}
+
+          <Btn
+            variant="primary"
+            size="lg"
+            className="block"
+            onClick={async () => {
+              setSubmitting(true);
+              setError("");
+              try {
+                if (!temporaryPassword || !newPassword || !confirmPassword) {
+                  throw new Error("All password fields are required");
+                }
+                if (newPassword.length < 8) {
+                  throw new Error("New password must be at least 8 characters");
+                }
+                if (newPassword !== confirmPassword) {
+                  throw new Error("New password and confirmation do not match");
+                }
+
+                const res = await fetch("/api/auth/reset-password", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    temporaryPassword,
+                    newPassword,
+                    confirmPassword,
+                  }),
+                });
+                const json = await res.json();
+                if (json.error) throw new Error(json.error);
+                onComplete?.(json.data?.next ?? "/select-company");
+              } catch (e) {
+                setError(e?.message || "Password reset failed");
+              } finally {
+                setSubmitting(false);
+              }
+            }}
+          >
+            {submitting ? "Updating…" : "Update password"}{" "}
+            <Icon name="arrowRight" size={14} />
+          </Btn>
+
+          <div className="auth-foot" style={{ marginTop: 16 }}>
+            <a onClick={onLogout} style={{ cursor: "pointer" }}>
+              Sign out
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export { Login, Forgot, CompanySelect, ResetPassword };

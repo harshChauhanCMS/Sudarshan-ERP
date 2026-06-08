@@ -1,8 +1,9 @@
 // @ts-nocheck
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { isGroupBrandRoute } from "@/lib/group-brand-routes";
+import { filterNavByPermissions } from "@/lib/nav-permissions";
 import { Icon } from "./icons";
 
 /* ============================================================
@@ -186,7 +187,24 @@ const Sidebar = ({
   setIsCollapsed,
   mobileOpen = false,
   onMobileClose,
+  permissions,
+  userName,
+  userRole,
 }) => {
+  const filteredNav = useMemo(
+    () => filterNavByPermissions(NAV, permissions),
+    [permissions]
+  );
+
+  const displayName = userName || "User";
+  const displayRole = userRole || "Signed in";
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
   const [collapsed, setCollapsed] = useState({});
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const toggle = (id) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
@@ -466,7 +484,7 @@ const Sidebar = ({
       </div>
 
       <nav className="sb-nav">
-        {NAV.map((section) => (
+        {filteredNav.map((section) => (
           <div
             key={section.id}
             className={`sb-section ${collapsed[section.id] ? "collapsed" : ""}`}
@@ -486,10 +504,10 @@ const Sidebar = ({
       </nav>
 
       <div className="sb-foot">
-        <div className="sb-foot-avatar">RM</div>
+        <div className="sb-foot-avatar">{initials || "U"}</div>
         <div className="sb-foot-info">
-          <div className="sb-foot-name">Rajiv Mehta</div>
-          <div className="sb-foot-role">Owner · Both companies</div>
+          <div className="sb-foot-name">{displayName}</div>
+          <div className="sb-foot-role">{displayRole}</div>
         </div>
         <button className="sb-foot-btn" title="Settings">
           <Icon name="settings" size={14} />

@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Employee from "@/lib/models/Employee";
-import User from "@/lib/models/User";
-import bcrypt from "bcryptjs";
-import nodemailer from "nodemailer";
-
-function generatePassword(length = 8) {
-  const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
-  let retVal = "";
-  for (let i = 0, n = charset.length; i < length; ++i) {
-    retVal += charset.charAt(Math.floor(Math.random() * n));
-  }
-  return retVal;
-}
+import { allocateHrmsEmployeeId } from "@/lib/hrms-employee-id";
+import {
+  employeeUniqueConflictMessage,
+  findEmployeeUniqueConflict,
+} from "@/lib/hrms-employee-uniqueness";
+import { provisionEmployeeLoginAndSendWelcomeEmail } from "@/lib/hrms-employee-welcome";
 
 export async function GET() {
   try {
@@ -30,9 +24,7 @@ export async function POST(req: Request) {
     await connectDB();
     const payload = await req.json();
 
-    // Basic required fields assertion
     const requiredFields = [
-      "employeeId",
       "fullName",
       "primaryContact",
       "department",
@@ -44,7 +36,11 @@ export async function POST(req: Request) {
     ];
 
     for (const field of requiredFields) {
-      if (!payload[field]) {
+      const value = payload[field];
+      const isEmpty =
+        value == null ||
+        (typeof value === "string" && !value.trim());
+      if (isEmpty) {
         return NextResponse.json(
           { error: `Missing required field: ${field}` },
           { status: 400 }
@@ -52,57 +48,52 @@ export async function POST(req: Request) {
       }
     }
 
-    // Check for unique employeeId
-    const existingEmployee = await Employee.findOne({ employeeId: payload.employeeId });
-    if (existingEmployee) {
+    const uniqueConflict = await findEmployeeUniqueConflict(payload);
+    if (uniqueConflict) {
       return NextResponse.json(
-        { error: `Employee ID ${payload.employeeId} already exists` },
+        { error: employeeUniqueConflictMessage(uniqueConflict) },
         { status: 409 }
       );
     }
 
-    const newEmployee = await Employee.create(payload);
+    const employeeId =
+      typeof payload.employeeId === "string" && payload.employeeId.trim()
+        ? payload.employeeId.trim().toUpperCase()
+        : await allocateHrmsEmployeeId();
 
-    const targetEmail = payload.officialEmail || payload.personalEmail;
-
-    if (targetEmail) {
-      const tempPassword = generatePassword();
-      const hashedPassword = bcrypt.hashSync(tempPassword, 10);
-      
-      const existingUser = await User.findOne({ email: targetEmail.toLowerCase() });
-      if (!existingUser) {
-        await User.create({
-          email: targetEmail.toLowerCase(),
-          password: hashedPassword,
-          requiresPasswordReset: true,
-          employeeId: newEmployee.employeeId
-        });
-
-        // Send Email
-        const transporter = nodemailer.createTransport({
-          service: 'gmail',
-          auth: {
-            user: process.env.EMAIL_ID,
-            pass: process.env.EMAIL_PASS
-          }
-        });
-
-        const mailOptions = {
-          from: process.env.EMAIL_ID,
-          to: targetEmail,
-          subject: 'Welcome to Sudarshan Group - Your Login Credentials',
-          text: `Hello ${payload.fullName},\n\nYour account has been created successfully.\n\nYour temporary password is: ${tempPassword}\n\nPlease log in and you will be prompted to reset your password.\n\nBest Regards,\nSudarshan Group HR`
-        };
-
-        try {
-          await transporter.sendMail(mailOptions);
-        } catch (mailErr) {
-          console.error("Failed to send email:", mailErr);
-        }
-      }
+    const existingEmployee = await Employee.findOne({ employeeId });
+    if (existingEmployee) {
+      return NextResponse.json(
+        { error: `Employee ID ${employeeId} already exists` },
+        { status: 409 }
+      );
     }
 
-    return NextResponse.json({ success: true, data: newEmployee }, { status: 201 });
+    const newEmployee = await Employee.create({ ...payload, employeeId });
+
+    const targetEmail = payload.officialEmail || payload.personalEmail;
+    let credentialsEmail: { sent: boolean; reason?: string } = {
+      sent: false,
+      reason: "no_email",
+    };
+
+    if (targetEmail) {
+      credentialsEmail = await provisionEmployeeLoginAndSendWelcomeEmail({
+        fullName: payload.fullName,
+        employeeId: newEmployee.employeeId,
+        email: targetEmail,
+        role: payload.department,
+      });
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: newEmployee,
+        credentialsEmail,
+      },
+      { status: 201 }
+    );
   } catch (error: any) {
     console.error("POST Employee API Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

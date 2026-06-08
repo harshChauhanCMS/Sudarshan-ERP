@@ -6,12 +6,17 @@ import { usePathname, useRouter } from "next/navigation";
 import { message } from "antd";
 import { ErpDataProvider, useErpData } from "@/context/erp-data-provider";
 import type { ErpData } from "@/lib/seed-data";
-import { Login, Forgot, CompanySelect } from "@/components/erp/auth";
+import { Login, Forgot, CompanySelect, ResetPassword } from "@/components/erp/auth";
 import { Sidebar, Topbar } from "@/components/layout";
 import { Btn } from "@/components/ui";
 import { Icon } from "@/components/erp/icons";
 import { renderErpRoute } from "@/components/erp/render-route";
 import { ERP_ROUTES, pathToRoute } from "@/lib/erp-routes";
+import {
+  canAccessRoute,
+  getDefaultLandingRoute,
+} from "@/lib/nav-permissions";
+import type { PermissionsMap } from "@/lib/permission-types";
 import { PageShell } from "@/components/layout/page-shell";
 import { sidebarBadges } from "@/lib/erp-stats";
 import {
@@ -162,7 +167,8 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   const route =
     pathname === "/login" ||
     pathname === "/forgot" ||
-    pathname === "/select-company"
+    pathname === "/select-company" ||
+    pathname === "/reset-password"
       ? pathname
       : pathname.startsWith("/hrms/") ||
           (ERP_ROUTES as readonly string[]).includes(pathname)
@@ -175,6 +181,9 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   const [sessionUser, setSessionUser] = useState<{
     email: string;
     name: string;
+    role: string;
+    permissions?: PermissionsMap;
+    mustResetPassword?: boolean;
   } | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(248);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -231,6 +240,24 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   }, [route, company, data.COMPANIES]);
 
   useEffect(() => {
+    if (sessionUser?.mustResetPassword && route !== "/reset-password") {
+      navigate("/reset-password");
+      return;
+    }
+  }, [sessionUser?.mustResetPassword, route, navigate]);
+
+  useEffect(() => {
+    if (!sessionUser?.permissions) return;
+    if (["/login", "/select-company", "/forgot", "/reset-password"].includes(route)) return;
+    if (canAccessRoute(route, sessionUser.permissions)) return;
+    const fallback = getDefaultLandingRoute(sessionUser.permissions);
+    if (fallback !== route) {
+      message.warning("You do not have access to that page.");
+      navigate(fallback);
+    }
+  }, [route, sessionUser, navigate]);
+
+  useEffect(() => {
     if (["/login", "/select-company", "/forgot"].includes(route)) {
       prevRouteRef.current = route;
       return;
@@ -282,15 +309,31 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   if (route === "/forgot" || pathname === "/forgot") {
     return <Forgot onBack={() => navigate("/login")} />;
   }
+  if (route === "/reset-password" || pathname === "/reset-password") {
+    return (
+      <ResetPassword
+        userEmail={sessionUser?.email}
+        userName={sessionUser?.name}
+        onComplete={(next) => {
+          setSessionUser((prev) =>
+            prev ? { ...prev, mustResetPassword: false } : prev
+          );
+          message.success("Password updated successfully.");
+          navigate(next ?? "/select-company");
+        }}
+        onLogout={handleLogout}
+      />
+    );
+  }
   if (route === "/select-company" || pathname === "/select-company") {
     return (
       <CompanySelect
         companies={data.COMPANIES}
         dataWarning={meta?.warning}
-        userEmail={sessionUser?.email ?? "rajiv@sudarshan.co.in"}
+        userEmail={sessionUser?.email}
         onSelect={(c) => {
           setCompany(c);
-          navigate("/dashboard/master");
+          navigate(getDefaultLandingRoute(sessionUser?.permissions));
         }}
         onLogout={handleLogout}
       />
@@ -335,6 +378,9 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
         setIsCollapsed={setIsSidebarCollapsed}
         mobileOpen={mobileSidebarOpen}
         onMobileClose={() => setMobileSidebarOpen(false)}
+        permissions={sessionUser?.permissions}
+        userName={sessionUser?.name}
+        userRole={sessionUser?.role}
       />
       <div className="main">
         <Topbar

@@ -7,6 +7,7 @@ const PUBLIC_PATHS = ["/login", "/forgot", "/mobile"];
 const PUBLIC_API = [
   "/api/auth/login",
   "/api/auth/forgot",
+  "/api/auth/reset-password",
   "/api/seed",
   "/api/bootstrap",
   "/api/integrations/biometric",
@@ -64,6 +65,21 @@ export async function middleware(request: NextRequest) {
     const login = new URL("/login", request.url);
     login.searchParams.set("from", pathname);
     return NextResponse.redirect(login);
+  }
+
+  if (
+    session.user?.mustResetPassword &&
+    pathname !== "/reset-password" &&
+    !pathname.startsWith("/api/auth/reset-password")
+  ) {
+    return NextResponse.redirect(new URL("/reset-password", request.url));
+  }
+
+  if (
+    !session.user?.mustResetPassword &&
+    pathname === "/reset-password"
+  ) {
+    return NextResponse.redirect(new URL("/select-company", request.url));
   }
 
   return res;

@@ -1,11 +1,14 @@
 import { getIronSession, SessionOptions } from "iron-session";
 import { cookies } from "next/headers";
+import type { PermissionsMap } from "@/lib/permission-types";
 
 export type SessionUser = {
   id: string;
   email: string;
   name: string;
   role: string;
+  permissions?: PermissionsMap;
+  mustResetPassword?: boolean;
 };
 
 export type SessionData = {

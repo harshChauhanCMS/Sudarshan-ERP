@@ -650,6 +650,11 @@
   max-width: 280px;
 }
 
+.arf-controls.ap-filters-controls--split-apply > .arf-item.ap-filters-search-field {
+  flex: 2 1 260px;
+  max-width: 360px;
+}
+
 .ap-filters-row-break {
   flex-basis: 100%;
   width: 0;
@@ -4649,4 +4654,806 @@ select.input {
     repeating-linear-gradient(90deg, transparent 0, transparent 39px, rgba(55,77,149,0.04) 39px, rgba(55,77,149,0.04) 40px),
     linear-gradient(135deg, #f5f5f1 0%, #ecedea 100%);
   border: 1px solid var(--border);
+}
+
+/* Dispatch dashboard — live fleet map + active vehicles */
+.dispatch-fleet-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  margin-bottom: 20px;
+}
+
+.dispatch-fleet-map,
+.dispatch-fleet-side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dispatch-fleet-map__body {
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+}
+
+.dispatch-fleet-map__canvas {
+  position: relative;
+  min-height: 320px;
+  height: 100%;
+}
+
+.dispatch-fleet-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.dispatch-fleet-map .card-head .card-title {
+  min-width: 0;
+}
+
+.dispatch-fleet-vehicles {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dispatch-fleet-vehicle {
+  cursor: pointer;
+  min-width: 0;
+}
+
+.dispatch-fleet-vehicle__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  min-width: 0;
+}
+
+.dispatch-fleet-vehicle__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-bottom: 6px;
+  min-width: 0;
+}
+
+.dispatch-fleet-vehicle__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--fg-subtle);
+  min-width: 0;
+}
+
+@media (max-width: 992px) {
+  .dispatch-fleet-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dispatch-fleet-map__canvas {
+    min-height: 280px;
+  }
+}
+
+/* ============================================================
+   HRMS — Employee profile / ID card
+   ============================================================ */
+.emp-details-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  padding-bottom: 48px;
+}
+
+.emp-details-page__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.emp-profile-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .emp-profile-layout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+}
+
+.emp-profile-form {
+  flex: 1;
+  min-width: 0;
+}
+
+.emp-id-card {
+  width: 100%;
+  max-width: 300px;
+  flex-shrink: 0;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+@media (min-width: 1024px) {
+  .emp-id-card {
+    width: 300px;
+  }
+}
+
+.emp-id-card__header {
+  height: 68px;
+  background: linear-gradient(135deg, #374d95 0%, #2a3c74 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+}
+
+.emp-id-card__logo {
+  display: block;
+  height: 18px;
+  width: auto;
+  max-width: 110px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+  opacity: 0.92;
+}
+
+.emp-id-card__body {
+  padding: 0 18px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.emp-id-card__avatar {
+  margin-top: -40px;
+  margin-bottom: 10px;
+}
+
+.emp-id-card__avatar .ant-avatar {
+  border: 4px solid #fff;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.1);
+}
+
+.emp-id-card__name {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--fg);
+  line-height: 1.25;
+  text-align: center;
+}
+
+.emp-id-card__role {
+  margin: 8px 0 0;
+  display: inline-block;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  line-height: 1.4;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emp-id-card__details {
+  width: 100%;
+  margin: 18px 0 0;
+  padding: 0;
+}
+
+.emp-id-card__row {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+}
+
+.emp-id-card__row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.emp-id-card__label {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-muted);
+  text-align: left;
+  line-height: 1.3;
+}
+
+.emp-id-card__value {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+  text-align: right;
+  line-height: 1.35;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emp-id-card__value--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: -0.02em;
+}
+
+.emp-id-card__row--status .emp-id-card__value {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.emp-id-card__barcode {
+  background: var(--bg-subtle, #fafafa);
+  border-top: 1px solid var(--border);
+  padding: 10px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.emp-id-card__barcode-lines {
+  display: flex;
+  gap: 2px;
+  opacity: 0.35;
+  align-items: flex-end;
+}
+
+.emp-id-card__barcode-lines span {
+  display: block;
+  height: 26px;
+  background: #18181b;
+  flex-shrink: 0;
+}
+
+/* Employee profile — form sections & compact inputs */
+.emp-form-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-top: 24px;
+  padding-top: 8px;
+}
+
+.emp-form-collapse {
+  background: transparent !important;
+  border: none !important;
+}
+
+.emp-form-collapse > .ant-collapse-item {
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+  margin-bottom: 12px;
+  overflow: hidden;
+  background: var(--bg-elev);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.emp-form-collapse > .ant-collapse-item:last-child {
+  margin-bottom: 0;
+}
+
+.emp-form-collapse .ant-collapse-header {
+  min-height: 44px !important;
+  align-items: center !important;
+  padding: 11px 18px !important;
+  background: var(--bg-sunken) !important;
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+}
+
+.emp-form-collapse .ant-collapse-item-active > .ant-collapse-header {
+  border-bottom-color: var(--border);
+}
+
+.emp-form-collapse .ant-collapse-content {
+  border-top: none !important;
+  background: var(--bg-elev) !important;
+}
+
+.emp-form-collapse .ant-collapse-content-box {
+  padding: 16px 18px 18px !important;
+}
+
+.emp-form-collapse__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: -0.01em;
+}
+
+.emp-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 20px;
+  align-items: start;
+}
+
+/* Equal label band so inputs align across columns */
+.emp-form-grid > .ant-form-item {
+  min-width: 0;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.emp-form-grid > .ant-form-item .ant-form-item-label {
+  min-height: 38px;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 0 6px;
+}
+
+.emp-form-grid > .ant-form-item .ant-form-item-label > label {
+  white-space: normal;
+  line-height: 1.35;
+  height: auto !important;
+  width: 100%;
+}
+
+.emp-form-grid > .ant-form-item .ant-form-item-control {
+  width: 100%;
+}
+
+.emp-form-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .emp-form-grid,
+  .emp-form-grid--2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.emp-form-grid-divider {
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.emp-form-address-col > .ant-form-item {
+  margin-bottom: 10px;
+}
+
+.emp-form-address-col > .ant-form-item .ant-form-item-label {
+  min-height: 38px;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 0 6px;
+}
+
+.emp-form-address-col > .ant-form-item .ant-form-item-label > label {
+  width: 100%;
+  height: auto !important;
+  line-height: 1.35;
+}
+
+.emp-form-address-col > .ant-form-item.emp-form-address-pin {
+  margin-bottom: 0;
+}
+
+.emp-form-address-col > .ant-form-item.emp-form-address-pin .ant-form-item-label {
+  padding-top: 0;
+}
+
+.emp-form-address-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.emp-form-address-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.emp-form-subpanel {
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-top: 8px;
+}
+
+.emp-form-subpanel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.emp-form-subpanel__head-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg);
+}
+
+.emp-form-subpanel__head-main .anticon {
+  color: var(--primary);
+  font-size: 14px;
+}
+
+.emp-form-subpanel__badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.emp-form-note {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #92400e;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.emp-form-note strong {
+  color: #78350f;
+}
+
+.emp-form-note .anticon {
+  color: #d97706;
+  font-size: 14px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.emp-form-note__hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+
+.emp-form-compensation {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.emp-compensation-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .emp-compensation-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.emp-compensation-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-elev);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.emp-compensation-card:hover:not(.emp-compensation-card--disabled) {
+  border-color: var(--border-strong);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.emp-compensation-card--selected {
+  border-color: #374d95;
+  background: #f8faff;
+  box-shadow: 0 0 0 1px #374d95;
+}
+
+.emp-compensation-card--disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.emp-compensation-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.emp-compensation-card__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+  line-height: 1.35;
+}
+
+.emp-compensation-card__desc {
+  font-size: 11px;
+  color: var(--fg-muted);
+  line-height: 1.45;
+}
+
+/* Compact controls inside employee profile form */
+.emp-details-page .ant-form-item {
+  margin-bottom: 10px;
+}
+
+.emp-details-page .ant-form-item.emp-form-no-optional .ant-form-item-required-mark {
+  display: none !important;
+}
+
+.emp-details-page .ant-form-item-label > label {
+  font-size: 12px;
+  height: auto;
+  color: var(--fg-muted);
+}
+
+.emp-details-page .ant-input,
+.emp-details-page .ant-input-affix-wrapper,
+.emp-details-page .ant-input-number,
+.emp-details-page .ant-input-number-input-wrap,
+.emp-details-page .ant-select-single .ant-select-selector,
+.emp-details-page .ant-picker {
+  min-height: 32px !important;
+  height: 32px !important;
+  font-size: 13px;
+}
+
+.emp-details-page .ant-input-number-input {
+  height: 30px;
+}
+
+.emp-details-page .ant-select-single .ant-select-selector {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.emp-details-page .ant-select-single .ant-select-selection-item,
+.emp-details-page .ant-select-single .ant-select-selection-placeholder {
+  line-height: 30px !important;
+}
+
+.emp-details-page .ant-picker .ant-picker-input > input {
+  font-size: 13px;
+}
+
+.emp-details-page .ant-input-textarea textarea {
+  font-size: 13px;
+  min-height: 64px !important;
+}
+
+.emp-details-page .ant-select-multiple .ant-select-selector {
+  min-height: 32px !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+}
+
+/* Employee add — staged wizard */
+.emp-add-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.emp-add-steps-panel {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  width: 100%;
+}
+
+.emp-add-steps-panel__head {
+  padding: 11px 18px;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.emp-add-steps-panel__badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.emp-add-steps-panel__body {
+  padding: 16px 20px 14px;
+  overflow-x: auto;
+}
+
+.emp-add-steps-panel--horizontal .ant-steps {
+  width: 100%;
+}
+
+.emp-add-steps-panel--horizontal .ant-steps-item {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.emp-add-steps-panel--horizontal .ant-steps-item-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.emp-add-steps-panel--horizontal .ant-steps-item-title {
+  font-size: 12px !important;
+  line-height: 1.3 !important;
+  white-space: nowrap;
+}
+
+.emp-add-steps-panel .ant-steps-item-icon {
+  width: 28px !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  font-size: 12px !important;
+}
+
+@media (max-width: 900px) {
+  .emp-add-steps-panel--horizontal .ant-steps-item-title {
+    font-size: 11px !important;
+  }
+}
+
+.emp-form-step-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  min-height: 320px;
+  width: 100%;
+}
+
+.emp-form-step-card__head {
+  padding: 14px 20px;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--border);
+}
+
+.emp-form-step-card__step-num {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--primary);
+  margin-bottom: 4px;
+}
+
+.emp-form-step-card__title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--fg);
+  margin: 0;
+  line-height: 1.25;
+}
+
+.emp-form-step-card__desc {
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin: 5px 0 0;
+  line-height: 1.45;
+}
+
+.emp-form-step-card__body {
+  padding: 18px 20px 22px;
+}
+
+.emp-form-grid__full {
+  grid-column: 1 / -1;
+}
+
+.emp-add-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+}
+
+.emp-add-main--full {
+  max-width: 100%;
+}
+
+.emp-add-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 14px 18px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.emp-id-card--preview .emp-id-card__avatar .ant-avatar {
+  background: #e0e7ff !important;
+  color: #4338ca !important;
+}
+
+.emp-id-card__value--placeholder {
+  color: var(--fg-muted);
+  font-weight: 500;
+  font-style: italic;
 }

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Employee from "@/lib/models/Employee";
+import {
+  employeeUniqueConflictMessage,
+  findEmployeeUniqueConflict,
+} from "@/lib/hrms-employee-uniqueness";
 
 export async function GET(
   req: Request,
@@ -72,6 +76,14 @@ export async function PUT(
           { status: 400 }
         );
       }
+    }
+
+    const uniqueConflict = await findEmployeeUniqueConflict(payload, id);
+    if (uniqueConflict) {
+      return NextResponse.json(
+        { error: employeeUniqueConflictMessage(uniqueConflict) },
+        { status: 409 }
+      );
     }
 
     const updatedEmployee = await Employee.findOneAndUpdate(

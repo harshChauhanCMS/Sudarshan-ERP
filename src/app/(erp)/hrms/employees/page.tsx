@@ -45,6 +45,7 @@ interface Employee {
 }
 
 const DEFAULT_FILTERS: EmployeeFilterValues = {
+  search: "",
   department: "all",
   role: "all",
   shift: "all",
@@ -267,7 +268,28 @@ export default function EmployeesPage() {
   }, [employees]);
 
   const dataSource = useMemo(() => {
+    const searchQuery = filters.search.trim().toLowerCase();
+
     return employees.filter((emp) => {
+      if (searchQuery) {
+        const haystack = [
+          emp.id,
+          emp.name,
+          emp.phone,
+          emp.department,
+          emp.role,
+          emp.locationUnit,
+          emp.empType,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        if (!haystack.includes(searchQuery)) {
+          return false;
+        }
+      }
+
       if (
         appliedFilters.department !== "all" &&
         emp.department !== appliedFilters.department
@@ -303,7 +325,7 @@ export default function EmployeesPage() {
       }
       return true;
     });
-  }, [employees, appliedFilters]);
+  }, [employees, filters.search, appliedFilters]);
 
   const handleExport = () => {
     const headers = [
