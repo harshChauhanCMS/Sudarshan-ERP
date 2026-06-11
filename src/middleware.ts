@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getIronSession } from "iron-session";
-import { sessionOptions, type SessionData } from "@/lib/session";
+import { getSessionOptions, type SessionData } from "@/lib/session";
 import {
   canAccessRoute,
   getDefaultLandingRoute,
@@ -48,7 +48,7 @@ export async function middleware(request: NextRequest) {
     const session = await getIronSession<SessionData>(
       request,
       res,
-      sessionOptions,
+      getSessionOptions(),
     );
     if (!session.isLoggedIn) {
       return NextResponse.json(
@@ -63,7 +63,7 @@ export async function middleware(request: NextRequest) {
   const session = await getIronSession<SessionData>(
     request,
     res,
-    sessionOptions,
+    getSessionOptions(),
   );
 
   if (!session.isLoggedIn) {

@@ -26,17 +26,25 @@ function resolveSessionPassword(): string {
   return "sudarshan-dev-session-secret-min-32-chars";
 }
 
-export const sessionOptions: SessionOptions = {
-  password: resolveSessionPassword(),
-  cookieName: "sudarshan_session",
-  cookieOptions: {
-    secure: process.env.NODE_ENV === "production",
-    httpOnly: true,
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 7,
-  },
-};
+let cachedSessionOptions: SessionOptions | null = null;
+
+/** Resolved lazily so `next build` does not require SESSION_SECRET at import time. */
+export function getSessionOptions(): SessionOptions {
+  if (!cachedSessionOptions) {
+    cachedSessionOptions = {
+      password: resolveSessionPassword(),
+      cookieName: "sudarshan_session",
+      cookieOptions: {
+        secure: process.env.NODE_ENV === "production",
+        httpOnly: true,
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7,
+      },
+    };
+  }
+  return cachedSessionOptions;
+}
 
 export async function getSession() {
-  return getIronSession<SessionData>(await cookies(), sessionOptions);
+  return getIronSession<SessionData>(await cookies(), getSessionOptions());
 }
