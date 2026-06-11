@@ -97,7 +97,6 @@ const NAV = [
         icon: "user",
         items: [
           { id: "/hrms/employees", label: "Employees", icon: "user" },
-          { id: "/hrms/attendance", label: "Attendance", icon: "clock" },
           { id: "/hrms/salary", label: "Salary", icon: "money" },
         ],
       },
@@ -231,8 +230,6 @@ const Sidebar = ({
     if (
       route === "/hrms/employees" ||
       route?.startsWith("/hrms/employees/") ||
-      route === "/hrms/attendance" ||
-      route?.startsWith("/hrms/attendance/") ||
       route === "/hrms/salary" ||
       route?.startsWith("/hrms/salary/")
     ) {
@@ -569,7 +566,6 @@ const breadcrumbsFor = (route) => {
     "/dispatch": ["Operations", "Dispatch & Tracking"],
     "/hrms/employees": ["People", "HR Management", "Employees"],
     "/hrms/employees/add": ["People", "HR Management", "Employees", "Add employee"],
-    "/hrms/attendance": ["People", "HR Management", "Attendance"],
     "/hrms/notifications": ["People", "HR Management", "Notifications"],
     "/hrms/reports": ["People", "Reports"],
     "/hrms/reports/attendance": ["People", "Reports", "Attendance Overview"],

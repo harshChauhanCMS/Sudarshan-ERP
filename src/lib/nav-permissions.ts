@@ -45,7 +45,6 @@ const ROUTE_RULES: RouteRule[] = (
     { prefix: "/hrms/holidays", module: "hr" },
     { prefix: "/hrms/employees", module: "hr" },
     { prefix: "/hrms/notifications", module: "hr" },
-    { prefix: "/hrms/attendance", module: "hr" },
     { prefix: "/hrms", module: "hr" },
     { prefix: "/dashboard", module: "dashboard" },
   ] satisfies RouteRule[]
@@ -147,7 +146,6 @@ export function getDefaultLandingRoute(
   if (isManagerRole(role)) {
     const managerCandidates = [
       "/hrms/leave/approval",
-      "/hrms/attendance",
       "/hrms/employees",
       "/hrms/leave/record",
       "/hrms/reports/attendance",
@@ -160,7 +158,6 @@ export function getDefaultLandingRoute(
   const candidates = [
     "/dashboard/master",
     "/hrms/employees",
-    "/hrms/attendance",
     "/procurement/po",
     "/inventory/raw-material",
     "/orders",

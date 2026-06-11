@@ -24,7 +24,7 @@ const NotificationSchema = new Schema(
     employeeId: { type: String, trim: true, index: true },
     employeeName: { type: String, trim: true },
     message: { type: String, required: true, trim: true },
-    target: { type: String, trim: true, default: "/hrms/attendance" },
+    target: { type: String, trim: true, default: "/hrms/reports/attendance" },
     read: { type: Boolean, default: false, index: true },
     punchedAt: { type: Date },
   },
