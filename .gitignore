@@ -20,6 +20,9 @@
 # production
 /build
 
+# mobile app (separate Expo project)
+/sudarshan-mobile
+
 # misc
 .DS_Store
 *.pem

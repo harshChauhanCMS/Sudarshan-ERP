@@ -1,7 +1,7 @@
 import { connectDB } from "@/lib/db";
-import Employee from "@/lib/models/Employee";
 import { ok, fail } from "@/lib/api-response";
-import { getSession } from "@/lib/session";
+import { getUserFromRequest } from "@/lib/api-request-auth";
+import { resolveSessionEmployee } from "@/lib/resolve-session-employee";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import { enrichLocation } from "@/lib/reverse-geocode";
 import { notifyAttendancePunch } from "@/lib/hrms-punch-notifications";
@@ -39,8 +39,8 @@ function validateLocation(loc: unknown): { value: LocationPayload } | { error: s
 }
 
 export async function POST(request: Request) {
-  const session = await getSession();
-  if (!session.isLoggedIn || !session.user?.email) return fail("Unauthorized", 401);
+  const user = await getUserFromRequest(request);
+  if (!user?.email) return fail("Unauthorized", 401);
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") return fail("Invalid body", 400);
@@ -64,10 +64,8 @@ export async function POST(request: Request) {
   try {
     await connectDB();
 
-    const email = session.user.email.trim().toLowerCase();
-    const employee = await Employee.findOne({
-      $or: [{ officialEmail: email }, { personalEmail: email }],
-    }).lean();
+    const email = user.email.trim().toLowerCase();
+    const employee = await resolveSessionEmployee(user);
 
     const now = new Date();
     const start = new Date(now);
@@ -96,7 +94,7 @@ export async function POST(request: Request) {
 
     const created = await AttendancePunch.create({
       employeeId: employee?.employeeId,
-      userId: session.user.id,
+      userId: user.id,
       userEmail: email,
       punchType: "in",
       punchedAt: now,

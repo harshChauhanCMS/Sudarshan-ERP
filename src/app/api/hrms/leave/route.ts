@@ -17,6 +17,7 @@ import {
   canApplyLeaveOnBehalf,
   resolveSessionEmployee,
 } from "@/lib/resolve-session-employee";
+import { getUserFromRequest } from "@/lib/api-request-auth";
 import { getSession } from "@/lib/session";
 
 export async function GET(request: Request) {
@@ -88,8 +89,8 @@ async function getLeaveUsageForYear(employeeId: string, year: number) {
 }
 
 export async function POST(request: Request) {
-  const session = await getSession();
-  if (!session.isLoggedIn || !session.user?.email) return fail("Unauthorized", 401);
+  const user = await getUserFromRequest(request);
+  if (!user?.email) return fail("Unauthorized", 401);
 
   try {
     await connectDB();
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
     let employeeRecord: Awaited<ReturnType<typeof resolveSessionEmployee>> = null;
 
     if (selfApply) {
-      employeeRecord = await resolveSessionEmployee(session.user);
+      employeeRecord = await resolveSessionEmployee(user);
       if (!employeeRecord) {
         return fail(
           "No employee profile is linked to your login. Contact HR to link your official email or employee ID.",
@@ -120,29 +121,29 @@ export async function POST(request: Request) {
       const requestedId =
         typeof body.employeeId === "string" && body.employeeId.trim()
           ? body.employeeId.trim()
-          : session.user.employeeId
-            ? String(session.user.employeeId)
+          : user.employeeId
+            ? String(user.employeeId)
             : "";
 
       if (!requestedId) {
         return fail("employeeId is required.", 400);
       }
 
-      const selfEmployee = await resolveSessionEmployee(session.user);
+      const selfEmployee = await resolveSessionEmployee(user);
       const selfEmployeeId = selfEmployee
         ? String(selfEmployee.employeeId)
-        : session.user.employeeId
-          ? String(session.user.employeeId)
+        : user.employeeId
+          ? String(user.employeeId)
           : "";
 
       const applyingForSelf =
         selfEmployeeId && String(selfEmployeeId) === String(requestedId);
 
       if (!applyingForSelf) {
-        if (!canApplyLeaveOnBehalf(session.user?.role)) {
+        if (!canApplyLeaveOnBehalf(user?.role)) {
           return fail("You can only apply leave for your own account.", 403);
         }
-        if (isManagerRole(session.user?.role)) {
+        if (isManagerRole(user?.role)) {
           return fail("Managers cannot apply leave on behalf of employees.", 403);
         }
       }
