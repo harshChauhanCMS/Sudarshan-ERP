@@ -128,7 +128,7 @@ const SAMPLE_EMPLOYEES: SeedEmployee[] = [
     castCategory: "OBC",
     primaryContact: "9876500102",
     personalEmail: "priya.verma.demo@sudarshan.co.in",
-    officialEmail: "priya.verma@sudarshan.co.in",
+    officialEmail: "priya@sudarshan.co.in",
     currentAddress: "45, Ashok Nagar",
     currentStatePin: "Rajasthan — 313002",
     permanentAddress: "45, Ashok Nagar",

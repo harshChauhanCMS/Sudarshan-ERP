@@ -45,7 +45,6 @@ const Btn = ({
 const Badge = ({ tone = "default", dot, children, sq, className = "" }) => {
   const classes = ["badge"];
   if (tone !== "default") classes.push(tone);
-  if (dot) classes.push("dot");
   if (sq) classes.push("sq");
   if (className) classes.push(className);
   return (
@@ -154,22 +153,32 @@ const Kpi = ({ icon, label, value, unit, delta, deltaLabel, spark, sparkColor, t
    MODAL
    ============================================================ */
 const Modal = ({ open, onClose, title, sub, footer, children, wide }) => {
+  const titleId = "erp-modal-title";
+  const subId = sub ? "erp-modal-sub" : undefined;
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="modal-mask" onClick={onClose}>
-      <div className={`modal ${wide ? "wide" : ""}`} onClick={(e) => e.stopPropagation()}>
+    <div className="modal-mask" onClick={onClose} role="presentation">
+      <div
+        className={`modal ${wide ? "wide" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={subId}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
           <div>
-            <h3 className="modal-title">{title}</h3>
-            {sub && <div className="modal-sub">{sub}</div>}
+            <h3 className="modal-title" id={titleId}>{title}</h3>
+            {sub && <div className="modal-sub" id={subId}>{sub}</div>}
           </div>
-          <button className="tb-iconbtn" onClick={onClose}>
+          <button type="button" className="tb-iconbtn" onClick={onClose} aria-label="Close dialog">
             <Icon name="x" size={16} />
           </button>
         </div>

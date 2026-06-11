@@ -3,10 +3,19 @@ import { connectDB } from "@/lib/db";
 import { ok, fail } from "@/lib/api-response";
 import SalarySheet from "@/lib/models/SalarySheet";
 import { getSession } from "@/lib/session";
+import { canManagePayroll } from "@/lib/hrms-access";
+
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const ALLOWED_MIME = new Set([
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "application/octet-stream",
+]);
 
 export async function POST(request: Request) {
   const session = await getSession();
-  if (!session.isLoggedIn) return fail("Unauthorized", 401);
+  if (!session.isLoggedIn || !session.user) return fail("Unauthorized", 401);
+  if (!canManagePayroll(session.user)) return fail("Forbidden", 403);
 
   try {
     await connectDB();
@@ -16,6 +25,19 @@ export async function POST(request: Request) {
     const cycle = formData.get("cycle") as string | null;
 
     if (!file) return fail("file is required", 400);
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return fail("File must be 5 MB or smaller", 400);
+    }
+    const mime = file.type || "";
+    const name = file.name?.toLowerCase() ?? "";
+    if (
+      mime &&
+      !ALLOWED_MIME.has(mime) &&
+      !name.endsWith(".xlsx") &&
+      !name.endsWith(".xls")
+    ) {
+      return fail("Only Excel files (.xlsx, .xls) are allowed", 400);
+    }
     if (!cycle || !/^\d{4}-\d{2}$/.test(cycle)) return fail("cycle (YYYY-MM) is required", 400);
 
     // Dynamically import xlsx so it only loads server-side

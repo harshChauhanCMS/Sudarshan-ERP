@@ -67,6 +67,18 @@ export function nextEmployeeId(employees: WithId[]) {
   return `E-${max + 1}`;
 }
 
+/** Next HRMS employee code (EMP-3001, EMP-3011, …) from existing records */
+export function nextHrmsEmployeeId(employees: { employeeId?: string }[]) {
+  const floor = 3000;
+  let max = floor;
+  for (const e of employees) {
+    const id = (e.employeeId ?? "").trim().toUpperCase();
+    const m = id.match(/^EMP-(\d+)$/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return `EMP-${max + 1}`;
+}
+
 export function nextInvoiceId(invoices: WithId[]) {
   const n = invoices.length + 1;
   const stamp = String(Date.now()).slice(-4);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, Select, Badge } from "antd";
+import { Button, Select, Badge, message } from "antd";
 import {
   LoginOutlined,
   LogoutOutlined,
@@ -19,6 +19,7 @@ import {
   useAttendancePunch,
   type WorkSite,
 } from "@/hooks/use-attendance-punch";
+import { PUNCH_IN_LATE_ABSENT_MESSAGE } from "@/lib/hrms-shift-utils";
 
 type TodayRow = {
   id: string;
@@ -38,6 +39,7 @@ export default function AttendancePunchPage() {
   const [draftCompanyId, setDraftCompanyId] = useState<string>("");
   const [draftWorkSite, setDraftWorkSite] = useState<WorkSite>("office");
   const [myRow, setMyRow] = useState<TodayRow | null>(null);
+  const [punchInBlocked, setPunchInBlocked] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const companies = data.COMPANIES;
@@ -71,6 +73,7 @@ export default function AttendancePunchPage() {
       if (res.ok && !json?.error) {
         const rows: TodayRow[] = json.data?.rows ?? [];
         setMyRow(rows[0] ?? null);
+        setPunchInBlocked(Boolean(json.data?.meta?.punchInBlocked));
       }
     } catch {
       /* non-blocking */
@@ -107,6 +110,13 @@ export default function AttendancePunchPage() {
   const canPunchOut = myRow?.status === "In";
 
   const handlePunch = async (type: "in" | "out") => {
+    if (type === "in" && punchInBlocked) {
+      message.error({
+        content: PUNCH_IN_LATE_ABSENT_MESSAGE,
+        duration: 6,
+      });
+      return;
+    }
     const ok = await punch(type, workSite);
     if (ok) await loadToday();
   };
@@ -184,6 +194,11 @@ export default function AttendancePunchPage() {
               <div className="ap-punch-card__time">
                 {punchInTime ? punchInTime.format("HH:mm") : "—"}
               </div>
+              {punchInBlocked && canPunchIn ? (
+                <p className="ap-punch-card__warning">
+                  Absent marked for today — late by 4+ hours. Contact HR.
+                </p>
+              ) : null}
               <Button
                 type="primary"
                 size="large"

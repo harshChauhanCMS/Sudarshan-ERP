@@ -2,6 +2,8 @@ import { connectDB } from "@/lib/db";
 import Employee from "@/lib/models/Employee";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import { ok, fail } from "@/lib/api-response";
+import { getSession } from "@/lib/session";
+import { filterRowsByHrScope, resolveHrDataScope } from "@/lib/hrms-access";
 import { enrichLocation, shortAddressFromLocation, type GeoLocation } from "@/lib/reverse-geocode";
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
@@ -75,6 +77,9 @@ async function enrichPunchLocations(punches: any[]) {
 
 export async function GET(request: Request) {
   try {
+    const session = await getSession();
+    if (!session.isLoggedIn || !session.user) return fail("Unauthorized", 401);
+
     await connectDB();
 
     const url = new URL(request.url);
@@ -199,7 +204,25 @@ export async function GET(request: Request) {
       byPersonDay.set(rowKey, cur);
     }
 
-    const rows = Array.from(byPersonDay.values())
+    const dataScope = await resolveHrDataScope(session.user);
+
+    let dayRows = Array.from(byPersonDay.values());
+    const scopedDayRows = dayRows
+      .filter((p) => p.employeeId)
+      .map((p) => ({ employeeId: String(p.employeeId), row: p }));
+    const allowedIds = new Set(
+      filterRowsByHrScope(
+        scopedDayRows.map((x) => ({ employeeId: x.employeeId })),
+        dataScope,
+      ).map((x) => x.employeeId),
+    );
+    if (dataScope.mode !== "all") {
+      dayRows = dayRows.filter(
+        (p) => p.employeeId && allowedIds.has(String(p.employeeId)),
+      );
+    }
+
+    const rows = dayRows
       .map((p) => {
         const employee = p.employeeId
           ? byEmployeeId.get(String(p.employeeId))

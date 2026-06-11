@@ -5,4 +5,8 @@ export const HRMS_BACK = {
   employees: { backLabel: "Employees", backHref: "/hrms/employees" },
   salary: { backLabel: "Salary hub", backHref: "/hrms/salary" },
   leave: { backLabel: "Leave hub", backHref: "/hrms/leave/record" },
+  notifications: {
+    backLabel: "Dashboard",
+    backHref: "/dashboard/master",
+  },
 } as const;

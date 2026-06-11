@@ -7,10 +7,8 @@ import {
   InputNumber,
   Select,
   DatePicker,
-  Radio,
   Checkbox,
   Button,
-  Space,
   ConfigProvider,
   message,
   Steps,
@@ -19,14 +17,25 @@ import {
   SaveOutlined,
   SecurityScanOutlined,
   CalculatorOutlined,
-  LockOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/common/PageHeader";
+import CompensationCategoryPicker from "@/components/hrms/CompensationCategoryPicker";
 import NumericInput from "@/components/common/NumericInput";
 import { HRMS_BACK } from "@/lib/hrms-nav";
+import {
+  disableEmployeeDobUnder18,
+  employeeMinAgeDobRule,
+  latestAllowedEmployeeDob,
+} from "@/lib/hrms-dob";
+import {
+  departmentSkipsReportingManager,
+  EMPLOYEE_EXPERIENCE_OPTIONS,
+  EMPLOYEE_QUALIFICATION_OPTIONS,
+} from "@/lib/hrms-employee-options";
+import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
 
 const DRAFT_KEY = "hrms_employee_draft";
 
@@ -37,48 +46,113 @@ const EMPLOYEE_COMPANY_OPTIONS = [
 
 const digitsOnlyRule = { pattern: /^\d+$/, message: "Numbers only" };
 
+const STEP_META = [
+  {
+    title: "Profile Details",
+    description:
+      "Personal information, DOB and background — employee ID is assigned automatically",
+  },
+  {
+    title: "Contact & Address",
+    description: "Phone numbers, email and residential address",
+  },
+  {
+    title: "Identity & Bank",
+    description: "Aadhar, PAN, PF/UAN and bank account",
+  },
+  {
+    title: "Employment",
+    description: "Department, designation, company access and joining",
+  },
+  {
+    title: "Shift Assignment",
+    description: "Shift mode, working hours and weekly off",
+  },
+  {
+    title: "Salary Structure",
+    description: "Monthly CTC or daily wage compensation",
+  },
+];
+
 export default function AddEmployeePage() {
   const router = useRouter();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
-  const [compensationType, setCompensationType] = useState("Monthly CTC");
   const [messageApi, contextHolder] = message.useMessage();
-  const [departmentOptions, setDepartmentOptions] = useState<{ value: string; label: string }[]>([]);
+  const compensationType =
+    Form.useWatch("compensationType", form) ?? "Monthly CTC";
+  const department = Form.useWatch("department", form);
+  const showReportingManager = !departmentSkipsReportingManager(department);
+  const [departmentOptions, setDepartmentOptions] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const [reportingManagerOptions, setReportingManagerOptions] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const [nextEmployeeId, setNextEmployeeId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!showReportingManager) {
+      form.setFieldValue("reportingManager", undefined);
+    }
+  }, [showReportingManager, form]);
+
+  useEffect(() => {
+    fetch("/api/hrms/employees/next-id")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.employeeId) setNextEmployeeId(d.employeeId);
+      })
+      .catch(() => {});
+
     fetch("/api/system/roles")
       .then((r) => r.json())
       .then((d) => {
         if (d.success) {
-          setDepartmentOptions(d.data.map((role: any) => ({ value: role.roleKey, label: role.label })));
+          setDepartmentOptions(
+            d.data.map((role: any) => ({
+              value: role.roleKey,
+              label: role.label,
+            })),
+          );
         }
       })
       .catch(() => {});
-      
+
+    fetch("/api/hrms/employees")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && Array.isArray(d.data)) {
+          setReportingManagerOptions(
+            d.data.map((emp: { employeeId: string; fullName: string }) => ({
+              value: formatReportingManagerLabel(emp.employeeId, emp.fullName),
+              label: formatReportingManagerLabel(emp.employeeId, emp.fullName),
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+
     // Load draft if it exists
     const draft = localStorage.getItem(DRAFT_KEY);
     if (draft) {
       try {
         const parsedDraft = JSON.parse(draft);
+        delete parsedDraft.employeeId;
         if (parsedDraft.dob) parsedDraft.dob = dayjs(parsedDraft.dob);
-        if (parsedDraft.dateJoining) parsedDraft.dateJoining = dayjs(parsedDraft.dateJoining);
-        if (parsedDraft.dateConfirmation) parsedDraft.dateConfirmation = dayjs(parsedDraft.dateConfirmation);
-        
+        if (parsedDraft.dateJoining)
+          parsedDraft.dateJoining = dayjs(parsedDraft.dateJoining);
+        if (parsedDraft.dateConfirmation)
+          parsedDraft.dateConfirmation = dayjs(parsedDraft.dateConfirmation);
+
         form.setFieldsValue(parsedDraft);
-        if (parsedDraft.compensationType) {
-          setCompensationType(parsedDraft.compensationType);
-        }
         messageApi.info("Draft loaded successfully.");
       } catch (e) {
         console.error("Failed to parse draft", e);
       }
     }
   }, []);
-
-  const handleCompensationTypeChange = (e: any) => {
-    setCompensationType(e.target.value);
-  };
 
   const handleAnnualCtcChange = (value: number | null) => {
     if (value) {
@@ -100,14 +174,27 @@ export default function AddEmployeePage() {
     }
   };
 
-  const onFinish = async (values: any) => {
+  const onFinish = async () => {
     setLoading(true);
 
+    const values = form.getFieldsValue(true);
+    const { employeeId: _omit, ...rest } = values;
     const formattedValues = {
-      ...values,
+      ...rest,
+      reportingManager: departmentSkipsReportingManager(values.department)
+        ? ""
+        : values.reportingManager,
+      fullName:
+        typeof values.fullName === "string"
+          ? values.fullName.trim()
+          : values.fullName,
       dob: values.dob ? values.dob.format("DD/MM/YYYY") : undefined,
-      dateJoining: values.dateJoining ? values.dateJoining.format("DD/MM/YYYY") : undefined,
-      dateConfirmation: values.dateConfirmation ? values.dateConfirmation.format("DD/MM/YYYY") : undefined,
+      dateJoining: values.dateJoining
+        ? values.dateJoining.format("DD/MM/YYYY")
+        : undefined,
+      dateConfirmation: values.dateConfirmation
+        ? values.dateConfirmation.format("DD/MM/YYYY")
+        : undefined,
       overtimeApplicable: !!values.overtimeApplicable,
     };
 
@@ -126,11 +213,19 @@ export default function AddEmployeePage() {
         throw new Error(data.error || "Failed to create employee");
       }
 
+      const createdId = data.data?.employeeId ?? nextEmployeeId;
+      const emailNote = data.credentialsEmail?.sent
+        ? " Login credentials emailed — employee must reset password within 1 hour."
+        : data.credentialsEmail?.reason === "no_email"
+          ? " Add an official or personal email to send login credentials."
+          : "";
       messageApi.success({
-        content: "Employee created successfully! Redirecting to list...",
-        duration: 1.5,
+        content: createdId
+          ? `Employee ${createdId} created successfully!${emailNote} Redirecting…`
+          : `Employee created successfully!${emailNote} Redirecting…`,
+        duration: emailNote ? 3 : 1.5,
       });
-      
+
       localStorage.removeItem(DRAFT_KEY);
 
       setTimeout(() => {
@@ -145,28 +240,49 @@ export default function AddEmployeePage() {
       setLoading(false);
     }
   };
-  
+
+  const employmentFields = (fields: string[]) =>
+    fields.filter(
+      (field) =>
+        field !== "reportingManager" || showReportingManager
+    );
+
   const handleNext = async () => {
     try {
-      const fieldsToValidate = steps[currentStep].fields;
+      const fieldsToValidate = employmentFields(steps[currentStep].fields);
       await form.validateFields(fieldsToValidate);
       setCurrentStep((prev) => prev + 1);
     } catch (error) {
       // Validation failed
     }
   };
-  
+
   const handlePrev = () => {
     setCurrentStep((prev) => prev - 1);
   };
-  
+
+  const handleCreateEmployee = async () => {
+    try {
+      const allFields = steps.flatMap((step) => employmentFields(step.fields));
+      await form.validateFields(allFields);
+      form.submit();
+    } catch {
+      messageApi.error("Please complete all required fields in every step.");
+    }
+  };
+
   const handleSaveDraft = () => {
     const values = form.getFieldsValue(true);
+    const { employeeId: _omit, ...rest } = values;
     const draftValues = {
-      ...values,
+      ...rest,
       dob: values.dob ? values.dob.toISOString() : undefined,
-      dateJoining: values.dateJoining ? values.dateJoining.toISOString() : undefined,
-      dateConfirmation: values.dateConfirmation ? values.dateConfirmation.toISOString() : undefined,
+      dateJoining: values.dateJoining
+        ? values.dateJoining.toISOString()
+        : undefined,
+      dateConfirmation: values.dateConfirmation
+        ? values.dateConfirmation.toISOString()
+        : undefined,
     };
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draftValues));
     messageApi.success("Draft saved successfully.");
@@ -175,24 +291,42 @@ export default function AddEmployeePage() {
   const steps = [
     {
       title: "Profile",
-      fields: ["fullName", "employeeId", "fatherName", "dob", "gender", "qualification", "experience", "castCategory"],
+      fields: [
+        "fullName",
+        "fatherName",
+        "dob",
+        "gender",
+        "qualification",
+        "experience",
+        "castCategory",
+      ],
       content: (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1 p-2">
-          <Form.Item name="fullName" label="Full Name" rules={[{ required: true, message: "Required" }]}>
-            <Input style={{ height: 38 }} />
-          </Form.Item>
-          <Form.Item name="employeeId" label="Employee ID" rules={[{ required: true, message: "Required" }]}>
-            <Input style={{ height: 38 }} />
+        <div className="emp-form-grid">
+          <Form.Item
+            name="fullName"
+            label="Full Name"
+            rules={[{ required: true, message: "Required" }]}
+          >
+            <Input />
           </Form.Item>
           <Form.Item name="fatherName" label="Father's Name">
-            <Input style={{ height: 38 }} />
+            <Input />
           </Form.Item>
-          <Form.Item name="dob" label="Date of Birth">
-            <DatePicker style={{ height: 38, width: "100%" }} format="DD/MM/YYYY" />
+          <Form.Item
+            name="dob"
+            label="Date of Birth"
+            rules={[employeeMinAgeDobRule]}
+            tooltip="Employee must be at least 18 years old"
+          >
+            <DatePicker
+              style={{ width: "100%" }}
+              format="DD/MM/YYYY"
+              disabledDate={disableEmployeeDobUnder18}
+              defaultPickerValue={latestAllowedEmployeeDob()}
+            />
           </Form.Item>
           <Form.Item name="gender" label="Gender">
             <Select
-              style={{ height: 38 }}
               options={[
                 { value: "Male", label: "Male" },
                 { value: "Female", label: "Female" },
@@ -201,14 +335,21 @@ export default function AddEmployeePage() {
             />
           </Form.Item>
           <Form.Item name="qualification" label="Qualification">
-            <Input style={{ height: 38 }} />
+            <Select
+              allowClear
+              placeholder="Select qualification"
+              options={[...EMPLOYEE_QUALIFICATION_OPTIONS]}
+            />
           </Form.Item>
           <Form.Item name="experience" label="Experience">
-            <Input style={{ height: 38 }} />
+            <Select
+              allowClear
+              placeholder="Select experience"
+              options={[...EMPLOYEE_EXPERIENCE_OPTIONS]}
+            />
           </Form.Item>
           <Form.Item name="castCategory" label="Cast Category">
             <Select
-              style={{ height: 38 }}
               options={[
                 { value: "General", label: "General" },
                 { value: "OBC", label: "OBC" },
@@ -218,14 +359,25 @@ export default function AddEmployeePage() {
             />
           </Form.Item>
         </div>
-      )
+      ),
     },
     {
       title: "Contact",
-      fields: ["primaryContact", "personalEmail", "alternateContact", "emergencyContact", "emergencyNameRelation", "officialEmail", "currentAddress", "currentStatePin", "permanentAddress", "permanentStatePin"],
+      fields: [
+        "primaryContact",
+        "personalEmail",
+        "alternateContact",
+        "emergencyContact",
+        "emergencyNameRelation",
+        "officialEmail",
+        "currentAddress",
+        "currentStatePin",
+        "permanentAddress",
+        "permanentStatePin",
+      ],
       content: (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1 p-2">
+          <div className="emp-form-grid">
             <Form.Item
               name="primaryContact"
               label="Primary Contact No."
@@ -235,121 +387,180 @@ export default function AddEmployeePage() {
                 { len: 10, message: "Enter a 10-digit mobile number" },
               ]}
             >
-              <NumericInput style={{ height: 38 }} maxDigits={10} />
+              <NumericInput maxDigits={10} />
             </Form.Item>
-            <Form.Item name="personalEmail" label="Personal Email">
-              <Input style={{ height: 38 }} />
+            <Form.Item
+              name="personalEmail"
+              label="Personal Email"
+              className="emp-form-no-optional"
+            >
+              <Input />
             </Form.Item>
             <Form.Item
               name="alternateContact"
               label="Alternate Contact No."
               rules={[{ pattern: /^\d*$/, message: "Numbers only" }]}
             >
-              <NumericInput style={{ height: 38 }} maxDigits={10} />
+              <NumericInput maxDigits={10} />
             </Form.Item>
             <Form.Item
               name="emergencyContact"
               label="Emergency Contact No."
               rules={[{ pattern: /^\d*$/, message: "Numbers only" }]}
             >
-              <NumericInput style={{ height: 38 }} maxDigits={10} />
+              <NumericInput maxDigits={10} />
             </Form.Item>
-            <Form.Item name="emergencyNameRelation" label="Emergency Contact — Name & Relation">
-              <Input style={{ height: 38 }} />
+            <Form.Item
+              name="emergencyNameRelation"
+              label="Emergency name & relation"
+              tooltip="Full name and relation of emergency contact"
+            >
+              <Input placeholder="e.g. Ramesh Kumar — Father" />
             </Form.Item>
-            <Form.Item name="officialEmail" label="Official Email (if assigned)">
-              <Input style={{ height: 38 }} />
+            <Form.Item
+              name="officialEmail"
+              label="Official Email (if assigned)"
+            >
+              <Input />
             </Form.Item>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 p-2 border-t border-zinc-100/50 mt-2 pt-4">
-            <div>
+          <div className="emp-form-grid emp-form-grid--2 emp-form-grid-divider">
+            <div className="emp-form-address-col">
               <Form.Item name="currentAddress" label="Current Address">
                 <Input.TextArea rows={2} />
               </Form.Item>
               <Form.Item
+                className="emp-form-address-pin emp-form-no-optional"
                 name="currentStatePin"
                 label="State / PIN Code"
-                rules={[{ pattern: /^\d*$/, message: "PIN must be numbers only" }]}
+                rules={[
+                  { pattern: /^\d*$/, message: "PIN must be numbers only" },
+                ]}
               >
-                <NumericInput style={{ height: 38 }} maxDigits={6} />
+                <NumericInput maxDigits={6} />
               </Form.Item>
             </div>
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-zinc-700 font-medium text-xs">Permanent Address</span>
-                <Checkbox onChange={(e) => handleCurrentAddressCopy(e.target.checked)} className="text-[11px] text-zinc-500">Same as current</Checkbox>
-              </div>
-              <Form.Item name="permanentAddress" noStyle>
-                <Input.TextArea rows={2} className="mb-2.5" />
-              </Form.Item>
-              <div className="h-2" />
+            <div className="emp-form-address-col">
               <Form.Item
+                name="permanentAddress"
+                label={
+                  <div className="emp-form-address-header">
+                    <span className="emp-form-address-label">
+                      Permanent Address
+                    </span>
+                    <Checkbox
+                      onChange={(e) =>
+                        handleCurrentAddressCopy(e.target.checked)
+                      }
+                    >
+                      Same as current
+                    </Checkbox>
+                  </div>
+                }
+              >
+                <Input.TextArea rows={2} />
+              </Form.Item>
+              <Form.Item
+                className="emp-form-address-pin emp-form-no-optional"
                 name="permanentStatePin"
                 label="State / PIN Code"
-                rules={[{ pattern: /^\d*$/, message: "PIN must be numbers only" }]}
+                rules={[
+                  { pattern: /^\d*$/, message: "PIN must be numbers only" },
+                ]}
               >
-                <NumericInput style={{ height: 38 }} maxDigits={6} />
+                <NumericInput maxDigits={6} />
               </Form.Item>
             </div>
           </div>
         </>
-      )
+      ),
     },
     {
       title: "Identity",
-      fields: ["aadhar", "pan", "pfUan", "esiIp", "bankName", "accountNo", "ifscCode"],
+      fields: [
+        "aadhar",
+        "pan",
+        "pfUan",
+        "esiIp",
+        "bankName",
+        "accountNo",
+        "ifscCode",
+      ],
       content: (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1 p-2">
+        <div className="emp-form-grid">
           <Form.Item
             name="aadhar"
             label="Aadhar No."
-            rules={[{ pattern: /^\d{0,12}$/, message: "Aadhar must be 12 digits" }]}
+            rules={[
+              { pattern: /^\d{0,12}$/, message: "Aadhar must be 12 digits" },
+            ]}
           >
-            <NumericInput style={{ height: 38 }} maxDigits={12} />
+            <NumericInput maxDigits={12} />
           </Form.Item>
           <Form.Item name="pan" label="PAN No.">
-            <Input style={{ height: 38 }} />
+            <Input />
           </Form.Item>
           <Form.Item
             name="pfUan"
             label="PF / UAN No."
             rules={[{ pattern: /^\d*$/, message: "Numbers only" }]}
           >
-            <NumericInput style={{ height: 38 }} maxDigits={12} />
+            <NumericInput maxDigits={12} />
           </Form.Item>
           <Form.Item
             name="esiIp"
             label="ESI / IP No."
             rules={[{ pattern: /^\d*$/, message: "Numbers only" }]}
           >
-            <NumericInput style={{ height: 38 }} maxDigits={17} />
+            <NumericInput maxDigits={17} />
           </Form.Item>
           <Form.Item name="bankName" label="Bank Name">
-            <Input style={{ height: 38 }} />
+            <Input />
           </Form.Item>
           <Form.Item
             name="accountNo"
             label="Account No."
-            rules={[{ pattern: /^\d*$/, message: "Account number must be numbers only" }]}
+            rules={[
+              {
+                pattern: /^\d*$/,
+                message: "Account number must be numbers only",
+              },
+            ]}
           >
-            <NumericInput style={{ height: 38 }} maxDigits={18} />
+            <NumericInput maxDigits={18} />
           </Form.Item>
           <Form.Item name="ifscCode" label="IFSC Code">
-            <Input style={{ height: 38 }} />
+            <Input />
           </Form.Item>
         </div>
-      )
+      ),
     },
     {
       title: "Employment",
-      fields: ["companies", "department", "designation", "locationUnit", "reportingManager", "employmentType", "dateJoining", "dateConfirmation", "probationMonths"],
+      fields: [
+        "companies",
+        "department",
+        "designation",
+        "reportingManager",
+        "employmentType",
+        "dateJoining",
+        "dateConfirmation",
+        "probationMonths",
+      ],
       content: (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1 p-2">
+        <div className="emp-form-grid">
           <Form.Item
             name="companies"
             label="Companies"
-            className="md:col-span-3"
-            rules={[{ required: true, type: "array", min: 1, message: "Select at least one company" }]}
+            className="emp-form-grid__full"
+            rules={[
+              {
+                required: true,
+                type: "array",
+                min: 1,
+                message: "Select at least one company",
+              },
+            ]}
           >
             <Select
               mode="multiple"
@@ -359,39 +570,42 @@ export default function AddEmployeePage() {
               maxTagCount="responsive"
             />
           </Form.Item>
-          <Form.Item name="department" label="Department" rules={[{ required: true, message: "Required" }]}>
+          <Form.Item
+            name="department"
+            label="Department"
+            rules={[{ required: true, message: "Required" }]}
+          >
             <Select
-              style={{ height: 38 }}
               options={departmentOptions}
               loading={departmentOptions.length === 0}
               showSearch
             />
           </Form.Item>
-          <Form.Item name="designation" label="Designation" rules={[{ required: true, message: "Required" }]}>
-            <Input style={{ height: 38 }} />
+          <Form.Item
+            name="designation"
+            label="Designation"
+            rules={[{ required: true, message: "Required" }]}
+          >
+            <Input />
           </Form.Item>
-          <Form.Item name="locationUnit" label="Location / Unit" rules={[{ required: true, message: "Required" }]}>
+
+          {showReportingManager ? (
+            <Form.Item name="reportingManager" label="Reporting Manager">
+              <Select
+                options={reportingManagerOptions}
+                loading={reportingManagerOptions.length === 0}
+                showSearch
+                allowClear
+                optionFilterProp="label"
+              />
+            </Form.Item>
+          ) : null}
+          <Form.Item
+            name="employmentType"
+            label="Employment Type"
+            rules={[{ required: true, message: "Required" }]}
+          >
             <Select
-              style={{ height: 38 }}
-              options={[
-                { value: "Sudarshan Minerals (Udaipur — Plant 1)", label: "Sudarshan Minerals (Udaipur — Plant 1)" },
-                { value: "Sudarshan Minerals (Udaipur — Plant 2)", label: "Sudarshan Minerals (Udaipur — Plant 2)" },
-                { value: "Sudarshan Microns (Udaipur)", label: "Sudarshan Microns (Udaipur)" },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="reportingManager" label="Reporting Manager">
-            <Select
-              style={{ height: 38 }}
-              options={[
-                { value: "EMP-2010 — Sunil Mehra (Plant Head)", label: "EMP-2010 — Sunil Mehra (Plant Head)" },
-                { value: "EMP-2014 — Rajiv Mehta (Owner)", label: "EMP-2014 — Rajiv Mehta (Owner)" },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="employmentType" label="Employment Type" rules={[{ required: true, message: "Required" }]}>
-            <Select
-              style={{ height: 38 }}
               options={[
                 { value: "Permanent", label: "Permanent" },
                 { value: "Contractual", label: "Contractual" },
@@ -399,58 +613,83 @@ export default function AddEmployeePage() {
               ]}
             />
           </Form.Item>
-          <Form.Item name="dateJoining" label="Date of Joining" rules={[{ required: true, message: "Required" }]}>
-            <DatePicker style={{ height: 38, width: "100%" }} format="DD/MM/YYYY" />
+          <Form.Item
+            name="dateJoining"
+            label="Date of Joining"
+            rules={[{ required: true, message: "Required" }]}
+          >
+            <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
           </Form.Item>
           <Form.Item name="dateConfirmation" label="Confirmation Date">
-            <DatePicker style={{ height: 38, width: "100%" }} format="DD/MM/YYYY" />
+            <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
           </Form.Item>
           <Form.Item name="probationMonths" label="Probation Period (Months)">
-            <InputNumber style={{ height: 38, width: "100%" }} min={0} />
+            <InputNumber style={{ width: "100%" }} min={0} />
           </Form.Item>
         </div>
-      )
+      ),
     },
     {
       title: "Shift",
-      fields: ["shiftMode", "primaryShift", "rotationPattern", "workingHours", "weeklyOff", "overtimeApplicable"],
+      fields: [
+        "shiftMode",
+        "primaryShift",
+        "rotationPattern",
+        "workingHours",
+        "weeklyOff",
+        "overtimeApplicable",
+      ],
       content: (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1 p-2">
+        <div className="emp-form-grid">
           <Form.Item name="shiftMode" label="Shift Mode">
             <Select
-              style={{ height: 38 }}
               options={[
-                { value: "Single shift (fixed)", label: "Single shift (fixed)" },
-                { value: "Multiple shifts (rotating)", label: "Multiple shifts (rotating)" },
+                {
+                  value: "Single shift (fixed)",
+                  label: "Single shift (fixed)",
+                },
+                {
+                  value: "Multiple shifts (rotating)",
+                  label: "Multiple shifts (rotating)",
+                },
               ]}
             />
           </Form.Item>
           <Form.Item name="primaryShift" label="Primary Shift">
             <Select
-              style={{ height: 38 }}
               options={[
-                { value: "Shift A — 06:00 to 14:00", label: "Shift A — 06:00 to 14:00" },
-                { value: "Shift B — 14:00 to 22:00", label: "Shift B — 14:00 to 22:00" },
-                { value: "Shift C — 22:00 to 06:00", label: "Shift C — 22:00 to 06:00" },
+                {
+                  value: "Shift A — 06:00 to 14:00",
+                  label: "Shift A — 06:00 to 14:00",
+                },
+                {
+                  value: "Shift B — 14:00 to 22:00",
+                  label: "Shift B — 14:00 to 22:00",
+                },
+                {
+                  value: "Shift C — 22:00 to 06:00",
+                  label: "Shift C — 22:00 to 06:00",
+                },
               ]}
             />
           </Form.Item>
           <Form.Item name="rotationPattern" label="Rotation Pattern">
             <Select
-              style={{ height: 38 }}
               options={[
                 { value: "None", label: "None" },
                 { value: "Weekly rotation", label: "Weekly rotation" },
-                { value: "Fortnightly rotation", label: "Fortnightly rotation" },
+                {
+                  value: "Fortnightly rotation",
+                  label: "Fortnightly rotation",
+                },
               ]}
             />
           </Form.Item>
           <Form.Item name="workingHours" label="Working Hours / Day">
-            <InputNumber style={{ height: 38, width: "100%" }} min={1} max={24} />
+            <InputNumber style={{ width: "100%" }} min={1} max={24} />
           </Form.Item>
           <Form.Item name="weeklyOff" label="Weekly Off Day">
             <Select
-              style={{ height: 38 }}
               options={[
                 { value: "Sunday", label: "Sunday" },
                 { value: "Saturday", label: "Saturday" },
@@ -458,87 +697,194 @@ export default function AddEmployeePage() {
               ]}
             />
           </Form.Item>
-          <Form.Item name="overtimeApplicable" label="Overtime Applicability" valuePropName="checked" className="pt-2">
-            <Checkbox className="font-medium text-zinc-700 text-xs">Eligible for Overtime (OT)</Checkbox>
+          <Form.Item
+            name="overtimeApplicable"
+            label="Overtime Applicability"
+            valuePropName="checked"
+          >
+            <Checkbox>Eligible for Overtime (OT)</Checkbox>
           </Form.Item>
         </div>
-      )
+      ),
     },
     {
       title: "Salary",
-      fields: ["compensationType", "annualCtc", "monthlyGross", "basicSalary", "da", "hra", "otherConveyance", "specialBonus", "reimbursementCap", "dailyWageRate", "skillCategory", "tradeJobRole", "engagedVia", "payFrequency", "paymentMode"],
+      fields: [
+        "compensationType",
+        "annualCtc",
+        "monthlyGross",
+        "basicSalary",
+        "da",
+        "hra",
+        "otherConveyance",
+        "specialBonus",
+        "reimbursementCap",
+        "dailyWageRate",
+        "skillCategory",
+        "tradeJobRole",
+        "engagedVia",
+        "payFrequency",
+        "paymentMode",
+      ],
       content: (
-        <div className="p-2 flex flex-col gap-4">
-          <Form.Item name="compensationType" label={<span className="font-semibold text-zinc-800 text-xs">Compensation Category</span>} rules={[{ required: true, message: "Required" }]}>
-            <Radio.Group onChange={handleCompensationTypeChange} className="flex gap-4">
-              <Radio value="Monthly CTC">
-                <div className="flex flex-col text-left leading-normal">
-                  <span className="font-bold text-zinc-800">Monthly CTC (Salaried)</span>
-                  <span className="text-[11px] text-zinc-400 font-normal">Fixed monthly components (Basic + HRA + DA)</span>
-                </div>
-              </Radio>
-              <Radio value="Daily wage">
-                <div className="flex flex-col text-left leading-normal">
-                  <span className="font-bold text-zinc-800">Daily wage (Wage labour)</span>
-                  <span className="text-[11px] text-zinc-400 font-normal">Paid by shifts/days worked × daily rate</span>
-                </div>
-              </Radio>
-            </Radio.Group>
+        <div className="emp-form-compensation">
+          <Form.Item
+            name="compensationType"
+            label="Compensation Category"
+            rules={[{ required: true, message: "Required" }]}
+          >
+            <CompensationCategoryPicker />
           </Form.Item>
 
-          {/* Sub-Form: Monthly CTC Details */}
           {compensationType === "Monthly CTC" && (
-            <div className="bg-zinc-50 border border-zinc-200/50 rounded-xl p-6 flex flex-col gap-4 mt-2">
-              <div className="flex items-center gap-2 border-b border-zinc-200/50 pb-2.5">
-                <CalculatorOutlined className="text-[#374d95] text-base" />
-                <span className="font-bold text-zinc-900 text-xs uppercase tracking-wider">Monthly Components</span>
+            <div className="emp-form-subpanel">
+              <div className="emp-form-subpanel__head">
+                <div className="emp-form-subpanel__head-main">
+                  <CalculatorOutlined />
+                  <span>Monthly Components</span>
+                </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1">
+              <div className="emp-form-grid">
                 <Form.Item name="annualCtc" label="Annual CTC (₹)">
-                  <InputNumber style={{ height: 38, width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} onChange={handleAnnualCtcChange} />
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                    onChange={handleAnnualCtcChange}
+                  />
                 </Form.Item>
                 <Form.Item name="monthlyGross" label="Monthly Gross (₹)">
-                  <InputNumber style={{ height: 38, width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
                 <Form.Item name="basicSalary" label="Basic Salary (₹/mo)">
-                  <InputNumber style={{ height: 38, width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
                 <Form.Item name="da" label="DA (₹/mo)">
-                  <InputNumber style={{ height: 38, width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
                 <Form.Item name="hra" label="HRA (₹/mo)">
-                  <InputNumber style={{ height: 38, width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
-                <Form.Item name="otherConveyance" label="Other / Conveyance (₹/mo)">
-                  <InputNumber style={{ height: 38, width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                <Form.Item
+                  name="otherConveyance"
+                  label="Other / Conveyance (₹/mo)"
+                >
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
                 <Form.Item name="specialBonus" label="Special / Bonus (₹/mo)">
-                  <InputNumber style={{ height: 38, width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
-                <Form.Item name="reimbursementCap" label="Reimbursement Cap (₹/mo)">
-                  <InputNumber style={{ height: 38, width: "100%" }} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                <Form.Item
+                  name="reimbursementCap"
+                  label="Reimbursement Cap (₹/mo)"
+                >
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
               </div>
             </div>
           )}
 
-          {/* Sub-Form: Daily Wage Details */}
           {compensationType === "Daily wage" && (
-            <div className="bg-zinc-50 border border-zinc-200/50 rounded-xl p-6 flex flex-col gap-4 mt-2">
-              <div className="flex items-center justify-between border-b border-zinc-200/50 pb-2.5">
-                <div className="flex items-center gap-2">
-                  <SecurityScanOutlined className="text-amber-500 text-base" />
-                  <span className="font-bold text-zinc-900 text-xs uppercase tracking-wider">Labor / Daily Wage Grid</span>
+            <div className="emp-form-subpanel">
+              <div className="emp-form-subpanel__head">
+                <div className="emp-form-subpanel__head-main">
+                  <SecurityScanOutlined style={{ color: "#d97706" }} />
+                  <span>Labor / Daily Wage Grid</span>
                 </div>
-                <span className="text-[10px] text-zinc-400 font-semibold bg-white border border-zinc-200 px-2 py-0.5 rounded">Hourly calculation enabled</span>
+                <span className="emp-form-subpanel__badge">
+                  Hourly calculation enabled
+                </span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1">
+              <div className="emp-form-grid">
                 <Form.Item name="dailyWageRate" label="Daily Wage Rate (₹/day)">
-                  <InputNumber style={{ height: 38, width: "100%" }} formatter={v => `₹ ${v}`} parser={v => parseFloat(v?.toString().replace(/\₹\s?|(,*)/g, "") || "0") || 0} />
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) => `₹ ${v}`}
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
                 </Form.Item>
                 <Form.Item name="skillCategory" label="Skill Category">
                   <Select
-                    style={{ height: 38 }}
                     options={[
                       { value: "Skilled", label: "Skilled" },
                       { value: "Semi-Skilled", label: "Semi-Skilled" },
@@ -547,20 +893,21 @@ export default function AddEmployeePage() {
                   />
                 </Form.Item>
                 <Form.Item name="tradeJobRole" label="Trade / Job Role">
-                  <Input style={{ height: 38 }} />
+                  <Input />
                 </Form.Item>
                 <Form.Item name="engagedVia" label="Engaged Via">
                   <Select
-                    style={{ height: 38 }}
                     options={[
                       { value: "Direct (on-roll)", label: "Direct (on-roll)" },
-                      { value: "Contractor (off-roll)", label: "Contractor (off-roll)" },
+                      {
+                        value: "Contractor (off-roll)",
+                        label: "Contractor (off-roll)",
+                      },
                     ]}
                   />
                 </Form.Item>
                 <Form.Item name="payFrequency" label="Pay Frequency">
                   <Select
-                    style={{ height: 38 }}
                     options={[
                       { value: "Monthly", label: "Monthly" },
                       { value: "Weekly", label: "Weekly" },
@@ -570,7 +917,6 @@ export default function AddEmployeePage() {
                 </Form.Item>
                 <Form.Item name="paymentMode" label="Payment Mode">
                   <Select
-                    style={{ height: 38 }}
                     options={[
                       { value: "Bank transfer", label: "Bank transfer" },
                       { value: "Cash", label: "Cash" },
@@ -579,24 +925,22 @@ export default function AddEmployeePage() {
                   />
                 </Form.Item>
               </div>
-
-              {/* Auto-Formula Explainer Card */}
-              <div className="bg-amber-50/50 border border-amber-200/50 rounded-lg p-4 text-amber-800 text-[12px] font-medium leading-relaxed flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-2.5">
-                <CalculatorOutlined className="text-amber-600 text-sm mt-0.5" />
+              <div className="emp-form-note">
+                <CalculatorOutlined />
                 <div>
-                  <div>
-                    <span className="font-bold text-amber-900">Auto-formula details</span>: Net pay = (Daily rate × Days worked) + (OT hrs × 2 × Hourly rate) − PF/ESI − Advance.
-                  </div>
-                  <div className="text-zinc-500 mt-1 text-[11px] font-normal">
-                    Example: For ₹540/day at 26 days + 8 OT hrs = ₹14,040 + ₹1,080 = ₹15,120 gross.
-                  </div>
+                  <strong>Auto-formula details</strong>: Net pay = (Daily rate ×
+                  Days worked) + (OT hrs × 2 × Hourly rate) − PF/ESI − Advance.
+                  <span className="emp-form-note__hint">
+                    Example: For ₹540/day at 26 days + 8 OT hrs = ₹14,040 +
+                    ₹1,080 = ₹15,120 gross.
+                  </span>
                 </div>
               </div>
             </div>
           )}
         </div>
-      )
-    }
+      ),
+    },
   ];
 
   return (
@@ -608,68 +952,97 @@ export default function AddEmployeePage() {
         },
         components: {
           Form: {
-            itemMarginBottom: 12,
+            itemMarginBottom: 10,
+            labelFontSize: 12,
           },
         },
       }}
     >
       {contextHolder}
-      <div className="flex flex-col gap-4 w-full pb-12">
+      <div className="emp-details-page emp-add-page">
         <PageHeader
           compact
           {...HRMS_BACK.employees}
           title="Add employee"
-          subtitle="Register a new employee workspace across companies"
+          subtitle="Register a new employee — complete each stage to create the profile"
         />
-
-        <div className="bg-white shadow-sm" style={{ marginTop: "24px", marginBottom: "16px", padding: "24px", borderRadius: "12px" }}>
-          <Steps current={currentStep} items={steps.map(item => ({ title: item.title }))} />
-        </div>
 
         <Form
           form={form}
           layout="vertical"
           onFinish={onFinish}
+          preserve
           requiredMark="optional"
           initialValues={{
             overtimeApplicable: false,
             compensationType: "Monthly CTC",
           }}
+          style={{ width: "100%" }}
         >
-          <div className="bg-white shadow-sm min-h-[400px]" style={{ border: "1px solid #D0D0D0", padding: "24px", borderRadius: "12px" }}>
-            {steps[currentStep].content}
-          </div>
+          <div className="emp-add-stack">
+            <div className="emp-add-steps-panel emp-add-steps-panel--horizontal">
+              <div className="emp-add-steps-panel__head">
+                <span>Registration progress</span>
+                <span className="emp-add-steps-panel__badge">
+                  Step {currentStep + 1} of {steps.length}
+                </span>
+              </div>
+              <div className="emp-add-steps-panel__body">
+                <Steps
+                  current={currentStep}
+                  size="small"
+                  titlePlacement="vertical"
+                  responsive={false}
+                  items={steps.map((item) => ({
+                    title: item.title,
+                  }))}
+                />
+              </div>
+            </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "1rem", marginTop: "2rem", width: "100%", alignItems: "center" }}>
-            <Link href="/hrms/employees">
-              <Button style={{ height: 38, borderRadius: 6, fontWeight: 500 }} className="text-zinc-600">
-                Cancel
-              </Button>
-            </Link>
-            <Button onClick={handleSaveDraft} style={{ height: 38, borderRadius: 6 }}>
-              Save as Draft
-            </Button>
-            {currentStep > 0 && (
-              <Button onClick={handlePrev} style={{ height: 38, borderRadius: 6 }}>
-                Previous
-              </Button>
-            )}
-            {currentStep < steps.length - 1 && (
-              <Button type="primary" onClick={handleNext} style={{ height: 38, borderRadius: 6, background: "#374d95" }}>
-                Next
-              </Button>
-            )}
-            {currentStep === steps.length - 1 && (
-              <Button
-                type="primary"
-                onClick={() => form.submit()}
-                loading={loading}
-                style={{ height: 38, borderRadius: 6, background: "#374d95" }}
-                icon={<SaveOutlined />}
-              >
-                Create Employee
-              </Button>
-            )}
+            <div className="emp-add-main emp-add-main--full">
+              <section className="emp-form-step-card">
+                <header className="emp-form-step-card__head">
+                  <div className="emp-form-step-card__step-num">
+                    Step {currentStep + 1} of {steps.length}
+                  </div>
+                  <h2 className="emp-form-step-card__title">
+                    {STEP_META[currentStep]?.title}
+                  </h2>
+                  <p className="emp-form-step-card__desc">
+                    {STEP_META[currentStep]?.description}
+                  </p>
+                </header>
+                <div className="emp-form-step-card__body">
+                  {steps[currentStep].content}
+                </div>
+              </section>
+
+              <div className="emp-add-actions">
+                <Link href="/hrms/employees">
+                  <Button>Cancel</Button>
+                </Link>
+                <Button onClick={handleSaveDraft}>Save as Draft</Button>
+                {currentStep > 0 && (
+                  <Button onClick={handlePrev}>Previous</Button>
+                )}
+                {currentStep < steps.length - 1 && (
+                  <Button type="primary" onClick={handleNext}>
+                    Next
+                  </Button>
+                )}
+                {currentStep === steps.length - 1 && (
+                  <Button
+                    type="primary"
+                    onClick={handleCreateEmployee}
+                    loading={loading}
+                    icon={<SaveOutlined />}
+                  >
+                    Create Employee
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
         </Form>
       </div>

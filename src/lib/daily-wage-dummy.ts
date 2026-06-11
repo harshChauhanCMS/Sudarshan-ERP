@@ -142,14 +142,15 @@ export function getTradeSummary(workers: DailyWageWorker[]): TradeSummaryRow[] {
     cur.wages += p.wages;
     map.set(w.trade, cur);
   }
-  const order = ["Mason", "Welder", "Helper", "Loader", "Fitter", "Sweeper", "Painter", "Electrician"];
-  return order
-    .filter((t) => map.has(t))
-    .map((trade) => {
-      const cur = map.get(trade)!;
-      const avgRate = Math.round(cur.rates.reduce((a, b) => a + b, 0) / cur.rates.length);
-      return { trade, count: cur.count, avgRate, mandays: cur.mandays, wages: cur.wages };
-    });
+  return Array.from(map.entries())
+    .map(([trade, cur]) => ({
+      trade,
+      count: cur.count,
+      avgRate: Math.round(cur.rates.reduce((a, b) => a + b, 0) / cur.rates.length),
+      mandays: cur.mandays,
+      wages: cur.wages,
+    }))
+    .sort((a, b) => b.wages - a.wages || a.trade.localeCompare(b.trade));
 }
 
 export function getDisbursementSummary(workers: DailyWageWorker[]): DisbursementRow[] {
@@ -182,5 +183,6 @@ export function formatLakhs(n: number) {
 }
 
 export function getSampleWorker(workers: DailyWageWorker[]) {
-  return workers.find((w) => w.code === "LAB-3012") ?? workers[0];
+  if (!workers.length) return undefined;
+  return [...workers].sort((a, b) => b.days - a.days || b.dailyRate - a.dailyRate)[0];
 }

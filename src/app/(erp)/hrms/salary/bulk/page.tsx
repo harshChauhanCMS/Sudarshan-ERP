@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Tag, Select, DatePicker } from "antd";
+import { Button, Tag, Select, DatePicker, message } from "antd";
 import {
   DownloadOutlined,
   ReloadOutlined,
@@ -11,7 +11,7 @@ import {
   WalletOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import RepHeader from "@/components/hrms/RepHeader";
 import CommonTable from "@/components/common/CommonTable";
@@ -21,13 +21,15 @@ import { HRMS_BACK } from "@/lib/hrms-nav";
 import ReportSection from "@/components/hrms/ReportSection";
 import StatCard from "@/components/common/StatCard";
 import {
-  getPayrollSheetDummy,
   getPayrollSheetKpi,
   formatPayrollInr,
   type PayrollSheetRow,
-} from "@/lib/payroll-sheet-dummy";
+} from "@/lib/payroll-sheet";
+import FilterSearchField from "@/components/hrms/FilterSearchField";
+import { filterBySearch } from "@/lib/filter-search";
 
 const STATUS_COLOR: Record<string, string> = {
+  pending: "default",
   draft: "orange",
   approved: "green",
   disbursed: "blue",
@@ -36,15 +38,47 @@ const STATUS_COLOR: Record<string, string> = {
 export default function PayrollBulkPage() {
   const [month, setMonth] = useState(dayjs());
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const allRows = useMemo(() => getPayrollSheetDummy(), []);
+  const [search, setSearch] = useState("");
+  const [rows, setRows] = useState<PayrollSheetRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = useMemo(
-    () =>
-      statusFilter === "all"
-        ? allRows
-        : allRows.filter((r) => r.status === statusFilter),
-    [allRows, statusFilter]
-  );
+  const cycleKey = month.format("YYYY-MM");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ cycle: cycleKey });
+      if (statusFilter !== "all") {
+        params.set("status", statusFilter);
+      }
+      const res = await fetch(`/api/hrms/salary/bulk?${params.toString()}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to load payroll sheet");
+      setRows(json.data || []);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Failed to load payroll sheet");
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [cycleKey, statusFilter]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const filtered = useMemo(() => {
+    return filterBySearch(rows, search, (r) => [
+      r.employeeId,
+      r.name,
+      r.department,
+      r.designation,
+      r.pfUan,
+      r.esiIp,
+      r.accountNo,
+      r.ifsc,
+    ]);
+  }, [rows, search]);
 
   const kpi = getPayrollSheetKpi(filtered);
 
@@ -107,6 +141,8 @@ export default function PayrollBulkPage() {
       key: "pres",
       width: 72,
       align: "center" as const,
+      render: (v: number, r: PayrollSheetRow) =>
+        r.status === "pending" ? "—" : v,
     },
     {
       title: "Leave",
@@ -114,6 +150,8 @@ export default function PayrollBulkPage() {
       key: "leave",
       width: 64,
       align: "center" as const,
+      render: (v: number, r: PayrollSheetRow) =>
+        r.status === "pending" ? "—" : v,
     },
     {
       title: "LWP",
@@ -121,6 +159,8 @@ export default function PayrollBulkPage() {
       key: "lwp",
       width: 56,
       align: "center" as const,
+      render: (v: number, r: PayrollSheetRow) =>
+        r.status === "pending" ? "—" : v,
     },
     {
       title: "Pay days",
@@ -128,6 +168,8 @@ export default function PayrollBulkPage() {
       key: "pay",
       width: 80,
       align: "center" as const,
+      render: (v: number, r: PayrollSheetRow) =>
+        r.status === "pending" ? "—" : v,
     },
     { title: "CTC", dataIndex: "ctc", key: "ctc", width: 100, render: money },
     { title: "Gross", dataIndex: "gross", key: "gross", width: 100, render: money },
@@ -150,11 +192,14 @@ export default function PayrollBulkPage() {
       dataIndex: "deductions",
       key: "ded",
       width: 110,
-      render: (v: number) => (
-        <span className="font-semibold text-rose-600">
-          {formatPayrollInr(v)}
-        </span>
-      ),
+      render: (v: number, r: PayrollSheetRow) =>
+        r.status === "pending" ? (
+          "—"
+        ) : (
+          <span className="font-semibold text-rose-600">
+            {formatPayrollInr(v)}
+          </span>
+        ),
     },
     {
       title: "Reimbursement",
@@ -209,51 +254,18 @@ export default function PayrollBulkPage() {
         {...HRMS_BACK.salary}
         title="Payroll Sheet — Bulk View"
         subtitle="Full salary register with bank details, statutory deductions and attendance columns"
-        actions={<Button icon={<DownloadOutlined />}>Export</Button>}
+        actions={
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={() => {
+              window.location.href = `/api/hrms/salary/export.csv?cycle=${cycleKey}`;
+            }}
+          >
+            Export
+          </Button>
+        }
       />
 
-      <div className="arf-panel ap-filters-panel">
-        <div className="arf-head">
-          <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
-          <span className="arf-head-title">Filters</span>
-        </div>
-        <div className="arf-body">
-          <div className="arf-controls ap-filters-controls">
-            <div className="arf-item">
-              <span className="arf-label">Month</span>
-              <DatePicker
-                className="w-full"
-                picker="month"
-                value={month}
-                onChange={(d) => d && setMonth(d)}
-                allowClear={false}
-              />
-            </div>
-            <div className="arf-item">
-              <span className="arf-label">Status</span>
-              <Select
-                className="w-full"
-                value={statusFilter}
-                onChange={setStatusFilter}
-                options={[
-                  { value: "all", label: "All statuses" },
-                  { value: "draft", label: "Draft" },
-                  { value: "approved", label: "Approved" },
-                  { value: "disbursed", label: "Disbursed" },
-                ]}
-              />
-            </div>
-            <div className="arf-item ap-filters-actions ap-filters-actions--multi">
-              <Button type="primary" icon={<FilterOutlined />}>
-                Apply filters
-              </Button>
-              <Button icon={<ReloadOutlined />}>Refresh</Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI cards */}
       <div className="attendance-kpi-grid attendance-kpi-grid--auto">
         <StatCard
           icon={TeamOutlined}
@@ -284,7 +296,55 @@ export default function PayrollBulkPage() {
         />
       </div>
 
-      {/* Payroll table */}
+      <div className="arf-panel ap-filters-panel">
+        <div className="arf-head">
+          <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
+          <span className="arf-head-title">Filters</span>
+        </div>
+        <div className="arf-body">
+          <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
+            <FilterSearchField
+              value={search}
+              onChange={setSearch}
+              placeholder="Search employee ID, name, department…"
+            />
+            <div className="arf-item">
+              <span className="arf-label">Month</span>
+              <DatePicker
+                className="w-full"
+                picker="month"
+                value={month}
+                onChange={(d) => d && setMonth(d)}
+                allowClear={false}
+              />
+            </div>
+            <div className="arf-item">
+              <span className="arf-label">Status</span>
+              <Select
+                className="w-full"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={[
+                  { value: "all", label: "All statuses" },
+                  { value: "pending", label: "Not generated" },
+                  { value: "draft", label: "Draft" },
+                  { value: "approved", label: "Approved" },
+                  { value: "disbursed", label: "Disbursed" },
+                ]}
+              />
+            </div>
+            <div className="arf-item ap-filters-actions ap-filters-actions--multi">
+              <Button type="primary" icon={<FilterOutlined />} onClick={() => void load()}>
+                Apply filters
+              </Button>
+              <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+                Refresh
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <ReportSection
         title={`Payroll register · ${month.format("MMMM YYYY")}`}
         meta={`${filtered.length} employees · scroll horizontally for all columns`}
@@ -296,6 +356,12 @@ export default function PayrollBulkPage() {
           columns={columns}
           rowKey="id"
           size="middle"
+          loading={loading}
+          locale={{
+            emptyText: loading
+              ? "Loading…"
+              : "No monthly CTC employees found for this period.",
+          }}
           className="attendance-report-table"
           pagination={{
             pageSize: 15,

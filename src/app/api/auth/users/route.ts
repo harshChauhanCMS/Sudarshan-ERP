@@ -2,8 +2,20 @@ import bcrypt from "bcryptjs";
 import { connectDB, isDbConfigured } from "@/lib/mongodb";
 import { User } from "@/models/User";
 import { ok, fail } from "@/lib/api-response";
+import {
+  isAdminOrOwner,
+  requirePermission,
+  requireSession,
+} from "@/lib/api-auth";
 
 export async function POST(request: Request) {
+  const { user, error } = await requireSession();
+  if (error) return error;
+  if (!isAdminOrOwner(user!.role)) {
+    const permErr = requirePermission(user!, "user_management", "add");
+    if (permErr) return permErr;
+  }
+
   if (!isDbConfigured()) {
     return fail("Database not configured. Set MONGODB_URI and run npm run seed.", 503);
   }
@@ -16,9 +28,12 @@ export async function POST(request: Request) {
   const employeeId =
     typeof body.employeeId === "string" ? body.employeeId.trim() : "";
   const password =
-    typeof body.password === "string" && body.password.length >= 6
+    typeof body.password === "string" && body.password.length >= 8
       ? body.password
-      : "sudarshan123";
+      : "";
+  if (!password) {
+    return fail("Password is required (minimum 8 characters)", 400);
+  }
 
   if (!email || !name) {
     return fail("Email and name are required", 400);

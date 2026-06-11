@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Employee from "@/lib/models/Employee";
+import {
+  employeeUniqueConflictMessage,
+  findEmployeeUniqueConflict,
+} from "@/lib/hrms-employee-uniqueness";
+import { assertEmployeeVisibleToViewer } from "@/lib/hr-staff-visibility";
+import { assertManagerCanAccessEmployee, isManagerRole } from "@/lib/manager-scope";
+import { canManageEmployees } from "@/lib/hrms-access";
+import { validateEmployeePayload } from "@/lib/hrms-validation";
+import {
+  EMPLOYEE_WRITABLE_FIELDS,
+  pickAllowedFields,
+} from "@/lib/field-allowlists";
+import { getSession } from "@/lib/session";
 
 export async function GET(
   req: Request,
@@ -9,6 +22,15 @@ export async function GET(
   try {
     await connectDB();
     const { id } = await params;
+    const session = await getSession();
+    const managerAccess = await assertManagerCanAccessEmployee(session.user, id);
+    if (!managerAccess.ok) {
+      return NextResponse.json({ error: managerAccess.message }, { status: 403 });
+    }
+    const access = await assertEmployeeVisibleToViewer(session.user?.role, id);
+    if (!access.ok) {
+      return NextResponse.json({ error: access.message }, { status: 403 });
+    }
 
     const employee = await Employee.findOne({ employeeId: id });
     if (!employee) {
@@ -35,7 +57,34 @@ export async function PUT(
   try {
     await connectDB();
     const { id } = await params;
-    const payload = await req.json();
+    const session = await getSession();
+    if (!session.user || !canManageEmployees(session.user)) {
+      return NextResponse.json(
+        { error: "You are not authorized to edit employees." },
+        { status: 403 },
+      );
+    }
+    if (isManagerRole(session.user.role)) {
+      return NextResponse.json(
+        { error: "Managers can view team profiles but cannot edit employee records." },
+        { status: 403 },
+      );
+    }
+    const managerAccess = await assertManagerCanAccessEmployee(session.user, id);
+    if (!managerAccess.ok) {
+      return NextResponse.json({ error: managerAccess.message }, { status: 403 });
+    }
+    const access = await assertEmployeeVisibleToViewer(session.user.role, id);
+    if (!access.ok) {
+      return NextResponse.json({ error: access.message }, { status: 403 });
+    }
+
+    const raw = await req.json();
+    const payload = pickAllowedFields(raw, EMPLOYEE_WRITABLE_FIELDS);
+    const validationErr = validateEmployeePayload(payload);
+    if (validationErr) {
+      return NextResponse.json({ error: validationErr }, { status: 400 });
+    }
 
     const employee = await Employee.findOne({ employeeId: id });
     if (!employee) {
@@ -59,7 +108,6 @@ export async function PUT(
       "primaryContact",
       "department",
       "designation",
-      "locationUnit",
       "employmentType",
       "dateJoining",
       "compensationType",
@@ -72,6 +120,14 @@ export async function PUT(
           { status: 400 }
         );
       }
+    }
+
+    const uniqueConflict = await findEmployeeUniqueConflict(payload, id);
+    if (uniqueConflict) {
+      return NextResponse.json(
+        { error: employeeUniqueConflictMessage(uniqueConflict) },
+        { status: 409 }
+      );
     }
 
     const updatedEmployee = await Employee.findOneAndUpdate(

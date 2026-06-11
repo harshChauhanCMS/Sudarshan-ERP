@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import dayjs from "dayjs";
 import {
   TeamOutlined,
   DollarOutlined,
@@ -14,19 +16,12 @@ import StatCard from "@/components/common/StatCard";
 import RepHeader from "@/components/hrms/RepHeader";
 import { HRMS_BACK } from "@/lib/hrms-nav";
 import {
-  getPayrollSheetDummy,
   getPayrollSheetKpi,
   formatPayrollInr,
-} from "@/lib/payroll-sheet-dummy";
+  type PayrollSheetRow,
+} from "@/lib/payroll-sheet";
 
 const FEATURE_CARDS = [
-  // {
-  //   href: "/hrms/salary/monthly",
-  //   title: "Monthly Salary",
-  //   description:
-  //     "Generate, approve and export monthly salary sheets from attendance data.",
-  //   icon: CalendarOutlined,
-  // },
   {
     href: "/hrms/salary/bulk",
     title: "Payroll Sheet — Bulk View",
@@ -44,8 +39,30 @@ const FEATURE_CARDS = [
 ];
 
 export default function SalaryIndexPage() {
-  const rows = getPayrollSheetDummy();
+  const [rows, setRows] = useState<PayrollSheetRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const cycleKey = dayjs().format("YYYY-MM");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/hrms/salary/bulk?cycle=${cycleKey}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to load payroll");
+      setRows(json.data || []);
+    } catch {
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [cycleKey]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
   const kpi = getPayrollSheetKpi(rows);
+  const monthLabel = dayjs().format("MMM YYYY");
 
   return (
     <div className="attendance-reports-page">
@@ -59,28 +76,28 @@ export default function SalaryIndexPage() {
         <StatCard
           icon={TeamOutlined}
           label="Employees on sheet"
-          value={String(kpi.employees)}
-          hint="Mar 2026 payroll preview"
+          value={loading ? "…" : String(kpi.employees)}
+          hint={`${monthLabel} payroll`}
         />
         <StatCard
           icon={DollarOutlined}
           label="Total gross"
-          value={formatPayrollInr(kpi.gross)}
+          value={loading ? "…" : formatPayrollInr(kpi.gross)}
           hint="Before deductions"
           hintTone="positive"
         />
         <StatCard
           icon={MinusCircleOutlined}
           label="Total deductions"
-          value={formatPayrollInr(kpi.deductions)}
+          value={loading ? "…" : formatPayrollInr(kpi.deductions)}
           hint="PF, ESI, TDS, LWP"
           hintTone="warning"
         />
         <StatCard
           icon={WalletOutlined}
-          label="Net pay"
-          value={formatPayrollInr(kpi.netPay)}
-          hint="Disbursal amount"
+          label="Net payable"
+          value={loading ? "…" : formatPayrollInr(kpi.netPay)}
+          hint="After deductions"
           hintTone="positive"
         />
       </div>
@@ -94,7 +111,7 @@ export default function SalaryIndexPage() {
             <div className="salary-feature-card__title">{card.title}</div>
             <div className="salary-feature-card__desc">{card.description}</div>
             <div className="salary-feature-card__cta">
-              Open <ArrowRightOutlined style={{ fontSize: 11 }} />
+              Open <ArrowRightOutlined />
             </div>
           </Link>
         ))}

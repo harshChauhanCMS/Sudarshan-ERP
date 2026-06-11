@@ -1,8 +1,9 @@
 // @ts-nocheck
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { isGroupBrandRoute } from "@/lib/group-brand-routes";
+import { filterNavByPermissions } from "@/lib/nav-permissions";
 import { Icon } from "./icons";
 
 /* ============================================================
@@ -186,7 +187,24 @@ const Sidebar = ({
   setIsCollapsed,
   mobileOpen = false,
   onMobileClose,
+  permissions,
+  userName,
+  userRole,
 }) => {
+  const filteredNav = useMemo(
+    () => filterNavByPermissions(NAV, permissions, userRole),
+    [permissions, userRole]
+  );
+
+  const displayName = userName || "User";
+  const displayRole = userRole || "Signed in";
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
   const [collapsed, setCollapsed] = useState({});
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const toggle = (id) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
@@ -289,8 +307,10 @@ const Sidebar = ({
           key={item.id}
           className={`sb-item-group ${groupActive ? "active" : ""} ${depth > 0 ? "sb-item-group--nested" : ""}`}
         >
-          <div
+          <button
+            type="button"
             className={`sb-item ${depth > 0 ? "sub" : ""} ${groupActive ? "active" : ""}`}
+            aria-expanded={!isGroupCollapsed}
             onClick={(e) => {
               e.stopPropagation();
               toggleGroup(item.id);
@@ -307,7 +327,7 @@ const Sidebar = ({
                 className={`chev ${isGroupCollapsed ? "" : "open"}`}
               />
             </span>
-          </div>
+          </button>
           {!isGroupCollapsed && (
             <div className="sb-subitems">
               {item.items.map((child) => renderNavItem(child, depth + 1))}
@@ -320,9 +340,11 @@ const Sidebar = ({
     const isActive = navItemIsActive(item);
     const badges = badgeMap[item.id];
     return (
-      <div
+      <button
+        type="button"
         key={item.id}
         className={`sb-item ${depth > 0 ? "sub" : ""} ${isActive ? "active" : ""}`}
+        aria-current={isActive ? "page" : undefined}
         onClick={(e) => {
           e.stopPropagation();
           goTo(item.id);
@@ -336,7 +358,7 @@ const Sidebar = ({
         {badges?.badgeAlert && (
           <span className="sb-item-badge alert">{badges.badgeAlert}</span>
         )}
-      </div>
+      </button>
     );
   };
 
@@ -466,18 +488,20 @@ const Sidebar = ({
       </div>
 
       <nav className="sb-nav">
-        {NAV.map((section) => (
+        {filteredNav.map((section) => (
           <div
             key={section.id}
             className={`sb-section ${collapsed[section.id] ? "collapsed" : ""}`}
           >
-            <div
+            <button
+              type="button"
               className="sb-section-label"
+              aria-expanded={!collapsed[section.id]}
               onClick={() => toggle(section.id)}
             >
               <span>{section.label}</span>
               <Icon name="chevDown" size={11} className="chev" />
-            </div>
+            </button>
             <div className="sb-section-items">
               {section.items.map((item) => renderNavItem(item))}
             </div>
@@ -486,10 +510,10 @@ const Sidebar = ({
       </nav>
 
       <div className="sb-foot">
-        <div className="sb-foot-avatar">RM</div>
+        <div className="sb-foot-avatar">{initials || "U"}</div>
         <div className="sb-foot-info">
-          <div className="sb-foot-name">Rajiv Mehta</div>
-          <div className="sb-foot-role">Owner · Both companies</div>
+          <div className="sb-foot-name">{displayName}</div>
+          <div className="sb-foot-role">{displayRole}</div>
         </div>
         <button className="sb-foot-btn" title="Settings">
           <Icon name="settings" size={14} />
@@ -546,6 +570,7 @@ const breadcrumbsFor = (route) => {
     "/hrms/employees": ["People", "HR Management", "Employees"],
     "/hrms/employees/add": ["People", "HR Management", "Employees", "Add employee"],
     "/hrms/attendance": ["People", "HR Management", "Attendance"],
+    "/hrms/notifications": ["People", "HR Management", "Notifications"],
     "/hrms/reports": ["People", "Reports"],
     "/hrms/reports/attendance": ["People", "Reports", "Attendance Overview"],
     "/hrms/reports/employee": ["People", "Reports", "Employee Report"],
@@ -576,6 +601,12 @@ const breadcrumbsFor = (route) => {
     "/users": ["System", "User Management"],
     "/design-system": ["System", "Design System"],
   };
+  if (
+    route?.startsWith("/hrms/reports/employee/") &&
+    route !== "/hrms/reports/employee"
+  ) {
+    return ["People", "Reports", "Employee Report", "Detail"];
+  }
   return map[route] || [route];
 };
 
@@ -586,6 +617,7 @@ const Topbar = ({
   onLogout,
   onMenuClick,
   menuOpen,
+  notifUnreadCount = 0,
 }) => {
   const crumbs = breadcrumbsFor(route);
   return (
@@ -632,9 +664,19 @@ const Topbar = ({
           className="tb-iconbtn"
           onClick={onNotifClick}
           title="Notifications"
+          style={{ position: "relative" }}
         >
           <Icon name="bell" size={15} />
-          <span className="dot"></span>
+          {notifUnreadCount > 0 ? (
+            <span
+              className="dot"
+              style={{
+                position: "absolute",
+                top: 6,
+                right: 6,
+              }}
+            />
+          ) : null}
         </button>
         <div className="divider v"></div>
         <button className="btn ghost" onClick={onLogout}>

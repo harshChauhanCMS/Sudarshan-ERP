@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "antd";
+import dayjs from "dayjs";
 import {
   DownloadOutlined,
+  EyeOutlined,
   UserOutlined,
   TeamOutlined,
   ClockCircleOutlined,
@@ -15,6 +17,7 @@ import RepHeader from "@/components/hrms/RepHeader";
 import CommonTable, {
   type CommonTableColumn,
 } from "@/components/common/CommonTable";
+import { TableActionIcon } from "@/components/common/TableActionIcons";
 import ReportSection from "@/components/hrms/ReportSection";
 import ReportChoiceChips, {
   type ReportChipOption,
@@ -35,6 +38,12 @@ const REPORT_TYPE_CHIPS: ReportChipOption<ReportType>[] = [
   { value: "short", label: "Short hours", tone: "orange" },
   { value: "overtime", label: "Overtime", tone: "emerald" },
 ];
+
+function formatJoiningDate(value?: string) {
+  if (!value) return "—";
+  const parsed = dayjs(value, ["DD/MM/YYYY", "YYYY-MM-DD"], true);
+  return parsed.isValid() ? parsed.format("DD MMM YYYY") : value;
+}
 
 const GROUP_CHIPS: ReportChipOption<GroupBy>[] = [
   {
@@ -89,6 +98,14 @@ export default function EmployeeReportPage() {
   const [reportType, setReportType] = useState<ReportType>("monthly");
   const [groupBy, setGroupBy] = useState<GroupBy>("employee");
 
+  const buildReportHref = (row: AttendanceSummaryRow) => {
+    const params = new URLSearchParams({
+      from: r.range[0].format("YYYY-MM-DD"),
+      to: r.range[1].format("YYYY-MM-DD"),
+    });
+    return `/hrms/reports/employee/${encodeURIComponent(row.employeeId)}?${params}`;
+  };
+
   useEffect(() => {
     void r.handleApply();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -125,6 +142,14 @@ export default function EmployeeReportPage() {
       ),
     },
     { title: "Dept", dataIndex: "department", key: "dept" },
+    {
+      title: "Joining date",
+      dataIndex: "dateJoining",
+      key: "joining",
+      render: (v: string | undefined) => (
+        <span className="text-zinc-600">{formatJoiningDate(v)}</span>
+      ),
+    },
     { title: "Shift", dataIndex: "primaryShift", key: "shift" },
     {
       title: "Present",
@@ -164,6 +189,19 @@ export default function EmployeeReportPage() {
       key: "short",
       render: (v: number) => (
         <span className="text-zinc-500">{v.toFixed(1)}</span>
+      ),
+    },
+    {
+      title: "Actions",
+      key: "actions",
+      width: 72,
+      fixed: "right" as const,
+      render: (_: unknown, row: AttendanceSummaryRow) => (
+        <TableActionIcon
+          label="View report"
+          icon={<EyeOutlined />}
+          href={buildReportHref(row)}
+        />
       ),
     },
   ];
@@ -209,6 +247,9 @@ export default function EmployeeReportPage() {
         units={r.units}
         loading={r.loading}
         onApply={r.handleApply}
+        search={r.search}
+        setSearch={r.setSearch}
+        splitApplyRow
       />
 
       <ReportSection title="Report type & grouping">
@@ -246,6 +287,7 @@ export default function EmployeeReportPage() {
           rowKey="employeeId"
           loading={r.loading}
           pagination={{ pageSize: 15, showSizeChanger: true }}
+          scroll={{ x: 1200 }}
         />
       </ReportSection>
     </div>

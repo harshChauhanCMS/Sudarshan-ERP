@@ -1,6 +1,7 @@
 import { connectDB } from "@/lib/db";
 import { ok, fail } from "@/lib/api-response";
 import LeaveRequest from "@/lib/models/LeaveRequest";
+import { assertManagerCanAccessLeave } from "@/lib/manager-scope";
 import { getSession } from "@/lib/session";
 
 export async function PATCH(
@@ -19,6 +20,12 @@ export async function PATCH(
 
     const leave = await LeaveRequest.findById(id);
     if (!leave) return fail("Leave request not found", 404);
+
+    const access = await assertManagerCanAccessLeave(
+      session.user,
+      String(leave.employeeId)
+    );
+    if (!access.ok) return fail(access.message, 403);
 
     if (leave.status !== "approved") {
       return fail(`Can only rollback approved leaves, current status: ${leave.status}`, 409);

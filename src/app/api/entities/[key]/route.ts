@@ -11,6 +11,15 @@ import { isDbConfigured } from "@/lib/mongodb";
 import { useMockDataEnabled } from "@/lib/bootstrap-meta";
 import { SEED_DATA } from "@/lib/seed-data";
 import { ok, fail } from "@/lib/api-response";
+import {
+  requireSession,
+  requirePermission,
+  isAdminOrOwner,
+} from "@/lib/api-auth";
+import {
+  moduleForEntityKey,
+  sanitizeEntityPatch,
+} from "@/lib/entity-permissions";
 
 const REVERSE_MAP = Object.fromEntries(
   Object.entries(KEY_MAP).map(([field, key]) => [key, field])
@@ -18,9 +27,27 @@ const REVERSE_MAP = Object.fromEntries(
 
 type Params = { params: Promise<{ key: string }> };
 
+function requireEntityAccess(
+  user: NonNullable<Awaited<ReturnType<typeof requireSession>>["user"]>,
+  key: string,
+  action: "view" | "add" | "edit",
+) {
+  const module = moduleForEntityKey(key);
+  if (!module) return fail("Unknown entity key", 404);
+  if (["permissions", "roles"].includes(key) && !isAdminOrOwner(user.role)) {
+    return requirePermission(user, "user_management", action);
+  }
+  return requirePermission(user, module, action);
+}
+
 export async function GET(_req: Request, { params }: Params) {
   const { key } = await params;
   if (!REVERSE_MAP[key]) return fail("Unknown entity key", 404);
+
+  const { user, error } = await requireSession();
+  if (error) return error;
+  const permErr = requireEntityAccess(user, key, "view");
+  if (permErr) return permErr;
 
   try {
     if (!isDbConfigured()) {
@@ -49,13 +76,21 @@ export async function POST(request: Request, { params }: Params) {
   if (!REVERSE_MAP[key]) return fail("Unknown entity key", 404);
   if (!isDbConfigured()) return fail("Database not configured", 503);
 
+  const { user, error } = await requireSession();
+  if (error) return error;
+  const permErr = requireEntityAccess(user, key, "add");
+  if (permErr) return permErr;
+
   const body = await request.json().catch(() => null);
   if (!body?.item || typeof body.item !== "object") {
     return fail("Body must include item object", 400);
   }
 
   try {
-    const item = await appendEntityItem(key, body.item as Record<string, unknown>);
+    const item = await appendEntityItem(
+      key,
+      sanitizeEntityPatch(body.item as Record<string, unknown>),
+    );
     return ok({ created: true, item });
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Create failed", 500);
@@ -67,11 +102,19 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!REVERSE_MAP[key]) return fail("Unknown entity key", 404);
   if (!isDbConfigured()) return fail("Database not configured", 503);
 
+  const { user, error } = await requireSession();
+  if (error) return error;
+  const permErr = requireEntityAccess(user, key, "edit");
+  if (permErr) return permErr;
+
   const body = await request.json().catch(() => null);
   if (!body) return fail("Invalid body", 400);
 
   try {
     if ("items" in body) {
+      if (!isAdminOrOwner(user.role) && ["roles", "permissions"].includes(key)) {
+        return fail("Forbidden", 403);
+      }
       await upsertEntity(key, body.items);
       return ok({ updated: true });
     }
@@ -85,7 +128,7 @@ export async function PATCH(request: Request, { params }: Params) {
       const item = await updateEntityItem(
         key,
         String(body.id),
-        body.patch as Record<string, unknown>,
+        sanitizeEntityPatch(body.patch as Record<string, unknown>),
         body.idField
       );
       return ok({ updated: true, item });
@@ -101,6 +144,11 @@ export async function DELETE(request: Request, { params }: Params) {
   const { key } = await params;
   if (!REVERSE_MAP[key]) return fail("Unknown entity key", 404);
   if (!isDbConfigured()) return fail("Database not configured", 503);
+
+  const { user, error } = await requireSession();
+  if (error) return error;
+  const permErr = requireEntityAccess(user, key, "edit");
+  if (permErr) return permErr;
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");

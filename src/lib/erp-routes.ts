@@ -23,6 +23,7 @@ export const ERP_ROUTES = [
   "/dispatch",
   "/hrms/employees",
   "/hrms/attendance",
+  "/hrms/notifications",
   "/hrms/reports",
   "/hrms/reports/attendance",
   "/hrms/reports/employee",

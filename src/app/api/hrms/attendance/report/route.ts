@@ -2,6 +2,13 @@ import { connectDB } from "@/lib/db";
 import Employee from "@/lib/models/Employee";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import { ok, fail } from "@/lib/api-response";
+import {
+  assertCanAccessEmployee,
+  filterRowsByHrScope,
+  resolveHrDataScope,
+  scopeEmployeeFilter,
+} from "@/lib/hrms-access";
+import { getSession } from "@/lib/session";
 
 function parseDateParam(value: string | null): Date | null {
   if (!value) return null;
@@ -40,12 +47,25 @@ export async function GET(request: Request) {
     if (!from || !to) return fail("Query params from and to are required (ISO date)", 400);
 
     const employeeId = url.searchParams.get("employeeId")?.trim() || null;
+    const session = await getSession();
+    if (!session.isLoggedIn || !session.user) return fail("Unauthorized", 401);
+    const dataScope = await resolveHrDataScope(session.user);
+
+    if (employeeId) {
+      const access = await assertCanAccessEmployee(session.user, employeeId);
+      if (!access.ok) return fail(access.message, 403);
+    }
 
     const fromD = startOfDay(from);
     const toD = endOfDay(to);
 
     const query: Record<string, any> = { punchedAt: { $gte: fromD, $lte: toD } };
-    if (employeeId) query.employeeId = employeeId;
+    if (employeeId) {
+      query.employeeId = employeeId;
+    } else {
+      const scopeFilter = scopeEmployeeFilter(dataScope);
+      if (scopeFilter) Object.assign(query, scopeFilter);
+    }
 
     const punches = await AttendancePunch.find(query).sort({ punchedAt: 1 }).lean();
 
@@ -116,7 +136,16 @@ export async function GET(request: Request) {
       };
     });
 
-    return ok({ from: fromD.toISOString(), to: toD.toISOString(), employeeId, summary, daily });
+    const scopedDaily = filterRowsByHrScope(daily, dataScope);
+    const scopedSummary = filterRowsByHrScope(summary, dataScope);
+
+    return ok({
+      from: fromD.toISOString(),
+      to: toD.toISOString(),
+      employeeId,
+      summary: scopedSummary,
+      daily: scopedDaily,
+    });
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Failed to build report", 500);
   }

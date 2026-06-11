@@ -242,12 +242,12 @@ const RawMaterialInventory = () => {
 /* ============================================================
    VENDORS & PROCUREMENT (Vendors list + POs)
    ============================================================ */
-const Vendors = () => {
+const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) => {
   const DATA = useDATA();
   const { append, saving, error, clearError } = useEntityMutation();
   const [addVendor, setAddVendor] = useState(false);
   const [createPO, setCreatePO] = useState(false);
-  const [tab, setTab] = useState("vendors");
+  const [tab, setTab] = useState(defaultTab);
   const vendorForm = useFormState({ name: "", category: "Raw Material", city: "" });
   const poForm = useFormState({
     vendor: DATA.VENDORS[0]?.name ?? "",

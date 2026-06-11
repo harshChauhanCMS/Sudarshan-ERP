@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
   Modal,
@@ -21,6 +21,8 @@ import ReportSection from "@/components/hrms/ReportSection";
 import { ViewEditActions } from "@/components/common/TableActionIcons";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 import { downloadHolidayCalendarPdf } from "@/lib/holiday-calendar-pdf";
+import FilterSearchField from "@/components/hrms/FilterSearchField";
+import { filterBySearch } from "@/lib/filter-search";
 
 export type HolidayRecord = {
   _id: string;
@@ -57,7 +59,19 @@ export function HolidaysEditor({ companyName = "Sudarshan Group" }: HolidaysEdit
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<HolidayRecord | null>(null);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [search, setSearch] = useState("");
   const [form] = Form.useForm<HolidayFormValues>();
+
+  const filteredHolidays = useMemo(
+    () =>
+      filterBySearch(holidays, search, (h) => [
+        h.name,
+        h.date,
+        h.type,
+        h.description,
+      ]),
+    [holidays, search]
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -232,17 +246,17 @@ export function HolidaysEditor({ companyName = "Sudarshan Group" }: HolidaysEdit
   return (
     <>
       <div className="arf-panel ap-filters-panel" style={{ marginBottom: 0 }}>
-        <div className="arf-body" style={{ paddingTop: 14, paddingBottom: 14 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-end",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: 12,
-            }}
-          >
-            <div className="arf-item" style={{ maxWidth: 160, margin: 0 }}>
+        <div className="arf-head">
+          <span className="arf-head-title">Filters</span>
+        </div>
+        <div className="arf-body">
+          <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
+            <FilterSearchField
+              value={search}
+              onChange={setSearch}
+              placeholder="Search holiday name, date, type…"
+            />
+            <div className="arf-item" style={{ maxWidth: 160 }}>
               <span className="arf-label">Calendar year</span>
               <Select
                 className="w-full"
@@ -251,31 +265,34 @@ export function HolidaysEditor({ companyName = "Sudarshan Group" }: HolidaysEdit
                 options={YEAR_OPTIONS.map((y) => ({ value: y, label: String(y) }))}
               />
             </div>
-            <Space wrap>
-              <Button
-                icon={<FilePdfOutlined />}
-                loading={exportingPdf}
-                onClick={() => void exportPdf()}
-              >
-                Export PDF
-              </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
-                Add holiday
-              </Button>
-            </Space>
+            <div className="ap-filters-spacer" aria-hidden="true" />
+            <div className="arf-item ap-filters-actions ap-filters-actions--multi">
+              <Space wrap>
+                <Button
+                  icon={<FilePdfOutlined />}
+                  loading={exportingPdf}
+                  onClick={() => void exportPdf()}
+                >
+                  Export PDF
+                </Button>
+                <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
+                  Add holiday
+                </Button>
+              </Space>
+            </div>
           </div>
         </div>
       </div>
 
       <ReportSection
         title="Company holiday calendar"
-        meta={`${holidays.length} holidays in ${year}`}
+        meta={`${filteredHolidays.length} holidays in ${year}`}
         flush
       >
         <CommonTable
           {...ERP_TABLE_PROPS}
           loading={loading}
-          dataSource={holidays}
+          dataSource={filteredHolidays}
           columns={columns}
           rowKey="_id"
           size="middle"

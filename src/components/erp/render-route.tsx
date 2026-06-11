@@ -41,7 +41,7 @@ export function renderErpRoute(route: string, navigate: Navigate) {
     case "/procurement/vendors":
       return <Vendors />;
     case "/procurement/po":
-      return <Vendors />;
+      return <Vendors defaultTab="po" />;
     case "/procurement/invoices":
       return <InvoiceVerify />;
     case "/customers":

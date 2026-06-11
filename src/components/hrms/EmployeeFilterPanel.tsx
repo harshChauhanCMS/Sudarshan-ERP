@@ -2,8 +2,10 @@
 
 import { Button, Select } from "antd";
 import { FilterOutlined } from "@ant-design/icons";
+import FilterSearchField from "@/components/hrms/FilterSearchField";
 
 export interface EmployeeFilterValues {
+  search: string;
   department: string;
   role: string;
   shift: string;
@@ -48,6 +50,12 @@ export default function EmployeeFilterPanel({
 
       <div className="arf-body">
         <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
+          <FilterSearchField
+            value={filters.search}
+            onChange={(v) => patch("search", v)}
+            placeholder="Name, employee ID, phone, department, role…"
+          />
+
           <div className="arf-item">
             <span className="arf-label">Department</span>
             <Select

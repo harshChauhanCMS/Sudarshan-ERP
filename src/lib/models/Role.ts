@@ -1,27 +1,12 @@
 import mongoose, { Schema, Document } from "mongoose";
+import {
+  MODULE_KEYS,
+  type ModuleKey,
+  type ModulePermission,
+  type PermissionsMap,
+} from "@/lib/permission-types";
 
-// ─── Module Keys ─────────────────────────────────────────────────────────────
-export const MODULE_KEYS = [
-  "dashboard",
-  "hr",
-  "payroll",
-  "inventory_raw",
-  "inventory_packaging",
-  "inventory_spares",
-  "procurement_vendors",
-  "procurement_po",
-  "procurement_invoice",
-  "sales_customers",
-  "sales_orders",
-  "operations_production",
-  "operations_quality",
-  "dispatch",
-  "settings",
-  "user_management",
-  "reports",
-] as const;
-
-export type ModuleKey = (typeof MODULE_KEYS)[number];
+export { MODULE_KEYS, type ModuleKey, type ModulePermission, type PermissionsMap };
 
 export const MODULE_LABELS: Record<ModuleKey, string> = {
   dashboard: "Dashboard",
@@ -45,16 +30,6 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
 
 export type PermissionAction = "view" | "add" | "edit" | "approve" | "export";
 
-export type ModulePermission = {
-  view: boolean;
-  add: boolean;
-  edit: boolean;
-  approve: boolean;
-  export: boolean;
-};
-
-export type PermissionsMap = Record<ModuleKey, ModulePermission>;
-
 // ─── Helper builders ──────────────────────────────────────────────────────────
 const none = (): ModulePermission => ({ view: false, add: false, edit: false, approve: false, export: false });
 const viewOnly = (): ModulePermission => ({ view: true, add: false, edit: false, approve: false, export: false });
@@ -74,7 +49,7 @@ const ownerPerms = (): PermissionsMap => ({
 });
 
 const procurementPerms = (): PermissionsMap => ({
-  dashboard: viewOnly(), hr: none(), payroll: none(),
+  dashboard: none(), hr: none(), payroll: none(),
   inventory_raw: viewAddEditExport(), inventory_packaging: viewAddEditExport(), inventory_spares: viewAddEditExport(),
   procurement_vendors: viewAddEditExport(), procurement_po: full(), procurement_invoice: viewAddEditExport(),
   sales_customers: none(), sales_orders: none(),
@@ -83,7 +58,7 @@ const procurementPerms = (): PermissionsMap => ({
 });
 
 const rmProcurementPerms = (): PermissionsMap => ({
-  dashboard: viewOnly(), hr: none(), payroll: none(),
+  dashboard: none(), hr: none(), payroll: none(),
   inventory_raw: viewAddEditExport(), inventory_packaging: none(), inventory_spares: none(),
   procurement_vendors: viewAddEditExport(), procurement_po: viewAddEditExport(), procurement_invoice: none(),
   sales_customers: none(), sales_orders: none(),
@@ -92,7 +67,7 @@ const rmProcurementPerms = (): PermissionsMap => ({
 });
 
 const packagingProcurementPerms = (): PermissionsMap => ({
-  dashboard: viewOnly(), hr: none(), payroll: none(),
+  dashboard: none(), hr: none(), payroll: none(),
   inventory_raw: none(), inventory_packaging: viewAddEditExport(), inventory_spares: none(),
   procurement_vendors: viewAddEditExport(), procurement_po: viewAddEditExport(), procurement_invoice: none(),
   sales_customers: none(), sales_orders: none(),
@@ -101,7 +76,7 @@ const packagingProcurementPerms = (): PermissionsMap => ({
 });
 
 const sparesProcurementPerms = (): PermissionsMap => ({
-  dashboard: viewOnly(), hr: none(), payroll: none(),
+  dashboard: none(), hr: none(), payroll: none(),
   inventory_raw: none(), inventory_packaging: none(), inventory_spares: viewAddEditExport(),
   procurement_vendors: viewAddEditExport(), procurement_po: viewAddEditExport(), procurement_invoice: none(),
   sales_customers: none(), sales_orders: none(),
@@ -110,7 +85,7 @@ const sparesProcurementPerms = (): PermissionsMap => ({
 });
 
 const productionPerms = (): PermissionsMap => ({
-  dashboard: viewOnly(), hr: none(), payroll: none(),
+  dashboard: none(), hr: none(), payroll: none(),
   inventory_raw: viewExport(), inventory_packaging: viewExport(), inventory_spares: viewOnly(),
   procurement_vendors: none(), procurement_po: none(), procurement_invoice: none(),
   sales_customers: none(), sales_orders: none(),
@@ -119,7 +94,7 @@ const productionPerms = (): PermissionsMap => ({
 });
 
 const dispatchPerms = (): PermissionsMap => ({
-  dashboard: viewOnly(), hr: none(), payroll: none(),
+  dashboard: none(), hr: none(), payroll: none(),
   inventory_raw: viewOnly(), inventory_packaging: viewOnly(), inventory_spares: viewOnly(),
   procurement_vendors: none(), procurement_po: none(), procurement_invoice: none(),
   sales_customers: viewAddEditExport(), sales_orders: viewAddEditExport(),
@@ -128,7 +103,7 @@ const dispatchPerms = (): PermissionsMap => ({
 });
 
 const storePerms = (): PermissionsMap => ({
-  dashboard: viewOnly(), hr: none(), payroll: none(),
+  dashboard: none(), hr: none(), payroll: none(),
   inventory_raw: viewAddEditExport(), inventory_packaging: viewAddEditExport(), inventory_spares: viewAddEditExport(),
   procurement_vendors: viewOnly(), procurement_po: viewOnly(), procurement_invoice: none(),
   sales_customers: none(), sales_orders: none(),
@@ -137,7 +112,18 @@ const storePerms = (): PermissionsMap => ({
 });
 
 const hrPerms = (): PermissionsMap => ({
-  dashboard: viewExport(), hr: full(), payroll: full(),
+  dashboard: none(), hr: full(), payroll: full(),
+  inventory_raw: none(), inventory_packaging: none(), inventory_spares: none(),
+  procurement_vendors: none(), procurement_po: none(), procurement_invoice: none(),
+  sales_customers: none(), sales_orders: none(),
+  operations_production: none(), operations_quality: none(),
+  dispatch: none(), settings: none(), user_management: none(), reports: viewExport(),
+});
+
+const managerPerms = (): PermissionsMap => ({
+  dashboard: none(),
+  hr: { view: true, add: false, edit: false, approve: true, export: true },
+  payroll: none(),
   inventory_raw: none(), inventory_packaging: none(), inventory_spares: none(),
   procurement_vendors: none(), procurement_po: none(), procurement_invoice: none(),
   sales_customers: none(), sales_orders: none(),
@@ -213,9 +199,17 @@ export const DEFAULT_ROLES = [
   {
     roleKey: "hr",
     label: "HR",
-    description: "Full access on HR & Attendance. View + Export on Dashboard and Reports. No access to Settings.",
+    description: "Full access on HR & Attendance. View + Export on Reports. No access to Dashboard or Settings.",
     isSystem: true,
     permissions: hrPerms(),
+  },
+  {
+    roleKey: "manager",
+    label: "Manager",
+    description:
+      "View attendance and leave for assigned team members (reporting manager). Approve or reject team leave requests. No salary or payroll access.",
+    isSystem: true,
+    permissions: managerPerms(),
   },
 ];
 

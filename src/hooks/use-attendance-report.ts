@@ -2,9 +2,6 @@ import { useState, useMemo, useEffect } from "react";
 import dayjs from "dayjs";
 import { message } from "antd";
 import {
-  getAttendanceReportDummy,
-  isAttendanceReportEmpty,
-  isAttendanceReportSparse,
   type AttendanceSummaryRow,
   type AttendanceDailyRow,
   type AttendanceReportKpi,
@@ -12,6 +9,22 @@ import {
   type WeeklyTrendPoint,
   type DeptBreakdownPoint,
 } from "@/lib/attendance-report-dummy";
+import { filterBySearch } from "@/lib/filter-search";
+
+const EMPTY_KPI: AttendanceReportKpi = {
+  totalEmployees: 0,
+  presentDays: 0,
+  absentDays: 0,
+  lateDays: 0,
+  totalShortfall: 0,
+  totalOvertime: 0,
+};
+
+const EMPTY_GPS: AttendanceGpsSummary = {
+  gpsPunches: 0,
+  biometricPunches: 0,
+  gpsPercent: 0,
+};
 
 export type {
   AttendanceSummaryRow,
@@ -22,63 +35,107 @@ export type {
   DeptBreakdownPoint,
 };
 
-export function useAttendanceReport() {
-  const dummy = getAttendanceReportDummy();
+type AttendanceReportOptions = {
+  variant?: "default" | "daily";
+};
 
+export function useAttendanceReport(options?: AttendanceReportOptions) {
+  const isDaily = options?.variant === "daily";
   const [loading, setLoading] = useState(false);
-  const [departments, setDepartments] = useState<string[]>(() => dummy.departments);
-  const [range, setRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
-    dayjs().startOf("month"),
-    dayjs().endOf("month"),
-  ]);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [range, setRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>(
+    isDaily
+      ? [dayjs().startOf("day"), dayjs().endOf("day")]
+      : [dayjs().startOf("month"), dayjs().endOf("month")]
+  );
   const [dept, setDept] = useState("all");
   const [employeeId, setEmployeeId] = useState<string | undefined>(undefined);
   const [shift, setShift] = useState("all");
   const [unit, setUnit] = useState("all");
-  const [period, setPeriod] = useState("month");
-  const [kpi, setKpi] = useState<AttendanceReportKpi | null>(() => dummy.kpi);
-  const [workingDays, setWorkingDays] = useState(() => dummy.workingDays);
-  const [gpsSummary, setGpsSummary] = useState<AttendanceGpsSummary | null>(
-    () => dummy.gpsSummary
-  );
-  const [summary, setSummary] = useState<AttendanceSummaryRow[]>(() => dummy.summary);
-  const [daily, setDaily] = useState<AttendanceDailyRow[]>(() => dummy.daily);
-  const [usingDummy, setUsingDummy] = useState(true);
-  const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendPoint[]>(() => dummy.weeklyTrend);
-  const [deptBreakdown, setDeptBreakdown] = useState<DeptBreakdownPoint[]>(
-    () => dummy.deptBreakdown
-  );
+  const [period, setPeriod] = useState(isDaily ? "today" : "month");
+  const [search, setSearch] = useState("");
+  const [kpi, setKpi] = useState<AttendanceReportKpi | null>(null);
+  const [workingDays, setWorkingDays] = useState(0);
+  const [gpsSummary, setGpsSummary] = useState<AttendanceGpsSummary | null>(null);
+  const [summary, setSummary] = useState<AttendanceSummaryRow[]>([]);
+  const [daily, setDaily] = useState<AttendanceDailyRow[]>([]);
 
   useEffect(() => {
-    fetch("/api/hrms/departments")
-      .then((r) => r.json())
-      .then((j) => {
-        const fromApi: string[] = j?.data || [];
-        if (fromApi.length) {
-          setDepartments([...new Set([...dummy.departments, ...fromApi])]);
-        }
+    Promise.all([
+      fetch("/api/system/roles").then((r) => r.json()),
+      fetch("/api/hrms/departments").then((r) => r.json()),
+    ])
+      .then(([rolesRes, deptRes]) => {
+        const fromRoles: string[] = (rolesRes?.data ?? []).map(
+          (role: { roleKey?: string }) => role.roleKey
+        ).filter(Boolean);
+        const fromDistinct: string[] = deptRes?.data ?? [];
+        const merged = [...new Set([...fromRoles, ...fromDistinct])].sort(
+          (a, b) => a.localeCompare(b)
+        );
+        if (merged.length) setDepartments(merged);
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filterDailyByEmployee = (
-    rows: AttendanceDailyRow[],
-    empId?: string
-  ) => (empId ? rows.filter((r) => r.employeeId === empId) : rows);
+  const normalize = (value: string) => value.trim().toLowerCase();
 
-  const applyDummy = (month?: string, empId?: string) => {
-    const demo = getAttendanceReportDummy(month);
-    const dailyRows = filterDailyByEmployee(demo.daily, empId);
-    setKpi(demo.kpi);
-    setWorkingDays(demo.workingDays);
-    setGpsSummary(demo.gpsSummary);
-    setSummary(demo.summary);
-    setDaily(dailyRows);
-    setDepartments(demo.departments);
-    setWeeklyTrend(demo.weeklyTrend);
-    setDeptBreakdown(demo.deptBreakdown);
-    setUsingDummy(true);
+  const filterSummaryRows = (
+    rows: AttendanceSummaryRow[],
+    opts: { dept: string; unit: string }
+  ) => {
+    let filtered = rows;
+    if (opts.dept !== "all") {
+      const dept = normalize(opts.dept);
+      filtered = filtered.filter((r) => normalize(r.department || "") === dept);
+    }
+    if (opts.unit !== "all") {
+      const unit = normalize(opts.unit);
+      filtered = filtered.filter(
+        (r) => normalize(r.locationUnit || "") === unit
+      );
+    }
+    return filtered;
+  };
+
+  const filterAndSortDailyRows = (
+    rows: AttendanceDailyRow[],
+    opts: { dept: string; shift: string; unit: string; employeeId?: string }
+  ) => {
+    let filtered = rows;
+    if (opts.employeeId) {
+      filtered = filtered.filter((r) => r.employeeId === opts.employeeId);
+    }
+    if (opts.dept !== "all") {
+      const dept = normalize(opts.dept);
+      filtered = filtered.filter((r) => normalize(r.department || "") === dept);
+    }
+    if (opts.unit !== "all") {
+      const unit = normalize(opts.unit);
+      filtered = filtered.filter(
+        (r) => normalize(r.locationUnit || "") === unit
+      );
+    }
+    if (opts.shift !== "all") {
+      const shift = normalize(opts.shift);
+      filtered = filtered.filter((r) =>
+        normalize(r.primaryShift || "").includes(shift)
+      );
+    }
+    return [...filtered].sort((a, b) => {
+      const dayCmp = b.day.localeCompare(a.day);
+      if (dayCmp !== 0) return dayCmp;
+      return (a.employeeName || "").localeCompare(b.employeeName || "");
+    });
+  };
+
+  const applyEmpty = () => {
+    setKpi(EMPTY_KPI);
+    setWorkingDays(0);
+    setGpsSummary(EMPTY_GPS);
+    setSummary([]);
+    setDaily([]);
   };
 
   const load = async (opts: {
@@ -96,6 +153,7 @@ export function useAttendanceReport() {
       });
       if (opts.dept !== "all") params.set("department", opts.dept);
       if (opts.shift !== "all") params.set("shift", opts.shift);
+      if (opts.unit !== "all") params.set("locationUnit", opts.unit);
       if (opts.employeeId) params.set("employeeId", opts.employeeId);
 
       const res = await fetch(`/api/hrms/attendance/report/extended?${params}`);
@@ -103,39 +161,19 @@ export function useAttendanceReport() {
       if (!res.ok || json?.error) throw new Error(json?.error ?? "Failed");
 
       let rows: AttendanceSummaryRow[] = json.data.summary ?? [];
-      if (opts.unit !== "all") {
-        rows = rows.filter((r) => r.locationUnit === opts.unit);
-      }
-
-      if (
-        isAttendanceReportEmpty(rows) ||
-        rows.length < 3 ||
-        isAttendanceReportSparse(rows)
-      ) {
-        applyDummy(opts.range[0].format("YYYY-MM"), opts.employeeId);
-        return;
-      }
+      rows = filterSummaryRows(rows, { dept: opts.dept, unit: opts.unit });
 
       let dailyRows: AttendanceDailyRow[] = json.data.daily ?? [];
-      dailyRows = filterDailyByEmployee(dailyRows, opts.employeeId);
+      dailyRows = filterAndSortDailyRows(dailyRows, opts);
 
-      const demo = getAttendanceReportDummy(opts.range[0].format("YYYY-MM"));
-
-      setKpi(json.data.kpi);
-      setWorkingDays(json.data.workingDays ?? 20);
-      setGpsSummary(json.data.gpsSummary ?? demo.gpsSummary);
+      setKpi(json.data.kpi ?? EMPTY_KPI);
+      setWorkingDays(json.data.workingDays ?? 0);
+      setGpsSummary(json.data.gpsSummary ?? EMPTY_GPS);
       setSummary(rows);
       setDaily(dailyRows);
-      setWeeklyTrend(
-        json.data.weeklyTrend?.length ? json.data.weeklyTrend : demo.weeklyTrend
-      );
-      setDeptBreakdown(
-        json.data.deptBreakdown?.length ? json.data.deptBreakdown : demo.deptBreakdown
-      );
-      setUsingDummy(false);
     } catch {
-      applyDummy(opts.range[0].format("YYYY-MM"), opts.employeeId);
-      message.warning("Showing demo data — live report could not be loaded");
+      applyEmpty();
+      message.warning("Could not load attendance report");
     } finally {
       setLoading(false);
     }
@@ -143,7 +181,14 @@ export function useAttendanceReport() {
 
   const handleApply = () => {
     let newRange = range;
-    if (period === "last") {
+    if (period === "today") {
+      const today = dayjs();
+      newRange = [today.startOf("day"), today.endOf("day")];
+      setRange(newRange);
+    } else if (period === "date") {
+      newRange = [range[0].startOf("day"), range[0].endOf("day")];
+      setRange(newRange);
+    } else if (period === "last") {
       const last = dayjs().subtract(1, "month");
       newRange = [last.startOf("month"), last.endOf("month")];
       setRange(newRange);
@@ -161,6 +206,7 @@ export function useAttendanceReport() {
     });
     if (dept !== "all") params.set("department", dept);
     if (shift !== "all") params.set("shift", shift);
+    if (unit !== "all") params.set("locationUnit", unit);
     if (employeeId) params.set("employeeId", employeeId);
     return params;
   };
@@ -170,14 +216,79 @@ export function useAttendanceReport() {
     [summary]
   );
 
+  const searchedSummary = useMemo(
+    () =>
+      filterBySearch(summary, search, (r) => [
+        r.employeeId,
+        r.employeeName,
+        r.department,
+        r.designation,
+        r.locationUnit,
+        r.primaryShift,
+      ]),
+    [summary, search]
+  );
+
+  const searchedDaily = useMemo(
+    () =>
+      filterBySearch(daily, search, (r) => [
+        r.employeeId,
+        r.employeeName,
+        r.department,
+        r.locationUnit,
+        r.primaryShift,
+        r.day,
+      ]),
+    [daily, search]
+  );
+
+  const rangeFrom = range[0].format("YYYY-MM-DD");
+  const rangeTo = range[1].format("YYYY-MM-DD");
+
+  const weeklyTrend = useMemo((): WeeklyTrendPoint[] => {
+    if (!searchedDaily.length) return [];
+    const rangeStart = dayjs(rangeFrom).startOf("day");
+    const buckets = new Map<number, { present: number; absent: number }>();
+    for (const row of searchedDaily) {
+      const weekIndex = Math.floor(dayjs(row.day).diff(rangeStart, "day") / 7);
+      const cur = buckets.get(weekIndex) ?? { present: 0, absent: 0 };
+      if (row.present) cur.present += 1;
+      if (row.absent) cur.absent += 1;
+      buckets.set(weekIndex, cur);
+    }
+    return [...buckets.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([idx, v]) => ({
+        week: `W${idx + 1}`,
+        present: v.present,
+        absent: v.absent,
+      }));
+  }, [searchedDaily, rangeFrom, rangeTo]);
+
+  const deptBreakdown = useMemo((): DeptBreakdownPoint[] => {
+    const map = new Map<string, { present: number; absent: number }>();
+    for (const s of searchedSummary) {
+      const cur = map.get(s.department) ?? { present: 0, absent: 0 };
+      cur.present += s.presentDays;
+      cur.absent += s.absentDays;
+      map.set(s.department, cur);
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dept, v]) => {
+        const total = v.present + v.absent || 1;
+        return { dept, presentPct: Math.round((v.present / total) * 100) };
+      });
+  }, [searchedSummary]);
+
   const fieldRows = useMemo(
-    () => summary.filter((s) => /sales|field/i.test(s.department)),
-    [summary]
+    () => searchedSummary.filter((s) => /sales|field/i.test(s.department)),
+    [searchedSummary]
   );
 
   const officeStats = useMemo(() => {
     const fieldDays = fieldRows.reduce((a, s) => a + s.presentDays, 0);
-    const totalPresent = summary.reduce((a, s) => a + s.presentDays, 0);
+    const totalPresent = searchedSummary.reduce((a, s) => a + s.presentDays, 0);
     const inOfficeDays = totalPresent - fieldDays;
     const totalExpected = summary.length * workingDays || 1;
     return {
@@ -186,16 +297,16 @@ export function useAttendanceReport() {
       inOfficeDays,
       fieldDays,
       fieldEmployees: fieldRows.length,
-      totalEmployees: summary.length,
+      totalEmployees: searchedSummary.length,
     };
-  }, [summary, fieldRows, workingDays]);
+  }, [searchedSummary, fieldRows, workingDays]);
 
   const unitTable = useMemo(() => {
     const map = new Map<
       string,
       { unit: string; employees: number; present: number; absent: number; late: number; inOffice: number; fieldDays: number }
     >();
-    for (const s of summary) {
+    for (const s of searchedSummary) {
       const key = s.locationUnit || "—";
       const cur = map.get(key) ?? {
         unit: key, employees: 0, present: 0, absent: 0, late: 0, inOffice: 0, fieldDays: 0,
@@ -213,11 +324,11 @@ export function useAttendanceReport() {
       const total = u.present + u.absent || 1;
       return { ...u, compliance: Math.round((u.present / total) * 100) };
     });
-  }, [summary]);
+  }, [searchedSummary]);
 
   const deptCompliance = useMemo(() => {
     const map = new Map<string, { department: string; present: number; absent: number; late: number }>();
-    for (const s of summary) {
+    for (const s of searchedSummary) {
       const cur = map.get(s.department) ?? {
         department: s.department, present: 0, absent: 0, late: 0,
       };
@@ -235,7 +346,25 @@ export function useAttendanceReport() {
       if (presentPct < 85) { text = "Poor"; color = "error"; }
       return { ...d, presentPct, absentPct: 100 - presentPct, text, color };
     });
-  }, [summary]);
+  }, [searchedSummary]);
+
+  const rangeLabel = useMemo(() => {
+    if (
+      period === "today" ||
+      period === "date" ||
+      range[0].isSame(range[1], "day")
+    ) {
+      return range[0].format("DD MMM YYYY");
+    }
+    if (
+      range[0].isSame(range[1], "month") &&
+      range[0].date() === 1 &&
+      range[1].date() === range[1].daysInMonth()
+    ) {
+      return range[0].format("MMM YYYY");
+    }
+    return `${range[0].format("DD MMM YYYY")} – ${range[1].format("DD MMM YYYY")}`;
+  }, [range, period]);
 
   return {
     range, setRange,
@@ -244,12 +373,15 @@ export function useAttendanceReport() {
     shift, setShift,
     unit, setUnit,
     period, setPeriod,
+    search, setSearch,
     departments, units,
     loading,
-    usingDummy,
-    kpi, workingDays, gpsSummary, summary, daily, weeklyTrend, deptBreakdown,
+    kpi, workingDays, gpsSummary,
+    summary: searchedSummary,
+    daily: searchedDaily,
+    weeklyTrend, deptBreakdown,
     fieldRows, officeStats, unitTable, deptCompliance,
     handleApply, buildCsvUrl,
-    rangeLabel: range[0].format("MMM YYYY"),
+    rangeLabel,
   };
 }

@@ -1,6 +1,8 @@
 import { connectDB } from "@/lib/db";
 import { ok, fail } from "@/lib/api-response";
 import LeaveRequest from "@/lib/models/LeaveRequest";
+import { assertManagerCanAccessLeave } from "@/lib/manager-scope";
+import { sendLeaveDecisionEmail } from "@/lib/leave-notification-email";
 import { getSession } from "@/lib/session";
 
 export async function POST(request: Request) {
@@ -25,6 +27,15 @@ export async function POST(request: Request) {
         const leave = await LeaveRequest.findById(id);
         if (!leave) { results.push({ id, status: "error", error: "Not found" }); continue; }
 
+        const access = await assertManagerCanAccessLeave(
+          session.user,
+          String(leave.employeeId)
+        );
+        if (!access.ok) {
+          results.push({ id, status: "error", error: access.message });
+          continue;
+        }
+
         if (action === "approve") {
           if (!["pending", "hod_approved"].includes(leave.status)) {
             results.push({ id, status: "skipped", error: `Already ${leave.status}` });
@@ -44,6 +55,24 @@ export async function POST(request: Request) {
         }
 
         await leave.save();
+
+        await sendLeaveDecisionEmail(
+          {
+            employeeId: String(leave.employeeId),
+            employeeName: leave.employeeName,
+            leaveType: leave.leaveType,
+            fromDate: leave.fromDate,
+            toDate: leave.toDate,
+            days: leave.days,
+            reason: leave.reason,
+          },
+          action === "approve" ? "approved" : "rejected",
+          {
+            actedBy: by,
+            rejectionReason: action === "reject" ? reason || "Bulk rejected" : undefined,
+          },
+        );
+
         results.push({ id, status: "ok" });
       } catch (err) {
         results.push({ id, status: "error", error: err instanceof Error ? err.message : "Failed" });
