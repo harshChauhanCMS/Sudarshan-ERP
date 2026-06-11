@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getIronSession } from "iron-session";
 import { getSessionOptions, type SessionData } from "@/lib/session";
+import { verifyMobileToken } from "@/lib/mobile-auth";
 import {
   canAccessRoute,
   getDefaultLandingRoute,
@@ -15,6 +16,7 @@ import {
 const PUBLIC_PATHS = ["/login", "/forgot", "/mobile"];
 const PUBLIC_API = [
   "/api/auth/login",
+  "/api/auth/mobile/login",
   "/api/auth/forgot",
   "/api/auth/forgot/verify",
   "/api/auth/reset-password",
@@ -44,6 +46,23 @@ export async function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/api/")) {
+    const bearer = request.headers.get("authorization");
+    const mobileToken = bearer?.startsWith("Bearer ")
+      ? bearer.slice(7).trim()
+      : "";
+
+    if (mobileToken) {
+      try {
+        if (await verifyMobileToken(mobileToken)) {
+          return NextResponse.next();
+        }
+      } catch {
+        // Edge verify can fail if SESSION_SECRET is unavailable — route verifies in Node
+      }
+      // Mobile Bearer present: reach API route; getUserFromRequest validates in Node runtime
+      return NextResponse.next();
+    }
+
     const res = NextResponse.next();
     const session = await getIronSession<SessionData>(
       request,

@@ -3,17 +3,17 @@ import { ok, fail } from "@/lib/api-response";
 import LeaveRequest from "@/lib/models/LeaveRequest";
 import LeavePolicy, { DEFAULT_LEAVE_POLICIES } from "@/lib/models/LeavePolicy";
 import { resolveSessionEmployee } from "@/lib/resolve-session-employee";
-import { getSession } from "@/lib/session";
+import { getUserFromRequest } from "@/lib/api-request-auth";
 
-export async function GET() {
-  const session = await getSession();
-  if (!session.isLoggedIn || !session.user) {
+export async function GET(request: Request) {
+  const user = await getUserFromRequest(request);
+  if (!user) {
     return fail("Unauthorized", 401);
   }
 
   try {
     await connectDB();
-    const employee = await resolveSessionEmployee(session.user);
+    const employee = await resolveSessionEmployee(user);
     if (!employee) {
       return fail(
         "No employee profile is linked to your login. Contact HR to link your official email or employee ID.",
@@ -69,6 +69,15 @@ export async function GET() {
         fullName: employee.fullName,
         department: employee.department,
         designation: employee.designation,
+        primaryContact: employee.primaryContact ?? "",
+        officialEmail: employee.officialEmail ?? "",
+        personalEmail: employee.personalEmail ?? "",
+      },
+      user: {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        employeeId: user.employeeId,
       },
       balance,
       recent: recent.map((leave) => ({
