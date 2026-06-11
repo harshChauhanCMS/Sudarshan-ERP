@@ -2,6 +2,7 @@ import { connectDB } from "@/lib/db";
 import { ok, fail } from "@/lib/api-response";
 import LeaveRequest from "@/lib/models/LeaveRequest";
 import { assertManagerCanAccessLeave } from "@/lib/manager-scope";
+import { sendLeaveDecisionEmail } from "@/lib/leave-notification-email";
 import { getSession } from "@/lib/session";
 
 export async function PATCH(
@@ -36,7 +37,22 @@ export async function PATCH(
     leave.hrApprovedBy = by;
 
     await leave.save();
-    return ok({ leave });
+
+    const emailResult = await sendLeaveDecisionEmail(
+      {
+        employeeId: String(leave.employeeId),
+        employeeName: leave.employeeName,
+        leaveType: leave.leaveType,
+        fromDate: leave.fromDate,
+        toDate: leave.toDate,
+        days: leave.days,
+        reason: leave.reason,
+      },
+      "approved",
+      { actedBy: by },
+    );
+
+    return ok({ leave, email: emailResult });
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Approve failed", 500);
   }

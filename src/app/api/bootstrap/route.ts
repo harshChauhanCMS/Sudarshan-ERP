@@ -5,8 +5,11 @@ import { isDbConfigured } from "@/lib/mongodb";
 import { fail } from "@/lib/api-response";
 import { SEED_DATA } from "@/lib/seed-data";
 import { NextResponse } from "next/server";
+import { requireSession } from "@/lib/api-auth";
 
 export async function GET() {
+  const { error } = await requireSession();
+  if (error) return error;
   try {
     if (!isDbConfigured()) {
       const data = useMockDataEnabled() ? SEED_DATA : EMPTY_ERP_DATA;

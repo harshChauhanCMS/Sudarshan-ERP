@@ -4,6 +4,7 @@ import SalarySheet from "@/lib/models/SalarySheet";
 import { fail } from "@/lib/api-response";
 import { filterRowsForHrViewer } from "@/lib/hr-staff-visibility";
 import { getSession } from "@/lib/session";
+import { canManagePayroll } from "@/lib/hrms-access";
 
 function csvEscape(v: unknown): string {
   const s = v == null ? "" : String(v);
@@ -19,6 +20,9 @@ export async function GET(request: Request) {
     if (!cycle) return fail("cycle param is required", 400);
 
     const session = await getSession();
+    if (!session.isLoggedIn || !session.user) return fail("Unauthorized", 401);
+    if (!canManagePayroll(session.user)) return fail("Forbidden", 403);
+
     const sheets = await filterRowsForHrViewer(
       (
         await SalarySheet.find({ cycle }).sort({ employeeName: 1 }).lean()

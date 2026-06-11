@@ -4,8 +4,18 @@ import { User } from "@/models/User";
 import { getSession } from "@/lib/session";
 import { ok, fail } from "@/lib/api-response";
 import { resolvePermissionsForRole } from "@/lib/resolve-user-permissions";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip")?.trim() ||
+    "unknown";
+  const rl = checkRateLimit(`login:${ip}`, 10, 15 * 60 * 1000);
+  if (!rl.ok) {
+    return fail(`Too many login attempts. Try again in ${rl.retryAfterSec}s.`, 429);
+  }
+
   const body = await request.json().catch(() => ({}));
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";

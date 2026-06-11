@@ -4,6 +4,15 @@ import { Button, DatePicker, Select } from "antd";
 import { FilterOutlined } from "@ant-design/icons";
 import type dayjs from "dayjs";
 import EmployeeSelect from "@/components/erp/EmployeeSelect";
+import FilterSearchField from "@/components/hrms/FilterSearchField";
+
+export type PeriodOption = { value: string; label: string };
+
+const DEFAULT_PERIOD_OPTIONS: PeriodOption[] = [
+  { value: "month", label: "This month" },
+  { value: "last", label: "Last month" },
+  { value: "custom", label: "Pick month…" },
+];
 
 interface Props {
   range: [dayjs.Dayjs, dayjs.Dayjs];
@@ -20,11 +29,15 @@ interface Props {
   units: string[];
   loading: boolean;
   onApply: () => void;
+  periodOptions?: PeriodOption[];
   showShift?: boolean;
   showEmployee?: boolean;
   employeeId?: string;
   setEmployeeId?: (v: string | undefined) => void;
   splitApplyRow?: boolean;
+  search?: string;
+  setSearch?: (v: string) => void;
+  searchPlaceholder?: string;
 }
 
 export default function AttendanceFilterPanel({
@@ -35,11 +48,15 @@ export default function AttendanceFilterPanel({
   period, setPeriod,
   departments, units,
   loading, onApply,
+  periodOptions = DEFAULT_PERIOD_OPTIONS,
   showShift = true,
   showEmployee = false,
   employeeId,
   setEmployeeId,
-  splitApplyRow = false,
+  splitApplyRow = true,
+  search = "",
+  setSearch,
+  searchPlaceholder,
 }: Props) {
   const controlsClass = splitApplyRow
     ? "arf-controls ap-filters-controls ap-filters-controls--split-apply"
@@ -54,24 +71,48 @@ export default function AttendanceFilterPanel({
 
       <div className="arf-body">
         <div className={controlsClass}>
+          {setSearch ? (
+            <FilterSearchField
+              value={search}
+              onChange={setSearch}
+              placeholder={
+                searchPlaceholder ??
+                "Search employee name, ID, department…"
+              }
+            />
+          ) : null}
+
           <div className="arf-item">
-            <span className="arf-label">Time period</span>
+            <label htmlFor="arf-period" className="arf-label">Time period</label>
             <Select
+              id="arf-period"
               className="w-full"
               value={period}
               onChange={setPeriod}
-              options={[
-                { value: "month", label: "This month" },
-                { value: "last", label: "Last month" },
-                { value: "custom", label: "Pick month…" },
-              ]}
+              options={periodOptions}
             />
           </div>
 
+          {period === "date" && (
+            <div className="arf-item">
+              <label htmlFor="arf-date" className="arf-label">Date</label>
+              <DatePicker
+                id="arf-date"
+                className="w-full"
+                value={range[0]}
+                onChange={(d) => {
+                  if (d) setRange([d.startOf("day"), d.endOf("day")]);
+                }}
+                allowClear={false}
+              />
+            </div>
+          )}
+
           {period === "custom" && (
             <div className="arf-item">
-              <span className="arf-label">Month</span>
+              <label htmlFor="arf-month" className="arf-label">Month</label>
               <DatePicker
+                id="arf-month"
                 className="w-full"
                 picker="month"
                 value={range[0]}
@@ -84,8 +125,9 @@ export default function AttendanceFilterPanel({
           )}
 
           <div className="arf-item">
-            <span className="arf-label">Unit</span>
+            <label htmlFor="arf-unit" className="arf-label">Unit</label>
             <Select
+              id="arf-unit"
               className="w-full"
               value={unit}
               onChange={setUnit}
@@ -97,8 +139,9 @@ export default function AttendanceFilterPanel({
           </div>
 
           <div className="arf-item">
-            <span className="arf-label">Department</span>
+            <label htmlFor="arf-dept" className="arf-label">Department</label>
             <Select
+              id="arf-dept"
               className="w-full"
               value={dept}
               onChange={setDept}
@@ -111,8 +154,9 @@ export default function AttendanceFilterPanel({
 
           {showShift && (
             <div className="arf-item">
-              <span className="arf-label">Shift</span>
+              <label htmlFor="arf-shift" className="arf-label">Shift</label>
               <Select
+                id="arf-shift"
                 className="w-full"
                 value={shift}
                 onChange={setShift}
@@ -128,8 +172,9 @@ export default function AttendanceFilterPanel({
 
           {showEmployee && setEmployeeId && (
             <div className="arf-item">
-              <span className="arf-label">Employee</span>
+              <label htmlFor="arf-employee" className="arf-label">Employee</label>
               <EmployeeSelect
+                id="arf-employee"
                 value={employeeId}
                 onChange={(id) => setEmployeeId(id)}
                 placeholder="All employees"
@@ -138,7 +183,12 @@ export default function AttendanceFilterPanel({
             </div>
           )}
 
-          {splitApplyRow && <div className="ap-filters-row-break" aria-hidden="true" />}
+          {splitApplyRow && (
+            <>
+              <div className="ap-filters-row-break" aria-hidden="true" />
+              <div className="ap-filters-spacer" aria-hidden="true" />
+            </>
+          )}
 
           <div className="arf-item ap-filters-actions">
             <Button

@@ -2,6 +2,8 @@ import { connectDB } from "@/lib/db";
 import { ok, fail } from "@/lib/api-response";
 import LeaveRequest from "@/lib/models/LeaveRequest";
 import LeavePolicy, { DEFAULT_LEAVE_POLICIES } from "@/lib/models/LeavePolicy";
+import { assertCanAccessEmployee } from "@/lib/hrms-access";
+import { getSession } from "@/lib/session";
 
 export async function GET(
   _request: Request,
@@ -9,7 +11,12 @@ export async function GET(
 ) {
   try {
     await connectDB();
+    const session = await getSession();
+    if (!session.isLoggedIn || !session.user) return fail("Unauthorized", 401);
+
     const { employeeId } = await params;
+    const access = await assertCanAccessEmployee(session.user, employeeId);
+    if (!access.ok) return fail(access.message, 403);
 
     // Seed default policies if none exist
     const count = await LeavePolicy.countDocuments();

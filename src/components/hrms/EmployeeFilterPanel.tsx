@@ -1,7 +1,8 @@
 "use client";
 
-import { Button, Input, Select } from "antd";
-import { FilterOutlined, SearchOutlined } from "@ant-design/icons";
+import { Button, Select } from "antd";
+import { FilterOutlined } from "@ant-design/icons";
+import FilterSearchField from "@/components/hrms/FilterSearchField";
 
 export interface EmployeeFilterValues {
   search: string;
@@ -49,16 +50,11 @@ export default function EmployeeFilterPanel({
 
       <div className="arf-body">
         <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
-          <div className="arf-item ap-filters-search-field">
-            <span className="arf-label">Search</span>
-            <Input
-              allowClear
-              placeholder="Name, employee ID, phone, department, role…"
-              prefix={<SearchOutlined style={{ color: "var(--fg-muted)" }} />}
-              value={filters.search}
-              onChange={(e) => patch("search", e.target.value)}
-            />
-          </div>
+          <FilterSearchField
+            value={filters.search}
+            onChange={(v) => patch("search", v)}
+            placeholder="Name, employee ID, phone, department, role…"
+          />
 
           <div className="arf-item">
             <span className="arf-label">Department</span>

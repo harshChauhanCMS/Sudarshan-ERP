@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Table, Button, Select, Tag, message } from "antd";
+import dayjs from "dayjs";
 import {
   FilterOutlined,
   DownloadOutlined,
@@ -19,7 +20,7 @@ import ReportSection from "@/components/hrms/ReportSection";
 import StatCard from "@/components/common/StatCard";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 import {
-  getDailyWageWorkers,
+  type DailyWageWorker,
   filterWorkers,
   getDailyWageKpi,
   getTradeSummary,
@@ -29,13 +30,13 @@ import {
   getSampleWorker,
   formatInr,
   formatLakhs,
-  PAY_PERIODS,
   PAY_FREQUENCIES,
-  UNITS,
   SKILL_FILTERS,
-  CONTRACTORS,
   DISBURSEMENT_FILTERS,
 } from "@/lib/daily-wage-dummy";
+import FilterSearchField from "@/components/hrms/FilterSearchField";
+import { filterBySearch } from "@/lib/filter-search";
+import { downloadCsv } from "@/lib/download-csv";
 
 function skillTagClass(skill: string) {
   if (skill === "Skilled") return "daily-wage-skill-tag--skilled";
@@ -43,15 +44,62 @@ function skillTagClass(skill: string) {
   return "daily-wage-skill-tag--unskilled";
 }
 
-export default function DailyWagePayrollPage() {
-  const allWorkers = useMemo(() => getDailyWageWorkers(), []);
+function buildPeriodOptions() {
+  const options: { value: string; label: string }[] = [];
+  const now = dayjs();
+  for (let i = 0; i < 12; i++) {
+    const d = now.subtract(i, "month");
+    options.push({
+      value: d.format("YYYY-MM"),
+      label: d.format("MMM YYYY"),
+    });
+  }
+  return options;
+}
 
-  const [payPeriod, setPayPeriod] = useState("2025-03");
+export default function DailyWagePayrollPage() {
+  const periodOptions = useMemo(() => buildPeriodOptions(), []);
+  const [allWorkers, setAllWorkers] = useState<DailyWageWorker[]>([]);
+  const [unitOptions, setUnitOptions] = useState<string[]>([]);
+  const [contractorOptions, setContractorOptions] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [payPeriod, setPayPeriod] = useState(
+    () => dayjs().format("YYYY-MM")
+  );
   const [payFrequency, setPayFrequency] = useState("Monthly");
   const [unit, setUnit] = useState("All");
   const [skill, setSkill] = useState("All");
   const [contractor, setContractor] = useState("All");
   const [disbursement, setDisbursement] = useState("All");
+  const [search, setSearch] = useState("");
+
+  const loadWorkers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `/api/hrms/salary/daily-wage?period=${encodeURIComponent(payPeriod)}`
+      );
+      const json = await res.json();
+      if (!res.ok || json?.error) throw new Error(json?.error ?? "Failed");
+      setAllWorkers(json.data?.workers ?? []);
+      setUnitOptions(json.data?.units ?? []);
+      setContractorOptions(json.data?.contractors ?? []);
+    } catch (e) {
+      message.error(
+        e instanceof Error ? e.message : "Failed to load daily wage employees"
+      );
+      setAllWorkers([]);
+      setUnitOptions([]);
+      setContractorOptions([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [payPeriod]);
+
+  useEffect(() => {
+    void loadWorkers();
+  }, [loadWorkers]);
 
   const workers = useMemo(
     () => filterWorkers(allWorkers, { unit, skill, contractor, disbursement }),
@@ -69,11 +117,25 @@ export default function DailyWagePayrollPage() {
   const samplePay = sample ? calcWorkerPay(sample) : null;
 
   const periodLabel =
-    PAY_PERIODS.find((p) => p.value === payPeriod)?.label ?? payPeriod;
+    periodOptions.find((p) => p.value === payPeriod)?.label ?? payPeriod;
+
+  const searchedWorkers = useMemo(
+    () =>
+      filterBySearch(workers, search, (w) => [
+        w.id,
+        w.name,
+        w.trade,
+        w.skill,
+        w.unit,
+        w.contractor,
+      ]),
+    [workers, search],
+  );
 
   const tableData = useMemo(
-    () => workers.map((w) => ({ ...w, ...calcWorkerPay(w), key: w.id })),
-    [workers],
+    () =>
+      searchedWorkers.map((w) => ({ ...w, ...calcWorkerPay(w), key: w.id })),
+    [searchedWorkers],
   );
 
   const totals = useMemo(() => {
@@ -140,7 +202,7 @@ export default function DailyWagePayrollPage() {
       dataIndex: "dailyRate",
       key: "rate",
       width: 110,
-      align: "right" as const,
+      align: "center" as const,
       render: (v: number) => formatInr(v),
     },
     {
@@ -155,7 +217,7 @@ export default function DailyWagePayrollPage() {
       dataIndex: "wages",
       key: "wages",
       width: 100,
-      align: "right" as const,
+      align: "center" as const,
       render: (v: number) => formatInr(v),
     },
     {
@@ -170,7 +232,7 @@ export default function DailyWagePayrollPage() {
       dataIndex: "otAmount",
       key: "otAmt",
       width: 100,
-      align: "right" as const,
+      align: "center" as const,
       render: (v: number) => formatInr(v),
     },
     {
@@ -178,7 +240,7 @@ export default function DailyWagePayrollPage() {
       dataIndex: "gross",
       key: "gross",
       width: 100,
-      align: "right" as const,
+      align: "center" as const,
       render: (v: number) => (
         <span className="font-semibold">{formatInr(v)}</span>
       ),
@@ -188,7 +250,7 @@ export default function DailyWagePayrollPage() {
       dataIndex: "deductions",
       key: "ded",
       width: 110,
-      align: "right" as const,
+      align: "center" as const,
       render: (v: number) => (
         <span className="text-rose-600">{formatInr(v)}</span>
       ),
@@ -198,7 +260,7 @@ export default function DailyWagePayrollPage() {
       dataIndex: "net",
       key: "net",
       width: 110,
-      align: "right" as const,
+      align: "center" as const,
       render: (v: number) => (
         <span className="font-extrabold">{formatInr(v)}</span>
       ),
@@ -230,9 +292,47 @@ export default function DailyWagePayrollPage() {
           <>
             <Button
               icon={<DownloadOutlined />}
-              onClick={() => message.info("Export Excel — preview")}
+              disabled={!searchedWorkers.length}
+              onClick={() => {
+                downloadCsv(
+                  `daily-wage-${payPeriod}.csv`,
+                  [
+                    "code",
+                    "name",
+                    "unit",
+                    "skill",
+                    "trade",
+                    "dailyRate",
+                    "days",
+                    "wages",
+                    "otHours",
+                    "otPay",
+                    "totalPay",
+                    "contractor",
+                    "status",
+                  ],
+                  searchedWorkers.map((w) => {
+                    const pay = calcWorkerPay(w);
+                    return {
+                      code: w.code,
+                      name: w.name,
+                      unit: w.unit,
+                      skill: w.skill,
+                      trade: w.trade,
+                      dailyRate: w.dailyRate,
+                      days: w.days,
+                      wages: pay.wages,
+                      otHours: w.otHours,
+                      otPay: pay.otAmount,
+                      totalPay: pay.net,
+                      contractor: w.contractor,
+                      status: w.status,
+                    };
+                  }),
+                );
+              }}
             >
-              Export
+              Export CSV
             </Button>
             <Button
               type="primary"
@@ -257,16 +357,18 @@ export default function DailyWagePayrollPage() {
 
         <div className="arf-body">
           <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
+            <FilterSearchField
+              value={search}
+              onChange={setSearch}
+              placeholder="Search worker name, ID, trade, contractor…"
+            />
             <div className="arf-item">
               <span className="arf-label">Pay Period</span>
               <Select
                 className="w-full"
                 value={payPeriod}
                 onChange={setPayPeriod}
-                options={PAY_PERIODS.map((p) => ({
-                  value: p.value,
-                  label: p.label,
-                }))}
+                options={periodOptions}
               />
             </div>
             <div className="arf-item">
@@ -284,7 +386,10 @@ export default function DailyWagePayrollPage() {
                 className="w-full"
                 value={unit}
                 onChange={setUnit}
-                options={UNITS.map((u) => ({ value: u, label: u }))}
+                options={[
+                  { value: "All", label: "All units" },
+                  ...unitOptions.map((u) => ({ value: u, label: u })),
+                ]}
               />
             </div>
             <div className="arf-item">
@@ -303,7 +408,10 @@ export default function DailyWagePayrollPage() {
                 className="w-full"
                 value={contractor}
                 onChange={setContractor}
-                options={CONTRACTORS.map((c) => ({ value: c, label: c }))}
+                options={[
+                  { value: "All", label: "All contractors" },
+                  ...contractorOptions.map((c) => ({ value: c, label: c })),
+                ]}
               />
             </div>
             <div className="arf-item">
@@ -320,7 +428,12 @@ export default function DailyWagePayrollPage() {
             </div>
             <div className="ap-filters-spacer" aria-hidden="true" />
             <div className="arf-item ap-filters-actions">
-              <Button type="primary" icon={<FilterOutlined />}>
+              <Button
+                type="primary"
+                icon={<FilterOutlined />}
+                loading={loading}
+                onClick={() => void loadWorkers()}
+              >
                 Apply filters
               </Button>
             </div>
@@ -448,11 +561,17 @@ export default function DailyWagePayrollPage() {
       >
         <CommonTable
           {...ERP_TABLE_PROPS}
+          loading={loading}
           dataSource={tableData}
           columns={columns}
           rowKey="key"
           size="small"
           scroll={{ x: 1400 }}
+          locale={{
+            emptyText: loading
+              ? "Loading…"
+              : "No daily wage employees found. Add employees with compensation type “Daily wage”.",
+          }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
@@ -462,33 +581,34 @@ export default function DailyWagePayrollPage() {
           summary={() => (
             <Table.Summary fixed>
               <Table.Summary.Row
+                className="daily-wage-table-totals-row"
                 style={{ background: "var(--bg-sunken)", fontWeight: 700 }}
               >
-                <Table.Summary.Cell index={0} colSpan={5}>
+                <Table.Summary.Cell index={0} colSpan={6} align="center">
                   Totals
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={5} align="center">
+                <Table.Summary.Cell index={6} align="center">
                   {totals.days}
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={6} align="right">
+                <Table.Summary.Cell index={7} align="center">
                   {formatInr(totals.wages)}
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={7} align="center">
+                <Table.Summary.Cell index={8} align="center">
                   {totals.otHrs}
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={8} align="right">
+                <Table.Summary.Cell index={9} align="center">
                   {formatInr(totals.otAmt)}
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={9} align="right">
+                <Table.Summary.Cell index={10} align="center">
                   {formatInr(totals.gross)}
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={10} align="right">
+                <Table.Summary.Cell index={11} align="center">
                   {formatInr(totals.ded)}
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={11} align="right">
+                <Table.Summary.Cell index={12} align="center">
                   {formatInr(totals.net)}
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={12} colSpan={2} />
+                <Table.Summary.Cell index={13} colSpan={2} />
               </Table.Summary.Row>
             </Table.Summary>
           )}

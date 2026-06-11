@@ -2,6 +2,7 @@ import { connectDB } from "@/lib/db";
 import { ok, fail } from "@/lib/api-response";
 import LeaveRequest from "@/lib/models/LeaveRequest";
 import { assertManagerCanAccessLeave } from "@/lib/manager-scope";
+import { sendLeaveDecisionEmail } from "@/lib/leave-notification-email";
 import { getSession } from "@/lib/session";
 
 export async function POST(request: Request) {
@@ -54,6 +55,24 @@ export async function POST(request: Request) {
         }
 
         await leave.save();
+
+        await sendLeaveDecisionEmail(
+          {
+            employeeId: String(leave.employeeId),
+            employeeName: leave.employeeName,
+            leaveType: leave.leaveType,
+            fromDate: leave.fromDate,
+            toDate: leave.toDate,
+            days: leave.days,
+            reason: leave.reason,
+          },
+          action === "approve" ? "approved" : "rejected",
+          {
+            actedBy: by,
+            rejectionReason: action === "reject" ? reason || "Bulk rejected" : undefined,
+          },
+        );
+
         results.push({ id, status: "ok" });
       } catch (err) {
         results.push({ id, status: "error", error: err instanceof Error ? err.message : "Failed" });

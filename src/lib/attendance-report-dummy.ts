@@ -21,6 +21,8 @@ export type AttendanceDailyRow = {
   employeeId: string;
   employeeName: string;
   department: string;
+  locationUnit?: string;
+  primaryShift?: string;
   day: string;
   inAt: string | null;
   outAt: string | null;

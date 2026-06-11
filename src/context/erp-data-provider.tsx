@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -34,9 +35,10 @@ export function ErpDataProvider({ children }: { children: ReactNode }) {
   const [meta, setMeta] = useState<BootstrapMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasLoadedRef = useRef(false);
 
   const refresh = useCallback(async () => {
-    setLoading(true);
+    if (!hasLoadedRef.current) setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/bootstrap");
@@ -50,6 +52,7 @@ export function ErpDataProvider({ children }: { children: ReactNode }) {
       setMeta(DEFAULT_META);
     } finally {
       setLoading(false);
+      hasLoadedRef.current = true;
     }
   }, []);
 

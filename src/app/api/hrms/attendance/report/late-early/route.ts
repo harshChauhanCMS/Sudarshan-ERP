@@ -7,9 +7,10 @@ import {
   filterLateEarlyEmployees,
 } from "@/lib/hrms-late-early-report";
 import {
-  managerTeamEmployeeFilter,
-  resolveManagerScope,
-} from "@/lib/manager-scope";
+  resolveHrDataScope,
+  scopeEmployeeFilter,
+} from "@/lib/hrms-access";
+import { escapeRegex } from "@/lib/escape-regex";
 import { getSession } from "@/lib/session";
 
 function parseDateParam(v: string | null): Date | null {
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
     const minMinutes = Number(url.searchParams.get("minMinutes") ?? "0");
 
     const session = await getSession();
-    const managerScope = await resolveManagerScope(session.user);
+    const dataScope = await resolveHrDataScope(session.user);
 
     const fromD = startOfDay(from);
     const toD = endOfDay(to);
@@ -58,10 +59,13 @@ export async function GET(request: Request) {
     const empQuery: Record<string, unknown> = {};
     if (department && department !== "all") empQuery.department = department;
     if (shift && shift !== "all") {
-      empQuery.primaryShift = { $regex: shift, $options: "i" };
+      empQuery.primaryShift = {
+        $regex: escapeRegex(shift),
+        $options: "i",
+      };
     }
-    const teamFilter = managerTeamEmployeeFilter(managerScope);
-    if (teamFilter) Object.assign(empQuery, teamFilter);
+    const scopeFilter = scopeEmployeeFilter(dataScope);
+    if (scopeFilter) Object.assign(empQuery, scopeFilter);
 
     const employees = await Employee.find(empQuery)
       .select({

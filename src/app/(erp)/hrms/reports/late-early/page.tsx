@@ -1,14 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  Button,
-  DatePicker,
-  InputNumber,
-  Select,
-  Tag,
-  Progress,
-} from "antd";
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { Button, DatePicker, InputNumber, Select, Tag, Progress, message } from "antd";
 import {
   DownloadOutlined,
   FilterOutlined,
@@ -37,6 +36,9 @@ import {
   type LateEarlyKpi,
   type LateEarlyUnitRow,
 } from "@/lib/hrms-late-early-report";
+import FilterSearchField from "@/components/hrms/FilterSearchField";
+import { filterBySearch } from "@/lib/filter-search";
+import { downloadCsv } from "@/lib/download-csv";
 
 const EMPTY_KPI: LateEarlyKpi = {
   latePunches: 0,
@@ -150,6 +152,7 @@ export default function LateEarlyReportPage() {
   const [reportType, setReportType] = useState("both");
   const [minMinutes, setMinMinutes] = useState(5);
   const [groupBy, setGroupBy] = useState<GroupBy>("employee");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [kpi, setKpi] = useState<LateEarlyKpi>(EMPTY_KPI);
   const [employees, setEmployees] = useState<LateEarlyEmployeeRow[]>([]);
@@ -163,10 +166,10 @@ export default function LateEarlyReportPage() {
     company: "all",
     reportType: "both",
     minMinutes: 5,
-    range: [
-      dayjs().startOf("month"),
-      dayjs().endOf("month"),
-    ] as [dayjs.Dayjs, dayjs.Dayjs],
+    range: [dayjs().startOf("month"), dayjs().endOf("month")] as [
+      dayjs.Dayjs,
+      dayjs.Dayjs,
+    ],
   });
 
   const loadReport = useCallback(async () => {
@@ -183,7 +186,7 @@ export default function LateEarlyReportPage() {
       if (applied.company !== "all") params.set("unit", applied.company);
 
       const res = await fetch(
-        `/api/hrms/attendance/report/late-early?${params}`
+        `/api/hrms/attendance/report/late-early?${params}`,
       );
       const json = await res.json();
       if (!res.ok || json?.error) throw new Error(json?.error ?? "Failed");
@@ -194,7 +197,8 @@ export default function LateEarlyReportPage() {
       setShifts(json.data?.shifts ?? []);
       setUnits(json.data?.units ?? []);
       setFilterDepartments(json.data?.filterDepartments ?? []);
-    } catch {
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Failed to load report");
       setKpi(EMPTY_KPI);
       setEmployees([]);
       setDepartments([]);
@@ -211,7 +215,9 @@ export default function LateEarlyReportPage() {
   }, [loadReport]);
 
   const unitOptions = useMemo(() => {
-    const fromData = [...new Set(units.map((u) => u.unit).filter((u) => u !== "—"))];
+    const fromData = [
+      ...new Set(units.map((u) => u.unit).filter((u) => u !== "—")),
+    ];
     return [
       { value: "all", label: "All units" },
       ...fromData.map((u) => ({ value: u, label: u })),
@@ -226,6 +232,33 @@ export default function LateEarlyReportPage() {
     ];
   }, [shifts]);
 
+  const searchedEmployees = useMemo(
+    () =>
+      filterBySearch(employees, search, (r) => [
+        r.employeeId,
+        r.employeeName,
+        r.department,
+        r.shift,
+        r.unit,
+      ]),
+    [employees, search],
+  );
+
+  const searchedDepartments = useMemo(
+    () => filterBySearch(departments, search, (r) => [r.department]),
+    [departments, search],
+  );
+
+  const searchedShifts = useMemo(
+    () => filterBySearch(shifts, search, (r) => [r.shift]),
+    [shifts, search],
+  );
+
+  const searchedUnits = useMemo(
+    () => filterBySearch(units, search, (r) => [r.unit]),
+    [units, search],
+  );
+
   const tableProps = {
     bordered: true as const,
     size: "middle" as const,
@@ -235,6 +268,7 @@ export default function LateEarlyReportPage() {
   const employeeColumns: CommonTableColumn<LateEarlyEmployeeRow>[] = [
     {
       title: "Employee",
+      width: 220,
       key: "emp",
       render: (_, r) => (
         <div>
@@ -257,7 +291,7 @@ export default function LateEarlyReportPage() {
     },
     { title: "Department", dataIndex: "department", key: "dept" },
     { title: "Shift", dataIndex: "shift", key: "shift", width: 100 },
-    { title: "Unit", dataIndex: "unit", key: "unit", width: 90 },
+    { title: "Unit", dataIndex: "unit", key: "unit", width: 240 },
     {
       title: "Late punches",
       dataIndex: "latePunches",
@@ -373,7 +407,7 @@ export default function LateEarlyReportPage() {
   ];
 
   const unitColumns: CommonTableColumn<LateEarlyUnitRow>[] = [
-    { title: "Unit", dataIndex: "unit", key: "unit" },
+    { title: "Unit", dataIndex: "unit", key: "unit", width: 320 },
     { title: "Headcount", dataIndex: "headcount", key: "hc" },
     { title: "Late", dataIndex: "late", key: "late" },
     { title: "Early", dataIndex: "early", key: "early" },
@@ -382,10 +416,7 @@ export default function LateEarlyReportPage() {
       dataIndex: "compliancePct",
       key: "comp",
       render: (v: number) => (
-        <span
-          className="font-semibold"
-          style={{ color: complianceColor(v) }}
-        >
+        <span className="font-semibold" style={{ color: complianceColor(v) }}>
           {v}%
         </span>
       ),
@@ -405,7 +436,31 @@ export default function LateEarlyReportPage() {
       <RepHeader
         title="Late Coming / Early Going"
         subtitle="Discipline view — late punches & early exits by employee, dept, shift & unit"
-        actions={<Button icon={<DownloadOutlined />}>Export Excel</Button>}
+        actions={
+          <Button
+            icon={<DownloadOutlined />}
+            disabled={!searchedEmployees.length}
+            onClick={() => {
+              downloadCsv(
+                `late-early-${applied.range[0].format("YYYY-MM-DD")}.csv`,
+                [
+                  "employeeId",
+                  "employeeName",
+                  "department",
+                  "shift",
+                  "unit",
+                  "latePunches",
+                  "lateAvgMins",
+                  "earlyIncidents",
+                  "earlyAvgMins",
+                ],
+                searchedEmployees.map((r) => ({ ...r })),
+              );
+            }}
+          >
+            Export CSV
+          </Button>
+        }
       />
 
       <div className="attendance-kpi-grid attendance-kpi-grid--4">
@@ -445,98 +500,104 @@ export default function LateEarlyReportPage() {
         </div>
 
         <div className="arf-body">
-        <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
-          <div className="arf-item">
-            <span className="arf-label">Company / unit</span>
-            <Select
-              className="w-full"
-              value={company}
-              onChange={setCompany}
-              options={unitOptions}
+          <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
+            <FilterSearchField
+              value={search}
+              onChange={setSearch}
+              placeholder="Search employee, ID, department, shift…"
             />
+
+            <div className="arf-item">
+              <span className="arf-label">Company / unit</span>
+              <Select
+                className="w-full"
+                value={company}
+                onChange={setCompany}
+                options={unitOptions}
+              />
+            </div>
+            <div className="arf-item">
+              <span className="arf-label">Department</span>
+              <Select
+                className="w-full"
+                value={dept}
+                onChange={setDept}
+                options={[
+                  { value: "all", label: "All departments" },
+                  ...filterDepartments.map((d) => ({ value: d, label: d })),
+                ]}
+              />
+            </div>
+            <div className="arf-item">
+              <span className="arf-label">Shift</span>
+              <Select
+                className="w-full"
+                value={shift}
+                onChange={setShift}
+                options={shiftOptions}
+              />
+            </div>
+            <div className="arf-item">
+              <span className="arf-label">Report type</span>
+              <Select
+                className="w-full"
+                value={reportType}
+                onChange={setReportType}
+                options={[
+                  { value: "both", label: "Late + Early going" },
+                  { value: "late", label: "Late coming only" },
+                  { value: "early", label: "Early going only" },
+                ]}
+              />
+            </div>
+            <div className="arf-item arf-item--compact">
+              <span className="arf-label">From</span>
+              <DatePicker
+                className="w-full"
+                value={range[0]}
+                onChange={(d) => d && setRange([d, range[1]])}
+                allowClear={false}
+              />
+            </div>
+            <div className="arf-item arf-item--compact">
+              <span className="arf-label">To</span>
+              <DatePicker
+                className="w-full"
+                value={range[1]}
+                onChange={(d) => d && setRange([range[0], d])}
+                allowClear={false}
+              />
+            </div>
+            <div className="arf-item arf-item--compact">
+              <span className="arf-label">Min late minutes</span>
+              <InputNumber
+                className="w-full"
+                min={0}
+                value={minMinutes}
+                onChange={(v) => setMinMinutes(v ?? 0)}
+              />
+            </div>
+            <div className="ap-filters-row-break" aria-hidden="true" />
+            <div className="ap-filters-spacer" aria-hidden="true" />
+            <div className="arf-item ap-filters-actions">
+              <Button
+                type="primary"
+                icon={<FilterOutlined />}
+                onClick={() =>
+                  setApplied({
+                    dept,
+                    shift,
+                    company,
+                    reportType,
+                    minMinutes,
+                    range: [...range] as [dayjs.Dayjs, dayjs.Dayjs],
+                  })
+                }
+              >
+                Apply filters
+              </Button>
+            </div>
           </div>
-          <div className="arf-item">
-            <span className="arf-label">Department</span>
-            <Select
-              className="w-full"
-              value={dept}
-              onChange={setDept}
-              options={[
-                { value: "all", label: "All departments" },
-                ...filterDepartments.map((d) => ({ value: d, label: d })),
-              ]}
-            />
-          </div>
-          <div className="arf-item">
-            <span className="arf-label">Shift</span>
-            <Select
-              className="w-full"
-              value={shift}
-              onChange={setShift}
-              options={shiftOptions}
-            />
-          </div>
-          <div className="arf-item">
-            <span className="arf-label">Report type</span>
-            <Select
-              className="w-full"
-              value={reportType}
-              onChange={setReportType}
-              options={[
-                { value: "both", label: "Late + Early going" },
-                { value: "late", label: "Late coming only" },
-                { value: "early", label: "Early going only" },
-              ]}
-            />
-          </div>
-          <div className="arf-item">
-            <span className="arf-label">From</span>
-            <DatePicker
-              className="w-full"
-              value={range[0]}
-              onChange={(d) => d && setRange([d, range[1]])}
-              allowClear={false}
-            />
-          </div>
-          <div className="ap-filters-row-break" aria-hidden="true" />
-          <div className="arf-item">
-            <span className="arf-label">To</span>
-            <DatePicker
-              className="w-full"
-              value={range[1]}
-              onChange={(d) => d && setRange([range[0], d])}
-              allowClear={false}
-            />
-          </div>
-          <div className="arf-item">
-            <span className="arf-label">Min late minutes</span>
-            <InputNumber
-              className="w-full"
-              min={0}
-              value={minMinutes}
-              onChange={(v) => setMinMinutes(v ?? 0)}
-            />
-          </div>
-          <div className="ap-filters-spacer" aria-hidden="true" />
-          <div className="arf-item ap-filters-actions">
-            <Button
-              type="primary"
-              icon={<FilterOutlined />}
-              onClick={() =>
-                setApplied({
-                  dept,
-                  shift,
-                  company,
-                  reportType,
-                  minMinutes,
-                  range: [...range] as [dayjs.Dayjs, dayjs.Dayjs],
-                })
-              }
-            >
-              Apply filters
-            </Button>
-          </div>
-        </div>
         </div>
       </div>
 
@@ -554,14 +615,14 @@ export default function LateEarlyReportPage() {
       {(groupBy === "employee" || groupBy === "trend") && (
         <ReportSection
           title="Employee-wise"
-          meta={`${applied.range[0].format("DD MMM")} – ${applied.range[1].format("DD MMM YYYY")} · ${employees.length} rows`}
+          meta={`${applied.range[0].format("DD MMM")} – ${applied.range[1].format("DD MMM YYYY")} · ${searchedEmployees.length} rows`}
           flush
         >
           <CommonTable
             {...tableProps}
             loading={loading}
             columns={employeeColumns}
-            dataSource={employees}
+            dataSource={searchedEmployees}
             rowKey="employeeId"
             pagination={{ pageSize: 10, showSizeChanger: true }}
             locale={emptyLocale}
@@ -575,7 +636,7 @@ export default function LateEarlyReportPage() {
             {...tableProps}
             loading={loading}
             columns={deptColumns}
-            dataSource={departments}
+            dataSource={searchedDepartments}
             rowKey="department"
             pagination={false}
             locale={emptyLocale}
@@ -583,34 +644,32 @@ export default function LateEarlyReportPage() {
         </ReportSection>
       )}
 
-      <div className="attendance-summary-grid">
-        {(groupBy === "shift" || groupBy === "employee") && (
-          <ReportSection title="Shift-wise pattern" flush>
-            <CommonTable
-              {...tableProps}
-              loading={loading}
-              columns={shiftColumns}
-              dataSource={shifts}
-              rowKey="shift"
-              pagination={false}
-              locale={emptyLocale}
-            />
-          </ReportSection>
-        )}
-        {(groupBy === "unit" || groupBy === "employee") && (
-          <ReportSection title="Unit-wise pattern" flush>
-            <CommonTable
-              {...tableProps}
-              loading={loading}
-              columns={unitColumns}
-              dataSource={units}
-              rowKey="unit"
-              pagination={false}
-              locale={emptyLocale}
-            />
-          </ReportSection>
-        )}
-      </div>
+      {(groupBy === "shift" || groupBy === "employee") && (
+        <ReportSection title="Shift-wise pattern" flush>
+          <CommonTable
+            {...tableProps}
+            loading={loading}
+            columns={shiftColumns}
+            dataSource={searchedShifts}
+            rowKey="shift"
+            pagination={false}
+            locale={emptyLocale}
+          />
+        </ReportSection>
+      )}
+      {(groupBy === "unit" || groupBy === "employee") && (
+        <ReportSection title="Unit-wise pattern" flush>
+          <CommonTable
+            {...tableProps}
+            loading={loading}
+            columns={unitColumns}
+            dataSource={searchedUnits}
+            rowKey="unit"
+            pagination={false}
+            locale={emptyLocale}
+          />
+        </ReportSection>
+      )}
     </div>
   );
 }

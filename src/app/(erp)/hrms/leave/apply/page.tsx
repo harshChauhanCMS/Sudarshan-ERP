@@ -1,27 +1,244 @@
 "use client";
 
-import { useState } from "react";
-import { Button, Select, DatePicker, Input, Upload, Tag } from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button, Select, DatePicker, Input, Tag, message } from "antd";
 import {
   SendOutlined,
-  SaveOutlined,
-  UploadOutlined,
   WalletOutlined,
   CalendarOutlined,
 } from "@ant-design/icons";
 import RepHeader from "@/components/hrms/RepHeader";
 import { HRMS_BACK } from "@/lib/hrms-nav";
-import dayjs from "dayjs";
+import dayjs, { type Dayjs } from "dayjs";
+import {
+  APPLY_LEAVE_TYPES,
+  API_LEAVE_TO_UI,
+  API_LEAVE_LABELS,
+  calcLeaveDays,
+  uiTypeToApi,
+} from "@/lib/leave-apply";
 
-import { getLeaveDummy } from "@/lib/leave-dummy";
+type SelfEmployee = {
+  employeeId: string;
+  fullName: string;
+  department?: string;
+  designation?: string;
+};
 
-const LEAVE_TYPES = ["PL", "CL", "SL", "Comp.Off", "OD", "LWP"];
+type BalanceRow = {
+  leaveType: string;
+  label: string;
+  annualQuota: number;
+  used: number;
+  remaining: number;
+};
+
+type RecentLeave = {
+  _id: string;
+  leaveType: string;
+  fromDate: string;
+  toDate: string;
+  days: number;
+  reason?: string;
+  status: string;
+};
+
+const STATUS_COLOR: Record<string, string> = {
+  approved: "success",
+  pending: "warning",
+  hod_approved: "processing",
+  rejected: "error",
+  cancelled: "error",
+  rolled_back: "default",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  approved: "Approved",
+  pending: "Pending",
+  hod_approved: "Pending",
+  rejected: "Rejected",
+  cancelled: "Cancelled",
+  rolled_back: "Rolled back",
+};
 
 export default function LeaveApplyPage() {
-  const demo = getLeaveDummy();
-  const [leaveType, setLeaveType] = useState("PL");
+  const [employee, setEmployee] = useState<SelfEmployee | null>(null);
+  const [profileError, setProfileError] = useState("");
+  const [balance, setBalance] = useState<BalanceRow[]>([]);
+  const [recent, setRecent] = useState<RecentLeave[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [leaveType, setLeaveType] = useState<string>("PL");
   const [duration, setDuration] = useState("full");
-  const totalDays = 3;
+  const [fromDate, setFromDate] = useState<Dayjs | null>(dayjs());
+  const [toDate, setToDate] = useState<Dayjs | null>(dayjs());
+  const [reason, setReason] = useState("");
+  const [contact, setContact] = useState("");
+
+  const employeeId = employee?.employeeId ?? "";
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setProfileError("");
+    try {
+      const res = await fetch("/api/hrms/leave/self");
+      const json = await res.json();
+
+      if (!res.ok) {
+        setEmployee(null);
+        setBalance([]);
+        setRecent([]);
+        setProfileError(
+          json?.error ||
+            "No employee profile is linked to your login. Contact HR to link your account.",
+        );
+        return;
+      }
+
+      const profile = json.data?.employee as SelfEmployee | undefined;
+      if (!profile?.employeeId) {
+        setEmployee(null);
+        setBalance([]);
+        setRecent([]);
+        setProfileError("No employee profile is linked to your login.");
+        return;
+      }
+
+      setEmployee(profile);
+      setBalance(Array.isArray(json.data?.balance) ? json.data.balance : []);
+      const leaves = Array.isArray(json.data?.recent) ? json.data.recent : [];
+      setRecent(
+        leaves.map((l: Record<string, unknown>) => ({
+          _id: String(l._id ?? ""),
+          leaveType: String(l.leaveType ?? ""),
+          fromDate: String(l.fromDate ?? ""),
+          toDate: String(l.toDate ?? ""),
+          days: Number(l.days ?? 0),
+          reason: typeof l.reason === "string" ? l.reason : "",
+          status: String(l.status ?? "pending"),
+        })),
+      );
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Failed to load leave data");
+      setEmployee(null);
+      setBalance([]);
+      setRecent([]);
+      setProfileError("Failed to load your employee profile.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const totalDays = useMemo(() => {
+    if (!fromDate || !toDate) return 0;
+    return calcLeaveDays(fromDate, toDate, duration);
+  }, [fromDate, toDate, duration]);
+
+  const apiLeaveType = uiTypeToApi(leaveType);
+
+  const selectedBalance = useMemo(() => {
+    if (!apiLeaveType) return null;
+    return balance.find((b) => b.leaveType === apiLeaveType) ?? null;
+  }, [balance, apiLeaveType]);
+
+  const balanceAfter = useMemo(() => {
+    if (!selectedBalance || selectedBalance.annualQuota <= 0) return null;
+    return Math.max(0, selectedBalance.remaining - totalDays);
+  }, [selectedBalance, totalDays]);
+
+  const balancePreview = useMemo(() => {
+    return balance.map((b) => {
+      const ui = API_LEAVE_TO_UI[b.leaveType] ?? b.leaveType;
+      const label = API_LEAVE_LABELS[b.leaveType] ?? b.label;
+      const isSelected = b.leaveType === apiLeaveType;
+      const value =
+        isSelected && balanceAfter != null && b.annualQuota > 0
+          ? String(balanceAfter)
+          : b.annualQuota > 0
+            ? String(b.remaining)
+            : "—";
+      return {
+        type: label,
+        ui,
+        value,
+        warn: isSelected && balanceAfter != null && balanceAfter <= 2 && b.annualQuota > 0,
+      };
+    });
+  }, [balance, apiLeaveType, balanceAfter]);
+
+  const handleSubmit = async () => {
+    if (!employeeId) {
+      message.error(
+        profileError ||
+          "Your account is not linked to an employee profile. Contact HR.",
+      );
+      return;
+    }
+    if (!fromDate || !toDate) {
+      message.error("Select from and to dates.");
+      return;
+    }
+    if (toDate.isBefore(fromDate, "day")) {
+      message.error("To date cannot be before from date.");
+      return;
+    }
+    if (!apiLeaveType) {
+      message.error("Select a valid leave type.");
+      return;
+    }
+    if (totalDays < 0.5) {
+      message.error("Leave duration must be at least half a day.");
+      return;
+    }
+    if (!reason.trim()) {
+      message.error("Please enter a reason for leave.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        selfApply: true,
+        leaveType: apiLeaveType,
+        fromDate: fromDate.format("YYYY-MM-DD"),
+        toDate: toDate.format("YYYY-MM-DD"),
+        days: totalDays,
+        reason: contact.trim()
+          ? `${reason.trim()} (Contact: ${contact.trim()})`
+          : reason.trim(),
+      };
+
+      const res = await fetch("/api/hrms/leave", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to submit leave");
+
+      message.success("Leave application submitted successfully.");
+      setReason("");
+      setContact("");
+      setDuration("full");
+      setFromDate(dayjs());
+      setToDate(dayjs());
+      void loadData();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Failed to submit leave");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const dateRangeLabel =
+    fromDate && toDate
+      ? `${fromDate.format("DD MMM YYYY")} – ${toDate.format("DD MMM YYYY")}`
+      : "—";
 
   return (
     <div className="attendance-reports-page leave-apply-page">
@@ -31,20 +248,29 @@ export default function LeaveApplyPage() {
         title="Apply Leave"
         subtitle="Submit a new leave request with balance preview"
         actions={
-          <>
-            <Button
-              type="primary"
-              icon={<SendOutlined />}
-              style={{ background: "#374d95", borderColor: "#374d95" }}
-            >
-              Submit
-            </Button>
-          </>
+          <Button
+            type="primary"
+            icon={<SendOutlined />}
+            style={{ background: "#374d95", borderColor: "#374d95" }}
+            loading={submitting}
+            disabled={loading || !employeeId}
+            onClick={() => void handleSubmit()}
+          >
+            Submit
+          </Button>
         }
       />
 
       <div className="lv-apply-emp">
-        {demo.employee.id} — {demo.employee.name}
+        {employeeId ? (
+          <>
+            {employeeId} — {employee?.fullName ?? "Employee"}
+            {employee?.department ? ` · ${employee.department}` : ""}
+          </>
+        ) : (
+          profileError ||
+          "No employee profile linked to your login — contact HR to apply leave."
+        )}
       </div>
 
       <div className="lv-apply-layout">
@@ -52,7 +278,7 @@ export default function LeaveApplyPage() {
           <div className="lv-apply-card">
             <p className="lv-apply-section-title">Leave type</p>
             <div className="lv-apply-chips">
-              {LEAVE_TYPES.map((t) => (
+              {APPLY_LEAVE_TYPES.map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -72,14 +298,21 @@ export default function LeaveApplyPage() {
                 <label className="lv-apply-label">From</label>
                 <DatePicker
                   className="w-full"
-                  defaultValue={dayjs("2025-03-12")}
+                  value={fromDate}
+                  onChange={setFromDate}
+                  allowClear={false}
                 />
               </div>
               <div className="lv-apply-field">
                 <label className="lv-apply-label">To</label>
                 <DatePicker
                   className="w-full"
-                  defaultValue={dayjs("2025-03-14")}
+                  value={toDate}
+                  onChange={setToDate}
+                  allowClear={false}
+                  disabledDate={(d) =>
+                    fromDate ? !!d && d.isBefore(fromDate, "day") : false
+                  }
                 />
               </div>
             </div>
@@ -113,31 +346,20 @@ export default function LeaveApplyPage() {
               <Input.TextArea
                 rows={3}
                 placeholder="Reason for leave…"
-                defaultValue="Family wedding — sister's marriage in home town"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
               />
             </div>
             <div className="lv-apply-field">
               <label className="lv-apply-label">Contact while away</label>
               <Input
                 placeholder="+91 98765 43210"
-                defaultValue="+91 98765 43210"
+                value={contact}
+                onChange={(e) => setContact(e.target.value)}
               />
             </div>
           </div>
 
-          <div className="lv-apply-card">
-            <p className="lv-apply-section-title">
-              Supporting document (optional)
-            </p>
-            <Upload.Dragger multiple={false} beforeUpload={() => false}>
-              <p className="ant-upload-drag-icon">
-                <UploadOutlined />
-              </p>
-              <p style={{ margin: 0, fontSize: 12, color: "var(--fg-muted)" }}>
-                PDF, JPG, PNG · max 5 MB
-              </p>
-            </Upload.Dragger>
-          </div>
         </div>
 
         <aside className="lv-apply-aside">
@@ -150,69 +372,81 @@ export default function LeaveApplyPage() {
               <p className="lv-apply-preview-summary">
                 Applying{" "}
                 <strong>
-                  {totalDays} {leaveType}
+                  {totalDays || "—"} {leaveType}
                 </strong>{" "}
-                · 12–14 Mar 2025. Balance after: <strong>11.5 PL</strong>
+                · {dateRangeLabel}
+                {balanceAfter != null ? (
+                  <>
+                    . Balance after: <strong>{balanceAfter} {leaveType}</strong>
+                  </>
+                ) : null}
               </p>
               <ul className="leave-balance-list">
-                {demo.balancePreview.map((b) => (
-                  <li key={b.type}>
-                    <span>{b.type}</span>
-                    <span
-                      className={
-                        "warn" in b && b.warn ? "leave-balance-warn" : undefined
-                      }
-                    >
-                      {b.value}
-                    </span>
+                {loading ? (
+                  <li>
+                    <span>Loading balance…</span>
                   </li>
-                ))}
+                ) : balancePreview.length === 0 ? (
+                  <li>
+                    <span>No balance data</span>
+                  </li>
+                ) : (
+                  balancePreview.map((b) => (
+                    <li key={b.ui}>
+                      <span>{b.type}</span>
+                      <span className={b.warn ? "leave-balance-warn" : undefined}>
+                        {b.value}
+                      </span>
+                    </li>
+                  ))
+                )}
               </ul>
-              <div className="leave-balance-note">
-                SL balance below 5 days — keep medical certificate ready.
-              </div>
+              {selectedBalance &&
+              selectedBalance.leaveType === "sick" &&
+              selectedBalance.remaining <= 5 ? (
+                <div className="leave-balance-note">
+                  SL balance below 5 days — keep medical certificate ready.
+                </div>
+              ) : null}
             </div>
-          </div>
-
-          <div className="lv-apply-card">
-            <p className="lv-apply-section-title">
-              <CalendarOutlined style={{ marginRight: 5 }} />
-              Holidays (next 30 days)
-            </p>
-            <ul className="leave-holiday-list">
-              {demo.holidays.slice(0, 4).map((h) => (
-                <li key={h.date}>
-                  <span className="leave-holiday-date">{h.date}</span>
-                  {h.name}
-                </li>
-              ))}
-            </ul>
           </div>
 
           <div className="lv-apply-card">
             <p className="lv-apply-section-title">My recent applications</p>
             <ul className="leave-recent-list">
-              {demo.recentApplications.map((app, i) => (
-                <li key={i}>
-                  <div className="leave-recent-main">
-                    <Tag>{app.type}</Tag>
-                    <span className="leave-recent-range">{app.range}</span>
-                    <span className="leave-recent-meta">{app.days}</span>
-                  </div>
-                  <p className="leave-recent-reason">{app.reason}</p>
-                  <Tag
-                    color={
-                      app.status === "Approved"
-                        ? "success"
-                        : app.status === "Pending"
-                          ? "warning"
-                          : "error"
-                    }
-                  >
-                    {app.status}
-                  </Tag>
+              {loading ? (
+                <li>
+                  <span className="leave-recent-meta">Loading…</span>
                 </li>
-              ))}
+              ) : recent.length === 0 ? (
+                <li>
+                  <span className="leave-recent-meta">No applications yet</span>
+                </li>
+              ) : (
+                recent.map((app) => {
+                  const uiType = API_LEAVE_TO_UI[app.leaveType] ?? app.leaveType;
+                  const from = dayjs(app.fromDate);
+                  const to = dayjs(app.toDate);
+                  const range = from.isValid() && to.isValid()
+                    ? `${from.format("DD MMM")} – ${to.format("DD MMM YYYY")}`
+                    : "—";
+                  return (
+                    <li key={app._id}>
+                      <div className="leave-recent-main">
+                        <Tag>{uiType}</Tag>
+                        <span className="leave-recent-range">{range}</span>
+                        <span className="leave-recent-meta">{app.days}d</span>
+                      </div>
+                      {app.reason ? (
+                        <p className="leave-recent-reason">{app.reason}</p>
+                      ) : null}
+                      <Tag color={STATUS_COLOR[app.status] || "default"}>
+                        {STATUS_LABEL[app.status] || app.status}
+                      </Tag>
+                    </li>
+                  );
+                })
+              )}
             </ul>
           </div>
         </aside>

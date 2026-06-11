@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { message } from "antd";
 import { ErpDataProvider, useErpData } from "@/context/erp-data-provider";
@@ -56,15 +56,16 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const prevRouteRef = useRef<string | null>(null);
+  const notifInFlightRef = useRef(false);
 
-  const navigate = (path: string) => {
+  const navigate = useCallback((path: string) => {
     router.push(path.startsWith("/") ? path : `/${path}`);
-  };
+  }, [router]);
 
-  const handleNavigate = (path: string) => {
+  const handleNavigate = useCallback((path: string) => {
     navigate(path);
     setMobileSidebarOpen(false);
-  };
+  }, [navigate]);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 768px)");
@@ -89,15 +90,19 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
     };
   }, [mobileSidebarOpen]);
 
-  const loadNotificationBadge = () => {
-    if (!sessionUser?.email) return;
+  const loadNotificationBadge = useCallback(() => {
+    if (!sessionUser?.email || notifInFlightRef.current) return;
+    notifInFlightRef.current = true;
     fetch("/api/notifications?limit=1")
       .then((r) => r.json())
       .then((j) => {
         if (j.data) setNotifUnreadCount(j.data.unreadCount ?? 0);
       })
-      .catch(() => {});
-  };
+      .catch(() => {})
+      .finally(() => {
+        notifInFlightRef.current = false;
+      });
+  }, [sessionUser?.email]);
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -111,15 +116,17 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   useEffect(() => {
     if (!sessionUser?.email) return;
     loadNotificationBadge();
-    const timer = setInterval(loadNotificationBadge, 60000);
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") loadNotificationBadge();
+    }, 60000);
     return () => clearInterval(timer);
-  }, [sessionUser?.email]);
+  }, [sessionUser?.email, loadNotificationBadge]);
 
   useEffect(() => {
     if (route === "/hrms/notifications" && sessionUser?.email) {
       loadNotificationBadge();
     }
-  }, [route, sessionUser?.email]);
+  }, [route, sessionUser?.email, loadNotificationBadge]);
 
   useEffect(() => {
     const authedRoute = !["/login", "/select-company", "/forgot"].includes(route);
@@ -199,7 +206,17 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
     );
   }
   if (route === "/forgot" || pathname === "/forgot") {
-    return <Forgot onBack={() => navigate("/login")} />;
+    return (
+      <Forgot
+        onBack={() => navigate("/login")}
+        onComplete={(msg) => {
+          message.success(
+            msg || "Password updated. Sign in with your new password.",
+          );
+          navigate("/login");
+        }}
+      />
+    );
   }
   if (route === "/reset-password" || pathname === "/reset-password") {
     return (

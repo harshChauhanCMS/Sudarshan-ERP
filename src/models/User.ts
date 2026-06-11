@@ -9,8 +9,15 @@ const UserSchema = new Schema(
     passwordHash: { type: String, required: true },
     requiresPasswordReset: { type: Boolean, default: false },
     passwordResetDeadline: { type: Date },
+    forgotPasswordOtpHash: { type: String },
+    forgotPasswordOtpExpires: { type: Date },
   },
   { timestamps: true }
 );
+
+// Next.js HMR can cache an older User schema; re-register when OTP fields are missing.
+if (models.User && !models.User.schema.path("forgotPasswordOtpHash")) {
+  mongoose.deleteModel("User");
+}
 
 export const User = models.User || model("User", UserSchema);

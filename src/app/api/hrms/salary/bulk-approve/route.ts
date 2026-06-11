@@ -3,10 +3,12 @@ import { ok, fail } from "@/lib/api-response";
 import SalarySheet from "@/lib/models/SalarySheet";
 import { getHrStaffEmployeeIds, isHrViewer } from "@/lib/hr-staff-visibility";
 import { getSession } from "@/lib/session";
+import { canManagePayroll } from "@/lib/hrms-access";
 
 export async function PATCH(request: Request) {
   const session = await getSession();
   if (!session.isLoggedIn || !session.user) return fail("Unauthorized", 401);
+  if (!canManagePayroll(session.user)) return fail("Forbidden", 403);
 
   try {
     await connectDB();

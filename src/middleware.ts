@@ -16,9 +16,8 @@ const PUBLIC_PATHS = ["/login", "/forgot", "/mobile"];
 const PUBLIC_API = [
   "/api/auth/login",
   "/api/auth/forgot",
+  "/api/auth/forgot/verify",
   "/api/auth/reset-password",
-  "/api/seed",
-  "/api/bootstrap",
   "/api/integrations/biometric",
 ];
 
@@ -40,10 +39,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (
-    PUBLIC_API.some((p) => pathname === p || pathname.startsWith(p)) ||
-    pathname.startsWith("/api/design-canvas")
-  ) {
+  if (PUBLIC_API.some((p) => pathname === p || pathname.startsWith(p))) {
     return NextResponse.next();
   }
 

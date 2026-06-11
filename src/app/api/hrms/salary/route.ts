@@ -4,6 +4,7 @@ import Employee from "@/lib/models/Employee";
 import SalarySheet from "@/lib/models/SalarySheet";
 import { filterRowsForHrViewer } from "@/lib/hr-staff-visibility";
 import { getSession } from "@/lib/session";
+import { canManagePayroll } from "@/lib/hrms-access";
 
 const MONTHLY_CTC = "Monthly CTC";
 
@@ -114,7 +115,9 @@ export async function GET(request: Request) {
   try {
     await connectDB();
     const session = await getSession();
-    const viewerRole = session.user?.role;
+    if (!session.isLoggedIn || !session.user) return fail("Unauthorized", 401);
+    const viewerRole = session.user.role;
+    const payrollAccess = canManagePayroll(session.user);
 
     const url = new URL(request.url);
     const cycle = url.searchParams.get("cycle");
@@ -123,7 +126,14 @@ export async function GET(request: Request) {
     const monthly = url.searchParams.get("monthly") !== "0";
 
     if (cycle && monthly) {
-      const rows = await getMonthlyCycleRows(cycle, department, status);
+      let rows = await getMonthlyCycleRows(cycle, department, status);
+      if (!payrollAccess && session.user.employeeId) {
+        rows = rows.filter(
+          (row) => String(row.employeeId) === String(session.user!.employeeId),
+        );
+      } else if (!payrollAccess) {
+        rows = [];
+      }
       const visible = await filterRowsForHrViewer(rows, viewerRole);
       return ok(visible);
     }
@@ -139,7 +149,15 @@ export async function GET(request: Request) {
       _id: String(sheet._id),
       employeeId: String(sheet.employeeId),
     }));
-    const visible = await filterRowsForHrViewer(normalized, viewerRole);
+    let scoped = normalized;
+    if (!payrollAccess && session.user.employeeId) {
+      scoped = normalized.filter(
+        (row) => String(row.employeeId) === String(session.user!.employeeId),
+      );
+    } else if (!payrollAccess) {
+      scoped = [];
+    }
+    const visible = await filterRowsForHrViewer(scoped, viewerRole);
     return ok(visible);
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Failed", 500);

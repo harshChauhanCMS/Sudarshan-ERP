@@ -1,11 +1,22 @@
 import { connectDB } from "@/lib/db";
 import { ok, fail } from "@/lib/api-response";
 import Holiday from "@/lib/models/Holiday";
+import { requireSession, requirePermission, isAdminOrOwner } from "@/lib/api-auth";
+
+function requireHolidayEdit(user: NonNullable<Awaited<ReturnType<typeof requireSession>>["user"]>) {
+  if (isAdminOrOwner(user.role)) return null;
+  return requirePermission(user, "hr", "edit");
+}
 
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { user, error } = await requireSession();
+  if (error) return error;
+  const permErr = requireHolidayEdit(user);
+  if (permErr) return permErr;
+
   try {
     await connectDB();
     const { id } = await params;
@@ -21,6 +32,11 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { user, error } = await requireSession();
+  if (error) return error;
+  const permErr = requireHolidayEdit(user);
+  if (permErr) return permErr;
+
   try {
     await connectDB();
     const { id } = await params;

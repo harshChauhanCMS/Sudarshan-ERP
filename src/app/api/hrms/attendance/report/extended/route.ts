@@ -3,11 +3,12 @@ import Employee from "@/lib/models/Employee";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import { ok, fail } from "@/lib/api-response";
 import {
-  assertManagerCanAccessEmployee,
-  managerTeamEmployeeFilter,
-  resolveManagerScope,
-} from "@/lib/manager-scope";
+  assertCanAccessEmployee,
+  resolveHrDataScope,
+  scopeEmployeeFilter,
+} from "@/lib/hrms-access";
 import { getSession } from "@/lib/session";
+import { escapeRegex } from "@/lib/escape-regex";
 
 function parseDateParam(v: string | null): Date | null {
   if (!v) return null;
@@ -27,6 +28,14 @@ function shiftStartHour(primaryShift: string): number | null {
   return parseInt(m[1], 10) + parseInt(m[2], 10) / 60;
 }
 
+function sortDailyRows(rows: any[]) {
+  return rows.sort((a, b) => {
+    const dayCmp = String(b.day).localeCompare(String(a.day));
+    if (dayCmp !== 0) return dayCmp;
+    return String(a.employeeName || "").localeCompare(String(b.employeeName || ""));
+  });
+}
+
 export async function GET(request: Request) {
   try {
     await connectDB();
@@ -38,15 +47,16 @@ export async function GET(request: Request) {
 
     const department = url.searchParams.get("department")?.trim() || null;
     const shift      = url.searchParams.get("shift")?.trim() || null;
+    const locationUnit =
+      url.searchParams.get("locationUnit")?.trim() ||
+      url.searchParams.get("unit")?.trim() ||
+      null;
     const employeeId = url.searchParams.get("employeeId")?.trim() || null;
     const session = await getSession();
-    const managerScope = await resolveManagerScope(session.user);
+    const dataScope = await resolveHrDataScope(session.user);
 
-    if (employeeId && managerScope.restricted) {
-      const access = await assertManagerCanAccessEmployee(
-        session.user,
-        employeeId
-      );
+    if (employeeId) {
+      const access = await assertCanAccessEmployee(session.user, employeeId);
       if (!access.ok) return fail(access.message, 403);
     }
 
@@ -55,13 +65,29 @@ export async function GET(request: Request) {
 
     // Build employee filter
     const empQuery: Record<string, any> = {};
-    if (department) empQuery.department = department;
-    if (shift)      empQuery.primaryShift = { $regex: shift, $options: "i" };
+    if (department) {
+      empQuery.department = {
+        $regex: `^${escapeRegex(department)}$`,
+        $options: "i",
+      };
+    }
+    if (shift) {
+      empQuery.primaryShift = {
+        $regex: escapeRegex(shift),
+        $options: "i",
+      };
+    }
+    if (locationUnit) {
+      empQuery.locationUnit = {
+        $regex: `^${escapeRegex(locationUnit)}$`,
+        $options: "i",
+      };
+    }
     if (employeeId) {
       empQuery.employeeId = employeeId;
     } else {
-      const teamFilter = managerTeamEmployeeFilter(managerScope);
-      if (teamFilter) Object.assign(empQuery, teamFilter);
+      const scopeFilter = scopeEmployeeFilter(dataScope);
+      if (scopeFilter) Object.assign(empQuery, scopeFilter);
     }
 
     const employees = await Employee.find(empQuery)
@@ -70,11 +96,39 @@ export async function GET(request: Request) {
       .lean();
 
     const empIds = employees.map((e) => String(e.employeeId));
-    const empById = new Map(employees.map((e) => [String(e.employeeId), e]));
 
-    // Fetch all punches in range
-    const punchQuery: Record<string, any> = { punchedAt: { $gte: fromD, $lte: toD } };
-    if (empIds.length > 0) punchQuery.employeeId = { $in: empIds };
+    if (empIds.length === 0) {
+      const workingDays = allDaysBetween(fromD, toD).filter(
+        (d) => new Date(d).getDay() !== 0
+      ).length;
+      return ok({
+        from: fromD.toISOString(),
+        to: toD.toISOString(),
+        workingDays,
+        kpi: {
+          totalEmployees: 0,
+          presentDays: 0,
+          absentDays: 0,
+          lateDays: 0,
+          totalShortfall: 0,
+          totalOvertime: 0,
+        },
+        gpsSummary: {
+          gpsPunches: 0,
+          biometricPunches: 0,
+          mobilePunches: 0,
+          gpsPercent: 0,
+        },
+        summary: [],
+        daily: [],
+      });
+    }
+
+    // Fetch punches in range for scoped employees only
+    const punchQuery: Record<string, any> = {
+      punchedAt: { $gte: fromD, $lte: toD },
+      employeeId: { $in: empIds },
+    };
 
     const punches = await AttendancePunch.find(punchQuery).sort({ punchedAt: 1 }).lean();
 
@@ -97,13 +151,7 @@ export async function GET(request: Request) {
     // Build set of (employeeId, day) that have punches
     const punchedSet = new Set(dayMap.keys());
 
-    // Enumerate all expected days (Mon-Sat default; skip if employee has weeklyOff matching)
-    const allDays: string[] = [];
-    const cur = new Date(fromD);
-    while (cur <= toD) {
-      allDays.push(dayKey(cur));
-      cur.setDate(cur.getDate() + 1);
-    }
+    const allDays = allDaysBetween(fromD, toD);
 
     const GRACE_MINUTES = 15;
 
@@ -226,7 +274,7 @@ export async function GET(request: Request) {
       kpi,
       gpsSummary,
       summary,
-      daily,
+      daily: sortDailyRows(daily),
     });
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Report failed", 500);
@@ -234,3 +282,13 @@ export async function GET(request: Request) {
 }
 
 function round2(n: number) { return Math.round(n * 100) / 100; }
+
+function allDaysBetween(fromD: Date, toD: Date) {
+  const allDays: string[] = [];
+  const cur = new Date(fromD);
+  while (cur <= toD) {
+    allDays.push(dayKey(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return allDays;
+}

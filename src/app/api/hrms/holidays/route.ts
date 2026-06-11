@@ -1,8 +1,12 @@
 import { connectDB } from "@/lib/db";
 import { ok, fail } from "@/lib/api-response";
 import Holiday from "@/lib/models/Holiday";
+import { requireSession, requirePermission, isAdminOrOwner } from "@/lib/api-auth";
 
 export async function GET(request: Request) {
+  const { error } = await requireSession();
+  if (error) return error;
+
   try {
     await connectDB();
     const url = new URL(request.url);
@@ -15,6 +19,13 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const { user, error } = await requireSession();
+  if (error) return error;
+  if (!isAdminOrOwner(user.role)) {
+    const permErr = requirePermission(user, "hr", "edit");
+    if (permErr) return permErr;
+  }
+
   try {
     await connectDB();
     const body = await request.json().catch(() => null);

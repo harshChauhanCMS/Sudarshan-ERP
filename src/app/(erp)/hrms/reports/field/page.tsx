@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { Button } from "antd";
 import { DownloadOutlined, BankOutlined, EnvironmentOutlined } from "@ant-design/icons";
 
@@ -8,11 +8,21 @@ import RepHeader from "@/components/hrms/RepHeader";
 import StatCard from "@/components/common/StatCard";
 import CommonTable, { type CommonTableColumn } from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
-import AttendanceFilterPanel from "@/components/hrms/AttendanceFilterPanel";
+import AttendanceFilterPanel, {
+  type PeriodOption,
+} from "@/components/hrms/AttendanceFilterPanel";
 import { useAttendanceReport, type AttendanceSummaryRow } from "@/hooks/use-attendance-report";
 
+const FIELD_PERIOD_OPTIONS: PeriodOption[] = [
+  { value: "today", label: "Today" },
+  { value: "date", label: "Pick a date" },
+  { value: "month", label: "This month" },
+  { value: "last", label: "Last month" },
+  { value: "custom", label: "Pick month…" },
+];
+
 export default function FieldAttendancePage() {
-  const r = useAttendanceReport();
+  const r = useAttendanceReport({ variant: "daily" });
   const fieldRows = r.fieldRows;
   const officeStats = r.officeStats;
 
@@ -93,16 +103,6 @@ export default function FieldAttendancePage() {
         }
       />
 
-      <AttendanceFilterPanel
-        range={r.range} setRange={r.setRange}
-        dept={r.dept} setDept={r.setDept}
-        unit={r.unit} setUnit={r.setUnit}
-        period={r.period} setPeriod={r.setPeriod}
-        departments={r.departments} units={r.units}
-        loading={r.loading} onApply={r.handleApply}
-        showShift={false}
-      />
-
       <div className="attendance-summary-grid">
         <StatCard
           icon={BankOutlined}
@@ -119,6 +119,18 @@ export default function FieldAttendancePage() {
           hintTone="positive"
         />
       </div>
+
+      <AttendanceFilterPanel
+        range={r.range} setRange={r.setRange}
+        dept={r.dept} setDept={r.setDept}
+        unit={r.unit} setUnit={r.setUnit}
+        period={r.period} setPeriod={r.setPeriod}
+        departments={r.departments} units={r.units}
+        loading={r.loading} onApply={r.handleApply}
+        search={r.search} setSearch={r.setSearch}
+        periodOptions={FIELD_PERIOD_OPTIONS}
+        showShift={false}
+      />
 
       <ReportSection
         title="Field employee breakdown"

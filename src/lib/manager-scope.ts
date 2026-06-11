@@ -51,22 +51,17 @@ export async function resolveManagerScope(
 }
 
 export async function assertManagerCanAccessEmployee(
-  user: Pick<SessionUser, "role" | "employeeId"> | undefined,
-  targetEmployeeId: string
+  user: Pick<SessionUser, "role" | "employeeId" | "permissions"> | undefined,
+  targetEmployeeId: string,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const scope = await resolveManagerScope(user);
-  if (!scope.restricted) return { ok: true };
-  if (isEmployeeInManagerTeam(targetEmployeeId, scope)) return { ok: true };
-  return {
-    ok: false,
-    message:
-      "You can only access employees assigned to you as reporting manager.",
-  };
+  const { assertCanAccessEmployee } = await import("@/lib/hrms-access");
+  return assertCanAccessEmployee(user, targetEmployeeId);
 }
 
 export async function assertManagerCanAccessLeave(
-  user: Pick<SessionUser, "role" | "employeeId"> | undefined,
-  employeeId: string
+  user: Pick<SessionUser, "role" | "employeeId" | "permissions"> | undefined,
+  employeeId: string,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  return assertManagerCanAccessEmployee(user, employeeId);
+  const { assertCanApproveLeave } = await import("@/lib/hrms-access");
+  return assertCanApproveLeave(user, employeeId);
 }

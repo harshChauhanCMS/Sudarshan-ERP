@@ -3,10 +3,11 @@ import Employee from "@/lib/models/Employee";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import { ok, fail } from "@/lib/api-response";
 import {
-  assertManagerCanAccessEmployee,
-  filterByManagerScope,
-  resolveManagerScope,
-} from "@/lib/manager-scope";
+  assertCanAccessEmployee,
+  filterRowsByHrScope,
+  resolveHrDataScope,
+  scopeEmployeeFilter,
+} from "@/lib/hrms-access";
 import { getSession } from "@/lib/session";
 
 function parseDateParam(value: string | null): Date | null {
@@ -47,13 +48,11 @@ export async function GET(request: Request) {
 
     const employeeId = url.searchParams.get("employeeId")?.trim() || null;
     const session = await getSession();
-    const managerScope = await resolveManagerScope(session.user);
+    if (!session.isLoggedIn || !session.user) return fail("Unauthorized", 401);
+    const dataScope = await resolveHrDataScope(session.user);
 
-    if (employeeId && managerScope.restricted) {
-      const access = await assertManagerCanAccessEmployee(
-        session.user,
-        employeeId
-      );
+    if (employeeId) {
+      const access = await assertCanAccessEmployee(session.user, employeeId);
       if (!access.ok) return fail(access.message, 403);
     }
 
@@ -63,12 +62,9 @@ export async function GET(request: Request) {
     const query: Record<string, any> = { punchedAt: { $gte: fromD, $lte: toD } };
     if (employeeId) {
       query.employeeId = employeeId;
-    } else if (managerScope.restricted) {
-      query.employeeId = {
-        $in: managerScope.teamEmployeeIds.length
-          ? managerScope.teamEmployeeIds
-          : ["__none__"],
-      };
+    } else {
+      const scopeFilter = scopeEmployeeFilter(dataScope);
+      if (scopeFilter) Object.assign(query, scopeFilter);
     }
 
     const punches = await AttendancePunch.find(query).sort({ punchedAt: 1 }).lean();
@@ -140,8 +136,8 @@ export async function GET(request: Request) {
       };
     });
 
-    const scopedDaily = filterByManagerScope(daily, managerScope);
-    const scopedSummary = filterByManagerScope(summary, managerScope);
+    const scopedDaily = filterRowsByHrScope(daily, dataScope);
+    const scopedSummary = filterRowsByHrScope(summary, dataScope);
 
     return ok({
       from: fromD.toISOString(),

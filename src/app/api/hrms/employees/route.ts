@@ -7,26 +7,34 @@ import {
   findEmployeeUniqueConflict,
 } from "@/lib/hrms-employee-uniqueness";
 import { provisionEmployeeLoginAndSendWelcomeEmail } from "@/lib/hrms-employee-welcome";
-import { filterRowsForHrViewer } from "@/lib/hr-staff-visibility";
+import { isManagerRole } from "@/lib/manager-scope";
 import {
-  filterByManagerScope,
-  isManagerRole,
-  resolveManagerScope,
-} from "@/lib/manager-scope";
+  canManageEmployees,
+  filterEmployeeRowsForViewer,
+  resolveHrDataScope,
+  scopeEmployeeFilter,
+} from "@/lib/hrms-access";
+import { validateEmployeePayload } from "@/lib/hrms-validation";
+import {
+  EMPLOYEE_WRITABLE_FIELDS,
+  pickAllowedFields,
+} from "@/lib/field-allowlists";
 import { getSession } from "@/lib/session";
 
 export async function GET() {
   try {
     await connectDB();
     const session = await getSession();
-    const scope = await resolveManagerScope(session.user);
-    const employees = await Employee.find({}).sort({ createdAt: -1 }).lean();
+    const scope = await resolveHrDataScope(session.user);
+    const filter = scopeEmployeeFilter(scope);
+    const employees = await Employee.find(filter ?? {})
+      .sort({ createdAt: -1 })
+      .lean();
     let visible = employees.map((emp) => ({
       ...emp,
       employeeId: String(emp.employeeId),
     }));
-    visible = filterByManagerScope(visible, scope);
-    visible = await filterRowsForHrViewer(visible, session.user?.role);
+    visible = await filterEmployeeRowsForViewer(visible, session.user);
     return NextResponse.json({
       success: true,
       count: visible.length,
@@ -42,13 +50,20 @@ export async function POST(req: Request) {
   try {
     await connectDB();
     const session = await getSession();
-    if (isManagerRole(session.user?.role)) {
+    if (!session.user || !canManageEmployees(session.user)) {
       return NextResponse.json(
-        { error: "Managers cannot add employees." },
-        { status: 403 }
+        { error: "You are not authorized to add employees." },
+        { status: 403 },
       );
     }
-    const payload = await req.json();
+    if (isManagerRole(session.user.role)) {
+      return NextResponse.json(
+        { error: "Managers cannot add employees." },
+        { status: 403 },
+      );
+    }
+    const raw = await req.json();
+    const payload = pickAllowedFields(raw, EMPLOYEE_WRITABLE_FIELDS);
 
     const requiredFields = [
       "fullName",
@@ -71,6 +86,11 @@ export async function POST(req: Request) {
           { status: 400 }
         );
       }
+    }
+
+    const validationErr = validateEmployeePayload(payload);
+    if (validationErr) {
+      return NextResponse.json({ error: validationErr }, { status: 400 });
     }
 
     const uniqueConflict = await findEmployeeUniqueConflict(payload);
@@ -96,7 +116,10 @@ export async function POST(req: Request) {
 
     const newEmployee = await Employee.create({ ...payload, employeeId });
 
-    const targetEmail = payload.officialEmail || payload.personalEmail;
+    const targetEmail =
+      (typeof payload.officialEmail === "string" && payload.officialEmail) ||
+      (typeof payload.personalEmail === "string" && payload.personalEmail) ||
+      "";
     let credentialsEmail: { sent: boolean; reason?: string } = {
       sent: false,
       reason: "no_email",
@@ -104,10 +127,10 @@ export async function POST(req: Request) {
 
     if (targetEmail) {
       credentialsEmail = await provisionEmployeeLoginAndSendWelcomeEmail({
-        fullName: payload.fullName,
+        fullName: String(payload.fullName ?? ""),
         employeeId: newEmployee.employeeId,
         email: targetEmail,
-        role: payload.department,
+        role: String(payload.department ?? ""),
       });
     }
 

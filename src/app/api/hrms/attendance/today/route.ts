@@ -2,8 +2,8 @@ import { connectDB } from "@/lib/db";
 import Employee from "@/lib/models/Employee";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import { ok, fail } from "@/lib/api-response";
-import { resolveManagerScope } from "@/lib/manager-scope";
 import { getSession } from "@/lib/session";
+import { filterRowsByHrScope, resolveHrDataScope } from "@/lib/hrms-access";
 import { enrichLocation, shortAddressFromLocation, type GeoLocation } from "@/lib/reverse-geocode";
 import {
   isPunchInLateAbsent,
@@ -43,8 +43,9 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const mineOnly = url.searchParams.get("mine") === "1";
     const session = await getSession();
-    const managerScope = await resolveManagerScope(session.user);
-    if (mineOnly && (!session?.isLoggedIn || !session.user?.email)) {
+    if (!session.isLoggedIn || !session.user) return fail("Unauthorized", 401);
+    const dataScope = await resolveHrDataScope(session.user);
+    if (mineOnly && !session.user.email) {
       return fail("Unauthorized", 401);
     }
     const sessionEmail = session?.user?.email?.trim().toLowerCase();
@@ -178,12 +179,7 @@ export async function GET(request: Request) {
     let people = Array.from(byPerson.values());
     let sessionEmployee: { employeeId?: string; primaryShift?: string } | null =
       null;
-    if (managerScope.restricted) {
-      const allowed = new Set(managerScope.teamEmployeeIds);
-      people = people.filter(
-        (p) => p.employeeId && allowed.has(String(p.employeeId))
-      );
-    } else if (mineOnly && sessionEmail) {
+    if (mineOnly && sessionEmail) {
       sessionEmployee = await Employee.findOne({
         $or: [
           { officialEmail: sessionEmail },
@@ -199,6 +195,20 @@ export async function GET(request: Request) {
         (p) =>
           (myEmpId && p.employeeId === myEmpId) ||
           (p.userEmail && p.userEmail.toLowerCase() === sessionEmail)
+      );
+    }
+
+    if (!mineOnly && dataScope.mode !== "all") {
+      const allowedIds = new Set(
+        filterRowsByHrScope(
+          people
+            .filter((p) => p.employeeId)
+            .map((p) => ({ employeeId: String(p.employeeId) })),
+          dataScope,
+        ).map((p) => p.employeeId),
+      );
+      people = people.filter(
+        (p) => p.employeeId && allowedIds.has(String(p.employeeId)),
       );
     }
 

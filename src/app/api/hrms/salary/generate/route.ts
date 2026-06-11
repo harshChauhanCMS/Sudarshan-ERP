@@ -6,6 +6,7 @@ import LeaveRequest from "@/lib/models/LeaveRequest";
 import SalarySheet from "@/lib/models/SalarySheet";
 import { calcSalary } from "@/lib/salary-calc";
 import { getSession } from "@/lib/session";
+import { canManagePayroll } from "@/lib/hrms-access";
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function endOfDay(d: Date)   { const x = new Date(d); x.setHours(23,59,59,999); return x; }
@@ -23,7 +24,8 @@ function countWorkingDays(from: Date, to: Date): number {
 
 export async function POST(request: Request) {
   const session = await getSession();
-  if (!session.isLoggedIn) return fail("Unauthorized", 401);
+  if (!session.isLoggedIn || !session.user) return fail("Unauthorized", 401);
+  if (!canManagePayroll(session.user)) return fail("Forbidden", 403);
 
   try {
     await connectDB();

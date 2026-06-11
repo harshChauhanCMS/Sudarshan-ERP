@@ -2,14 +2,13 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Button, Tag, message, Tooltip, DatePicker, Select, Input } from "antd";
+import { Button, Tag, message, Tooltip, DatePicker, Select } from "antd";
 import {
   DownloadOutlined,
   ThunderboltOutlined,
   CheckOutlined,
   ReloadOutlined,
   FilterOutlined,
-  SearchOutlined,
   TeamOutlined,
   CheckCircleOutlined,
   DollarOutlined,
@@ -23,6 +22,7 @@ import CommonTable from "@/components/common/CommonTable";
 import StatCard from "@/components/common/StatCard";
 import ReportSection from "@/components/hrms/ReportSection";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
+import FilterSearchField from "@/components/hrms/FilterSearchField";
 
 type SalaryRow = {
   _id: string;
@@ -373,16 +373,11 @@ function MonthlySalaryContent() {
         </div>
         <div className="arf-body">
           <div className="arf-controls ap-filters-controls ap-filters-controls--toolbar-inline">
-            <div className="arf-item ap-filters-search-field">
-              <span className="arf-label">Search</span>
-              <Input
-                allowClear
-                placeholder="Employee ID, name, department…"
-                prefix={<SearchOutlined style={{ color: "var(--fg-muted)" }} />}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
+            <FilterSearchField
+              value={search}
+              onChange={setSearch}
+              placeholder="Employee ID, name, department…"
+            />
             <div className="arf-item ap-filters-toolbar-field">
               <span className="arf-label">Pay month</span>
               <DatePicker

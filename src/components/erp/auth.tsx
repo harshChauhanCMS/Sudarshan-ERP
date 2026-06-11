@@ -16,7 +16,7 @@ const AuthAside = () => (
       <img
         src="/sudarshan-group-logo.webp"
         alt="Sudarshan Group Logo"
-        style={{ width: 48, height: 48, objectFit: "contain", borderRadius: 8 }}
+        className="auth-aside-logo"
       />
       <div>
         <div>Sudarshan Group</div>
@@ -79,11 +79,30 @@ const Login = ({ onLogin, onForgot, userEmail }) => {
   const [submitting, setSubmitting] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
 
+  const handleSubmit = async (e) => {
+    e?.preventDefault?.();
+    setSubmitting(true);
+    setError("");
+    try {
+      if (!email.trim()) {
+        throw new Error("Email is required");
+      }
+      if (!pwd) {
+        throw new Error("Password is required");
+      }
+      await onLogin(email.trim(), pwd);
+    } catch (err) {
+      setError(err?.message || "Sign in failed");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="auth-shell">
       <AuthAside />
       <div className="auth-form-wrap">
-        <div className="auth-form">
+        <form className="auth-form" onSubmit={handleSubmit} noValidate>
           <div className="auth-form-head">
             <h1 className="auth-form-title">Sign in</h1>
             <div className="auth-form-sub">
@@ -185,26 +204,11 @@ const Login = ({ onLogin, onForgot, userEmail }) => {
             </div>
           )}
           <Btn
+            type="submit"
             variant="primary"
             size="lg"
             className="block"
-            onClick={async () => {
-              setSubmitting(true);
-              setError("");
-              try {
-                if (!email.trim()) {
-                  throw new Error("Email is required");
-                }
-                if (!pwd) {
-                  throw new Error("Password is required");
-                }
-                await onLogin(email.trim(), pwd);
-              } catch (e) {
-                setError(e?.message || "Sign in failed");
-              } finally {
-                setSubmitting(false);
-              }
-            }}
+            disabled={submitting}
           >
             {submitting ? "Signing in…" : "Continue"}{" "}
             <Icon name="arrowRight" size={14} />
@@ -213,83 +217,240 @@ const Login = ({ onLogin, onForgot, userEmail }) => {
           <div className="auth-foot">
             New to Sudarshan? <a>Request an account</a>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );
 };
 
-const Forgot = ({ onBack }) => {
-  const [sent, setSent] = useState(false);
+const Forgot = ({ onBack, onComplete }) => {
+  const [step, setStep] = useState("email");
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [expiresMinutes, setExpiresMinutes] = useState(30);
+
+  const renderPasswordField = (
+    label,
+    value,
+    onChange,
+    show,
+    setShow,
+    placeholder,
+  ) => (
+    <div className="field">
+      <label className="field-label">{label}</label>
+      <div style={{ position: "relative" }}>
+        <input
+          className="input lg"
+          type={show ? "text" : "password"}
+          autoComplete="new-password"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ paddingRight: 36 }}
+        />
+        <button
+          type="button"
+          onClick={() => setShow(!show)}
+          style={{
+            position: "absolute",
+            right: 12,
+            top: 13,
+            background: "none",
+            border: "none",
+            padding: 0,
+            cursor: "pointer",
+            color: "var(--fg-subtle)",
+          }}
+        >
+          <Icon name={show ? "eyeOff" : "eye"} size={14} />
+        </button>
+      </div>
+    </div>
+  );
+
+  const handleSendCode = async (e) => {
+    e?.preventDefault?.();
+    setSubmitting(true);
+    setError("");
+    try {
+      if (!email.trim()) {
+        throw new Error("Email is required");
+      }
+      const res = await fetch("/api/auth/forgot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      setExpiresMinutes(json.data?.expiresMinutes ?? 30);
+      setStep("otp");
+    } catch (err) {
+      setError(err?.message || "Could not send verification code");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e?.preventDefault?.();
+    setSubmitting(true);
+    setError("");
+    try {
+      if (!otp.trim()) {
+        throw new Error("Verification code is required");
+      }
+      if (!newPassword || !confirmPassword) {
+        throw new Error("New password and confirmation are required");
+      }
+      if (newPassword.length < 8) {
+        throw new Error("New password must be at least 8 characters");
+      }
+      if (newPassword !== confirmPassword) {
+        throw new Error("New password and confirmation do not match");
+      }
+
+      const res = await fetch("/api/auth/forgot/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          otp: otp.trim(),
+          newPassword,
+          confirmPassword,
+        }),
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      onComplete?.(json.data?.message);
+    } catch (err) {
+      setError(err?.message || "Password reset failed");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="auth-shell">
       <AuthAside />
       <div className="auth-form-wrap">
         <div className="auth-form">
           <button
+            type="button"
             className="btn ghost sm"
-            onClick={onBack}
+            onClick={step === "otp" ? () => setStep("email") : onBack}
             style={{ marginBottom: 16, marginLeft: -8 }}
           >
-            <Icon name="chevLeft" size={13} /> Back to sign in
+            <Icon name="chevLeft" size={13} />{" "}
+            {step === "otp" ? "Change email" : "Back to sign in"}
           </button>
           <div className="auth-form-head">
             <h1 className="auth-form-title">Reset password</h1>
             <div className="auth-form-sub">
-              {sent
-                ? "We've sent reset instructions. Check your inbox."
-                : "Enter your registered email. We'll send a reset link."}
+              {step === "email"
+                ? "Enter your registered email. We'll send a 6-digit verification code."
+                : `Enter the code sent to ${email}. It expires in ${expiresMinutes} minutes.`}
             </div>
           </div>
-          {!sent ? (
-            <>
+
+          {step === "email" ? (
+            <form onSubmit={handleSendCode}>
               <div className="field">
                 <label className="field-label">Registered email</label>
                 <input
                   className="input lg"
-                  defaultValue="rajiv@sudarshan.co.in"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
+              {error && (
+                <div
+                  style={{ fontSize: 12, color: "var(--danger)", marginBottom: 8 }}
+                >
+                  {error}
+                </div>
+              )}
               <Btn
                 variant="primary"
                 size="lg"
                 className="block"
-                onClick={() => setSent(true)}
+                type="submit"
+                disabled={submitting}
               >
-                Send reset link
+                {submitting ? "Sending…" : "Send verification code"}
               </Btn>
-            </>
+            </form>
           ) : (
-            <>
-              <div
-                style={{
-                  padding: 16,
-                  background: "var(--success-soft)",
-                  borderRadius: 10,
-                  color: "var(--success)",
-                  fontSize: 13,
-                  display: "flex",
-                  gap: 10,
-                  alignItems: "flex-start",
-                }}
-              >
-                <Icon name="check" size={16} />
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                    Reset link sent
-                  </div>
-                  <div style={{ color: "var(--fg-muted)" }}>
-                    Sent to <strong>rajiv@sudarshan.co.in</strong>. Link expires
-                    in 30 minutes.
-                  </div>
+            <form onSubmit={handleResetPassword}>
+              <div className="field">
+                <label className="field-label">Verification code</label>
+                <input
+                  className="input lg"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="6-digit code"
+                  value={otp}
+                  onChange={(e) =>
+                    setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  style={{ letterSpacing: "0.25em", fontFamily: "monospace" }}
+                />
+              </div>
+              {renderPasswordField(
+                "New password",
+                newPassword,
+                setNewPassword,
+                showNew,
+                setShowNew,
+                "At least 8 characters",
+              )}
+              {renderPasswordField(
+                "Confirm new password",
+                confirmPassword,
+                setConfirmPassword,
+                showConfirm,
+                setShowConfirm,
+                "Re-enter new password",
+              )}
+              {error && (
+                <div
+                  style={{ fontSize: 12, color: "var(--danger)", marginBottom: 8 }}
+                >
+                  {error}
                 </div>
+              )}
+              <Btn
+                variant="primary"
+                size="lg"
+                className="block"
+                type="submit"
+                disabled={submitting}
+              >
+                {submitting ? "Updating…" : "Reset password"}{" "}
+                <Icon name="arrowRight" size={14} />
+              </Btn>
+              <div className="auth-foot" style={{ marginTop: 16 }}>
+                <a
+                  onClick={(e) => {
+                    if (!submitting) handleSendCode(e);
+                  }}
+                  style={{ cursor: submitting ? "not-allowed" : "pointer" }}
+                >
+                  Resend code
+                </a>
               </div>
-              <div style={{ marginTop: 16, textAlign: "center" }}>
-                <Btn onClick={onBack} className="block">
-                  Back to sign in
-                </Btn>
-              </div>
-            </>
+            </form>
           )}
         </div>
       </div>

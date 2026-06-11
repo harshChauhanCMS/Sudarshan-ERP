@@ -1,11 +1,25 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Role from "@/lib/models/Role";
+import {
+  requireSession,
+  requirePermission,
+  isAdminOrOwner,
+} from "@/lib/api-auth";
+import { pickAllowedFields, ROLE_WRITABLE_FIELDS } from "@/lib/field-allowlists";
+
+function requireRoleManagement(user: NonNullable<Awaited<ReturnType<typeof requireSession>>["user"]>) {
+  if (isAdminOrOwner(user.role)) return null;
+  return requirePermission(user, "user_management", "edit");
+}
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error } = await requireSession();
+  if (error) return error;
+
   try {
     await connectDB();
     const { id } = await params;
@@ -14,7 +28,7 @@ export async function GET(
       return NextResponse.json({ error: `Role "${id}" not found` }, { status: 404 });
     }
     return NextResponse.json({ success: true, data: role });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("GET Role Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
@@ -24,6 +38,11 @@ export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { user, error } = await requireSession();
+  if (error) return error;
+  const permErr = requireRoleManagement(user);
+  if (permErr) return permErr;
+
   try {
     await connectDB();
     const { id } = await params;
@@ -34,20 +53,16 @@ export async function PUT(
       return NextResponse.json({ error: `Role "${id}" not found` }, { status: 404 });
     }
 
-    // Prevent changing roleKey or isSystem of system roles
-    if (role.isSystem) {
-      delete payload.roleKey;
-      delete payload.isSystem;
-    }
+    const safe = pickAllowedFields(payload, ROLE_WRITABLE_FIELDS);
 
     const updated = await Role.findOneAndUpdate(
       { roleKey: id },
-      { $set: payload },
+      { $set: safe },
       { new: true, runValidators: true }
     );
 
     return NextResponse.json({ success: true, data: updated });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("PUT Role Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
@@ -57,6 +72,11 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { user, error } = await requireSession();
+  if (error) return error;
+  const permErr = requireRoleManagement(user);
+  if (permErr) return permErr;
+
   try {
     await connectDB();
     const { id } = await params;
@@ -72,7 +92,7 @@ export async function DELETE(
 
     await Role.deleteOne({ roleKey: id });
     return NextResponse.json({ success: true, message: `Role "${id}" deleted` });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("DELETE Role Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }

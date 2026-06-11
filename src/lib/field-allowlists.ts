@@ -1,0 +1,111 @@
+export const EMPLOYEE_WRITABLE_FIELDS = [
+  "fullName",
+  "fatherName",
+  "dob",
+  "gender",
+  "qualification",
+  "experience",
+  "castCategory",
+  "primaryContact",
+  "personalEmail",
+  "alternateContact",
+  "emergencyContact",
+  "emergencyNameRelation",
+  "officialEmail",
+  "currentAddress",
+  "currentStatePin",
+  "permanentAddress",
+  "permanentStatePin",
+  "aadhar",
+  "pan",
+  "pfUan",
+  "esiIp",
+  "bankName",
+  "accountNo",
+  "ifscCode",
+  "department",
+  "designation",
+  "locationUnit",
+  "companies",
+  "reportingManager",
+  "employmentType",
+  "dateJoining",
+  "dateConfirmation",
+  "probationMonths",
+  "shiftMode",
+  "primaryShift",
+  "eligibleShifts",
+  "rotationPattern",
+  "workingHours",
+  "weeklyOff",
+  "overtimeApplicable",
+  "compensationType",
+  "annualCtc",
+  "monthlyGross",
+  "basicSalary",
+  "da",
+  "hra",
+  "otherConveyance",
+  "specialBonus",
+  "reimbursementCap",
+  "dailyWageRate",
+  "skillCategory",
+  "tradeJobRole",
+  "engagedVia",
+  "payFrequency",
+  "paymentMode",
+] as const;
+
+export const SALARY_PATCH_FIELDS = [
+  "basicSalary",
+  "da",
+  "hra",
+  "otherConveyance",
+  "specialBonus",
+  "grossSalary",
+  "workingDays",
+  "daysPresent",
+  "leaveDays",
+  "unpaidLeaveDays",
+  "leaveDeduction",
+  "overtimeHours",
+  "overtimeAmount",
+  "pfEmployee",
+  "pfEmployer",
+  "esi",
+  "tds",
+  "otherDeductions",
+  "netPayable",
+  "notes",
+  "status",
+] as const;
+
+export const ROLE_WRITABLE_FIELDS = [
+  "label",
+  "description",
+  "permissions",
+  "isActive",
+] as const;
+
+export const LEAVE_POLICY_WRITABLE_FIELDS = [
+  "label",
+  "annualQuota",
+  "carryForwardAllowed",
+  "carryForwardMax",
+  "applicableTo",
+  "isActive",
+  "description",
+] as const;
+
+export function pickAllowedFields(
+  source: Record<string, unknown>,
+  allowed: readonly string[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      out[key] = source[key];
+    }
+  }
+  return out;
+}

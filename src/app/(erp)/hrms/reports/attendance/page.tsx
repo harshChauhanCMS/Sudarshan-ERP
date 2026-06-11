@@ -128,7 +128,7 @@ export default function AttendanceOverviewPage() {
     <div className="attendance-reports-page">
       <RepHeader
         title="Attendance Overview"
-        subtitle={`${r.rangeLabel} · KPIs, weekly trends & department compliance${r.usingDummy ? " · demo data" : ""}`}
+        subtitle={`${r.rangeLabel} · KPIs, weekly trends & department compliance`}
         actions={
           <Button
             icon={<DownloadOutlined />}
@@ -212,6 +212,9 @@ export default function AttendanceOverviewPage() {
         units={r.units}
         loading={r.loading}
         onApply={r.handleApply}
+        search={r.search}
+        setSearch={r.setSearch}
+        splitApplyRow
       />
 
       <ReportSection
@@ -224,7 +227,7 @@ export default function AttendanceOverviewPage() {
           columns={unitColumns}
           dataSource={r.unitTable}
           rowKey="unit"
-          loading={r.loading && !r.usingDummy}
+          loading={r.loading}
           pagination={false}
         />
       </ReportSection>
@@ -255,7 +258,7 @@ export default function AttendanceOverviewPage() {
           columns={deptColumns}
           dataSource={r.deptCompliance}
           rowKey="department"
-          loading={r.loading && !r.usingDummy}
+          loading={r.loading}
           pagination={false}
         />
       </ReportSection>

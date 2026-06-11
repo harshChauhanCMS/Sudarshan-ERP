@@ -116,7 +116,7 @@ const INVOICES = [
 /** Demo users — password for all: `sudarshan123` */
 const USERS = [
   { email: "rajiv@sudarshan.co.in", name: "Rajiv Mehta", role: "owner", employeeId: "E-2014" },
-  { email: "priya@sudarshan.co.in", name: "Priya Sharma", role: "admin", employeeId: "E-2018" },
+  { email: "priya@sudarshan.co.in", name: "Priya Sharma", role: "admin", employeeId: "EMP-3002" },
   { email: "anil@sudarshan.co.in", name: "Anil Kapoor", role: "rm", employeeId: "E-2019" },
 ];
 

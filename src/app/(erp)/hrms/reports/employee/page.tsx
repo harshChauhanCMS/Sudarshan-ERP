@@ -5,6 +5,7 @@ import { Button } from "antd";
 import dayjs from "dayjs";
 import {
   DownloadOutlined,
+  EyeOutlined,
   UserOutlined,
   TeamOutlined,
   ClockCircleOutlined,
@@ -16,6 +17,7 @@ import RepHeader from "@/components/hrms/RepHeader";
 import CommonTable, {
   type CommonTableColumn,
 } from "@/components/common/CommonTable";
+import { TableActionIcon } from "@/components/common/TableActionIcons";
 import ReportSection from "@/components/hrms/ReportSection";
 import ReportChoiceChips, {
   type ReportChipOption,
@@ -95,6 +97,14 @@ export default function EmployeeReportPage() {
   const r = useAttendanceReport();
   const [reportType, setReportType] = useState<ReportType>("monthly");
   const [groupBy, setGroupBy] = useState<GroupBy>("employee");
+
+  const buildReportHref = (row: AttendanceSummaryRow) => {
+    const params = new URLSearchParams({
+      from: r.range[0].format("YYYY-MM-DD"),
+      to: r.range[1].format("YYYY-MM-DD"),
+    });
+    return `/hrms/reports/employee/${encodeURIComponent(row.employeeId)}?${params}`;
+  };
 
   useEffect(() => {
     void r.handleApply();
@@ -181,6 +191,19 @@ export default function EmployeeReportPage() {
         <span className="text-zinc-500">{v.toFixed(1)}</span>
       ),
     },
+    {
+      title: "Actions",
+      key: "actions",
+      width: 72,
+      fixed: "right" as const,
+      render: (_: unknown, row: AttendanceSummaryRow) => (
+        <TableActionIcon
+          label="View report"
+          icon={<EyeOutlined />}
+          href={buildReportHref(row)}
+        />
+      ),
+    },
   ];
 
   const tableProps = {
@@ -224,6 +247,9 @@ export default function EmployeeReportPage() {
         units={r.units}
         loading={r.loading}
         onApply={r.handleApply}
+        search={r.search}
+        setSearch={r.setSearch}
+        splitApplyRow
       />
 
       <ReportSection title="Report type & grouping">
@@ -261,6 +287,7 @@ export default function EmployeeReportPage() {
           rowKey="employeeId"
           loading={r.loading}
           pagination={{ pageSize: 15, showSizeChanger: true }}
+          scroll={{ x: 1200 }}
         />
       </ReportSection>
     </div>

@@ -10,7 +10,9 @@ import { HRMS_BACK } from "@/lib/hrms-nav";
 import CommonTable, { type CommonTableColumn } from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
 import EmployeeSelect from "@/components/erp/EmployeeSelect";
-import { leaveTypeColor } from "@/lib/leave-dummy";
+import FilterSearchField from "@/components/hrms/FilterSearchField";
+import { leaveTypeColor } from "@/lib/leave-apply";
+import { filterBySearch } from "@/lib/filter-search";
 
 type LeaveHistoryRow = {
   id: string;
@@ -106,6 +108,7 @@ export default function LeaveRecordPage() {
   const [employee, setEmployee] = useState<string | undefined>(undefined);
   const [year, setYear] = useState(String(dayjs().year()));
   const [typeFilter, setTypeFilter] = useState("All");
+  const [search, setSearch] = useState("");
   const [leaves, setLeaves] = useState<Record<string, unknown>[]>([]);
   const [employees, setEmployees] = useState<
     { employeeId: string; fullName: string; department?: string; designation?: string }[]
@@ -177,10 +180,25 @@ export default function LeaveRecordPage() {
       });
   }, [leaves, employee, year]);
 
-  const filteredHistory =
-    typeFilter === "All"
-      ? history
-      : history.filter((h) => h.type === typeFilter);
+  const filteredHistory = useMemo(() => {
+    const byType =
+      typeFilter === "All"
+        ? history
+        : history.filter((h) => h.type === typeFilter);
+    return filterBySearch(byType, search, (h) => [
+      h.type,
+      h.from,
+      h.to,
+      h.reason,
+      h.approver,
+      h.appliedOn,
+      h.status,
+      selectedEmployee?.fullName,
+      selectedEmployee?.employeeId,
+      selectedEmployee?.department,
+      selectedEmployee?.designation,
+    ]);
+  }, [history, typeFilter, search, selectedEmployee]);
 
   const yearOptions = useMemo(() => {
     const years = new Set<number>([dayjs().year()]);
@@ -237,7 +255,12 @@ export default function LeaveRecordPage() {
           <span className="arf-head-title">Filters</span>
         </div>
         <div className="arf-body">
-          <div className="arf-controls ap-filters-controls">
+          <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
+            <FilterSearchField
+              value={search}
+              onChange={setSearch}
+              placeholder="Search leave type, reason, approver…"
+            />
             <div className="arf-item">
               <span className="arf-label">Employee</span>
               <EmployeeSelect value={employee} onChange={(v) => setEmployee(v)} />

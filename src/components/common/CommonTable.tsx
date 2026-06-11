@@ -1,9 +1,9 @@
 "use client";
 
 import { Table } from "antd";
-import type { TableProps } from "antd";
+import type { TablePaginationConfig, TableProps } from "antd";
 import type { AnyObject } from "antd/es/_util/type";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export type CommonTableColumn<RecordType> = NonNullable<
   TableProps<RecordType>["columns"]
@@ -15,12 +15,23 @@ export interface CommonTableProps<RecordType extends AnyObject>
   dataSource: readonly RecordType[];
 }
 
-const DEFAULT_PAGINATION: TableProps<AnyObject>["pagination"] = {
-  pageSize: 10,
+const DEFAULT_PAGE_SIZE = 10;
+
+const DEFAULT_PAGINATION: TablePaginationConfig = {
   showSizeChanger: true,
   showQuickJumper: true,
+  pageSizeOptions: ["10", "20", "50", "100"],
   showTotal: (total) => `Total ${total} items`,
 };
+
+function readInitialPageSize(pagination: CommonTableProps<AnyObject>["pagination"]) {
+  if (pagination === false) return DEFAULT_PAGE_SIZE;
+  const merged = {
+    ...DEFAULT_PAGINATION,
+    ...(typeof pagination === "object" ? pagination : {}),
+  };
+  return merged.pageSize ?? DEFAULT_PAGE_SIZE;
+}
 
 export default function CommonTable<RecordType extends AnyObject>({
   columns,
@@ -33,6 +44,19 @@ export default function CommonTable<RecordType extends AnyObject>({
   className,
   ...rest
 }: CommonTableProps<RecordType>) {
+  const [tablePage, setTablePage] = useState(1);
+  const [tablePageSize, setTablePageSize] = useState(() =>
+    readInitialPageSize(pagination)
+  );
+  const prevDataLength = useRef(dataSource.length);
+
+  useEffect(() => {
+    if (prevDataLength.current !== dataSource.length) {
+      setTablePage(1);
+      prevDataLength.current = dataSource.length;
+    }
+  }, [dataSource.length]);
+
   const resolvedRowKey = useMemo<TableProps<RecordType>["rowKey"]>(() => {
     if (rowKey) return rowKey;
     const sample = dataSource[0];
@@ -45,8 +69,30 @@ export default function CommonTable<RecordType extends AnyObject>({
 
   const resolvedPagination = useMemo(() => {
     if (pagination === false) return false as const;
-    return { ...DEFAULT_PAGINATION, ...(pagination ?? {}) };
-  }, [pagination]);
+
+    const merged: TablePaginationConfig = {
+      ...DEFAULT_PAGINATION,
+      ...(typeof pagination === "object" ? pagination : {}),
+    };
+    const { pageSize: _pageSize, current: _current, onChange, onShowSizeChange, ...restConfig } =
+      merged;
+
+    return {
+      ...restConfig,
+      current: tablePage,
+      pageSize: tablePageSize,
+      onChange: (page: number, size: number) => {
+        setTablePage(page);
+        setTablePageSize(size);
+        onChange?.(page, size);
+      },
+      onShowSizeChange: (_page: number, size: number) => {
+        setTablePage(1);
+        setTablePageSize(size);
+        onShowSizeChange?.(_page, size);
+      },
+    };
+  }, [pagination, tablePage, tablePageSize]);
 
   return (
     <Table<RecordType>

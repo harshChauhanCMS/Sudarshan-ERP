@@ -1,6 +1,8 @@
 "use client";
 
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button } from "antd";
+import dayjs from "dayjs";
 import RepHeader from "@/components/hrms/RepHeader";
 import CommonTable from "@/components/common/CommonTable";
 import StatCard from "@/components/common/StatCard";
@@ -15,13 +17,88 @@ import {
   HistoryOutlined,
   EyeOutlined,
 } from "@ant-design/icons";
+import {
+  getPayrollSheetKpi,
+  formatPayrollInr,
+  type PayrollSheetRow,
+} from "@/lib/payroll-sheet";
+
+type PayrollCycleRow = {
+  key: string;
+  cycle: string;
+  cycleKey: string;
+  employees: number;
+  amount: string;
+  status: string;
+  date: string;
+};
+
+function cycleStatus(rows: PayrollSheetRow[]) {
+  const generated = rows.filter((r) => r.status !== "pending");
+  if (generated.length === 0) return "Not started";
+  const disbursed = generated.filter((r) => r.status === "disbursed").length;
+  if (disbursed === generated.length) return "Disbursed";
+  const approved = generated.filter((r) => r.status === "approved").length;
+  if (approved === generated.length) return "Approved";
+  const pct = Math.round((generated.length / Math.max(rows.length, 1)) * 100);
+  return `Processing (${pct}%)`;
+}
 
 export default function PayrollPage() {
-  const payrollData = [
-    { key: "1", cycle: "May 2026", cycleKey: "2026-05", employees: 306, amount: "₹42,84,200", status: "Processing (95%)", date: "May 31, 2026" },
-    { key: "2", cycle: "April 2026", cycleKey: "2026-04", employees: 302, amount: "₹42,28,000", status: "Disbursed", date: "April 30, 2026" },
-    { key: "3", cycle: "March 2026", cycleKey: "2026-03", employees: 298, amount: "₹41,72,500", status: "Disbursed", date: "March 31, 2026" },
-  ];
+  const [cycles, setCycles] = useState<PayrollCycleRow[]>([]);
+  const [currentRows, setCurrentRows] = useState<PayrollSheetRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const monthKeys = Array.from({ length: 6 }, (_, i) =>
+        dayjs().subtract(i, "month").format("YYYY-MM"),
+      );
+      const results = await Promise.all(
+        monthKeys.map(async (cycleKey) => {
+          const res = await fetch(`/api/hrms/salary/bulk?cycle=${cycleKey}`);
+          const json = await res.json();
+          if (!res.ok) return { cycleKey, rows: [] as PayrollSheetRow[] };
+          return { cycleKey, rows: (json.data || []) as PayrollSheetRow[] };
+        }),
+      );
+
+      const tableRows: PayrollCycleRow[] = results
+        .filter((r) => r.rows.length > 0)
+        .map(({ cycleKey, rows }) => {
+          const kpi = getPayrollSheetKpi(rows);
+          const d = dayjs(`${cycleKey}-01`);
+          return {
+            key: cycleKey,
+            cycle: d.format("MMMM YYYY"),
+            cycleKey,
+            employees: kpi.employees,
+            amount: formatPayrollInr(kpi.netPay),
+            status: cycleStatus(rows),
+            date: d.endOf("month").format("MMMM D, YYYY"),
+          };
+        });
+
+      setCycles(tableRows);
+      setCurrentRows(results[0]?.rows ?? []);
+    } catch {
+      setCycles([]);
+      setCurrentRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const currentKpi = useMemo(
+    () => getPayrollSheetKpi(currentRows),
+    [currentRows],
+  );
+  const currentLabel = dayjs().format("MMMM YYYY");
 
   const columns = [
     { title: "Salary Cycle", dataIndex: "cycle", key: "cycle", render: (text: string) => <span className="font-bold">{text}</span> },
@@ -65,8 +142,8 @@ export default function PayrollPage() {
         title="Payroll Management"
         subtitle="Employee compensation, benefits, and salary cycles"
         actions={
-          <Button type="primary" icon={<WalletOutlined />}>
-            Process Payroll
+          <Button type="primary" icon={<WalletOutlined />} href="/hrms/salary/bulk">
+            Open payroll sheet
           </Button>
         }
       />
@@ -75,27 +152,27 @@ export default function PayrollPage() {
         <StatCard
           icon={WalletOutlined}
           label="Total payout (MTD)"
-          value="₹42,84,200"
-          hint="Active cycle: May 2026"
+          value={loading ? "…" : formatPayrollInr(currentKpi.netPay)}
+          hint={`Active cycle: ${currentLabel}`}
         />
         <StatCard
           icon={DollarOutlined}
           label="Taxes & deductions"
-          value="₹5,40,650"
-          hint="PF + PT + TDS"
+          value={loading ? "…" : formatPayrollInr(currentKpi.deductions)}
+          hint="PF + ESI + TDS"
           hintTone="warning"
         />
         <StatCard
           icon={HistoryOutlined}
-          label="Processing progress"
-          value="95%"
-          hint="May 2026 cycle in progress"
+          label="Employees on sheet"
+          value={loading ? "…" : String(currentKpi.employees)}
+          hint={`${currentLabel} cycle`}
         />
         <StatCard
           icon={CheckCircleOutlined}
-          label="Last cycle paid"
-          value="₹42,28,000"
-          hint="Paid April 30, 2026"
+          label="Gross payroll"
+          value={loading ? "…" : formatPayrollInr(currentKpi.gross)}
+          hint="Before deductions"
           hintTone="positive"
         />
       </div>
@@ -103,7 +180,8 @@ export default function PayrollPage() {
       <ReportSection title="Salary disbursements" flush>
         <CommonTable
           {...ERP_TABLE_PROPS}
-          dataSource={payrollData}
+          loading={loading}
+          dataSource={cycles}
           columns={columns}
           pagination={false}
           bordered

@@ -1,6 +1,7 @@
 import { connectDB, isDbConfigured } from "@/lib/mongodb";
 import { DesignCanvasState } from "@/models/DesignCanvasState";
 import { ok, fail } from "@/lib/api-response";
+import { requireAdminOrOwner, requireSession } from "@/lib/api-auth";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -16,6 +17,11 @@ async function readFileState() {
 }
 
 export async function GET() {
+  const { user, error } = await requireSession();
+  if (error) return error;
+  const adminErr = requireAdminOrOwner(user!);
+  if (adminErr) return adminErr;
+
   try {
     if (isDbConfigured()) {
       await connectDB();
@@ -29,6 +35,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const { user, error } = await requireSession();
+  if (error) return error;
+  const adminErr = requireAdminOrOwner(user!);
+  if (adminErr) return adminErr;
+
   const body = await request.json();
   try {
     if (isDbConfigured()) {

@@ -12,6 +12,7 @@ interface Employee {
 }
 
 interface EmployeeSelectProps {
+  id?: string;
   value?: string;
   onChange?: (value: string, employee?: Employee) => void;
   placeholder?: string;
@@ -21,6 +22,7 @@ interface EmployeeSelectProps {
 }
 
 export default function EmployeeSelect({
+  id,
   value,
   onChange,
   placeholder = "Search employee",
@@ -56,6 +58,7 @@ export default function EmployeeSelect({
 
   return (
     <Select
+      id={id}
       showSearch
       value={value || undefined}
       placeholder={loading ? "Loading employees..." : placeholder}

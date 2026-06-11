@@ -13,7 +13,6 @@ import {
   Tooltip,
 } from "antd";
 import {
-  PlusOutlined,
   CheckOutlined,
   CloseOutlined,
   RollbackOutlined,
@@ -21,10 +20,10 @@ import {
   DownloadOutlined,
   ThunderboltOutlined,
   EyeOutlined,
+  FilterOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 
 import RepHeader from "@/components/hrms/RepHeader";
 import { HRMS_BACK } from "@/lib/hrms-nav";
@@ -32,8 +31,10 @@ import CommonTable from "@/components/common/CommonTable";
 import StatCard from "@/components/common/StatCard";
 import EmployeeSelect from "@/components/erp/EmployeeSelect";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
-import { leaveTypeColor } from "@/lib/leave-dummy";
+import { leaveTypeColor } from "@/lib/leave-apply";
 import { computeLeaveApprovalKpi } from "@/lib/hrms-leave-kpi";
+import FilterSearchField from "@/components/hrms/FilterSearchField";
+import { filterBySearch } from "@/lib/filter-search";
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "orange",
@@ -77,6 +78,7 @@ export default function LeaveApprovalPage() {
   const [rollbackForm] = Form.useForm();
   const [rejectForm] = Form.useForm();
   const [activeTab, setActiveTab] = useState("pending");
+  const [search, setSearch] = useState("");
   const [viewOpen, setViewOpen] = useState(false);
   const [viewRow, setViewRow] = useState<Record<string, unknown> | null>(null);
 
@@ -112,9 +114,21 @@ export default function LeaveApprovalPage() {
   const kpi = useMemo(() => computeLeaveApprovalKpi(leaves), [leaves]);
 
   const tableData = useMemo(() => {
-    if (activeTab === "all") return leaves;
-    return leaves.filter((row) => String(row.status) === activeTab);
-  }, [leaves, activeTab]);
+    const byTab =
+      activeTab === "all"
+        ? leaves
+        : leaves.filter((row) => String(row.status) === activeTab);
+    return filterBySearch(byTab, search, (row) => [
+      String(row.employeeId ?? ""),
+      String(row.employeeName ?? ""),
+      String(row.department ?? ""),
+      String(row.leaveType ?? ""),
+      String(row.reason ?? ""),
+      String(row.status ?? ""),
+      String(row.fromDate ?? ""),
+      String(row.toDate ?? ""),
+    ]);
+  }, [leaves, activeTab, search]);
 
   const approve = async (id: string) => {
     try {
@@ -401,6 +415,22 @@ export default function LeaveApprovalPage() {
         />
       </div>
 
+      <div className="arf-panel ap-filters-panel">
+        <div className="arf-head">
+          <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
+          <span className="arf-head-title">Filters</span>
+        </div>
+        <div className="arf-body">
+          <div className="arf-controls ap-filters-controls">
+            <FilterSearchField
+              value={search}
+              onChange={setSearch}
+              placeholder="Search employee name, ID, leave type, reason…"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Leave table */}
       <div className="attendance-report-section">
         <Tabs
@@ -459,7 +489,7 @@ export default function LeaveApprovalPage() {
         width={520}
         footer={
           viewRow?.status === "pending" ? (
-            <div className="flex justify-end gap-2">
+            <div className="leave-view-modal-footer">
               <Button onClick={() => setViewOpen(false)}>Close</Button>
               <Button
                 danger

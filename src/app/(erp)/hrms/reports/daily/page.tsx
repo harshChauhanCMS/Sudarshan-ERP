@@ -8,8 +8,18 @@ import dayjs from "dayjs";
 import RepHeader from "@/components/hrms/RepHeader";
 import CommonTable, { type CommonTableColumn } from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
-import AttendanceFilterPanel from "@/components/hrms/AttendanceFilterPanel";
+import AttendanceFilterPanel, {
+  type PeriodOption,
+} from "@/components/hrms/AttendanceFilterPanel";
 import { useAttendanceReport, type AttendanceDailyRow } from "@/hooks/use-attendance-report";
+
+const DAILY_PERIOD_OPTIONS: PeriodOption[] = [
+  { value: "today", label: "Today" },
+  { value: "date", label: "Pick a date" },
+  { value: "month", label: "This month" },
+  { value: "last", label: "Last month" },
+  { value: "custom", label: "Pick month…" },
+];
 
 function fmtTime(iso: string | null) {
   if (!iso) return "—";
@@ -17,7 +27,7 @@ function fmtTime(iso: string | null) {
 }
 
 export default function DailyAttendancePage() {
-  const r = useAttendanceReport();
+  const r = useAttendanceReport({ variant: "daily" });
 
   useEffect(() => {
     void r.handleApply();
@@ -25,7 +35,17 @@ export default function DailyAttendancePage() {
   }, []);
 
   const columns: CommonTableColumn<AttendanceDailyRow>[] = [
-    { title: "Date", dataIndex: "day", key: "day", width: 110 },
+    {
+      title: "Date",
+      dataIndex: "day",
+      key: "day",
+      width: 120,
+      render: (v: string) => (
+        <span className="font-medium">
+          {v ? dayjs(v).format("DD MMM YYYY") : "—"}
+        </span>
+      ),
+    },
     {
       title: "Emp ID",
       dataIndex: "employeeId",
@@ -131,6 +151,8 @@ export default function DailyAttendancePage() {
         period={r.period} setPeriod={r.setPeriod}
         departments={r.departments} units={r.units}
         loading={r.loading} onApply={r.handleApply}
+        search={r.search} setSearch={r.setSearch}
+        periodOptions={DAILY_PERIOD_OPTIONS}
         showShift={false}
         showEmployee
         splitApplyRow
