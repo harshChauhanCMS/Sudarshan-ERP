@@ -134,7 +134,7 @@ export async function notifyAttendancePunch(
     const message = `${display.employeeName}${idPart} ${action} at ${time} · ${src}`;
     const target = display.employeeId
       ? `/hrms/employees/${display.employeeId}`
-      : "/hrms/attendance";
+      : "/hrms/reports/attendance";
 
     await Notification.insertMany(
       recipients.map((recipientEmail) => ({

@@ -104,7 +104,7 @@ export default function NotificationsPage() {
 
   const openNotification = (n: NotificationRow) => {
     if (!n.read) void markRead(n.id);
-    router.push(n.target || "/hrms/attendance");
+    router.push(n.target || "/hrms/reports/attendance");
   };
 
   const readCount = useMemo(

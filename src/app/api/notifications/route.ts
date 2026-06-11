@@ -46,7 +46,7 @@ export async function GET(request: Request) {
       category: n.category,
       text: n.message,
       time: formatRelativeTime(new Date(n.createdAt)),
-      target: n.target || "/hrms/attendance",
+      target: n.target || "/hrms/reports/attendance",
       read: Boolean(n.read),
       employeeId: n.employeeId,
       punchType: n.punchType,
