@@ -51,6 +51,7 @@ export const ERP_ROUTES = [
   "/reports",
   "/users",
   "/design-system",
+  "/profile",
 ] as const;
 
 export type ErpRoute = (typeof ERP_ROUTES)[number];

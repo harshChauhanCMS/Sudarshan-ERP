@@ -146,7 +146,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
 
   useEffect(() => {
     if (!sessionUser?.permissions) return;
-    if (["/login", "/select-company", "/forgot", "/reset-password"].includes(route)) return;
+    if (["/login", "/select-company", "/forgot", "/reset-password", "/profile"].includes(route)) return;
     if (canAccessRoute(route, sessionUser.permissions, sessionUser.role)) return;
     const fallback = getDefaultLandingRoute(
       sessionUser.permissions,

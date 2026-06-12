@@ -79,14 +79,19 @@ const NAV = [
       },
     ],
   },
-  {
-    id: "ops",
-    label: "Operations",
-    items: [
-      { id: "/production", label: "Production", icon: "factory" },
-      { id: "/dispatch", label: "Dispatch Planning", icon: "truck" },
-    ],
-  },
+  // {
+  //   id: "dispatch_tracking",
+  //   label: "Dispatch & Vehicle Tracking",
+  //   items: [
+  //     { id: "/dispatch/planning", label: "Dispatch Planning", icon: "truck" },
+  //     { id: "/dispatch/list", label: "Dispatch List", icon: "list" },
+  //     { id: "/dispatch/vehicle-tracking", label: "Vehicle Tracking", icon: "qr" },
+  //     { id: "/dispatch/vehicle-dispatch-tracking", label: "Vehicle Dispatch Tracking", icon: "pin" },
+  //     { id: "/dispatch/driver-tracking", label: "Dispatch Tracking (Driver app)", icon: "map" },
+  //     { id: "/dispatch/reminders", label: "Dispatch Reminders", icon: "clock" },
+  //     { id: "/dispatch/delay-alerts", label: "Dispatch Delay Alerts", icon: "alert" },
+  //   ],
+  // },
   {
     id: "people",
     label: "People",
@@ -192,7 +197,7 @@ const Sidebar = ({
 }) => {
   const filteredNav = useMemo(
     () => filterNavByPermissions(NAV, permissions, userRole),
-    [permissions, userRole]
+    [permissions, userRole],
   );
 
   const displayName = userName || "User";
@@ -512,7 +517,7 @@ const Sidebar = ({
           <div className="sb-foot-name">{displayName}</div>
           <div className="sb-foot-role">{displayRole}</div>
         </div>
-        <button className="sb-foot-btn" title="Settings">
+        <button className="sb-foot-btn" title="Settings" onClick={() => navigate("/profile")}>
           <Icon name="settings" size={14} />
         </button>
       </div>
@@ -572,7 +577,12 @@ const breadcrumbsFor = (route) => {
     "/production": ["Operations", "Production"],
     "/dispatch": ["Operations", "Dispatch Planning"],
     "/hrms/employees": ["People", "HR Management", "Employees"],
-    "/hrms/employees/add": ["People", "HR Management", "Employees", "Add employee"],
+    "/hrms/employees/add": [
+      "People",
+      "HR Management",
+      "Employees",
+      "Add employee",
+    ],
     "/hrms/notifications": ["People", "HR Management", "Notifications"],
     "/hrms/reports": ["People", "Reports"],
     "/hrms/reports/attendance": ["People", "Reports", "Attendance Overview"],
