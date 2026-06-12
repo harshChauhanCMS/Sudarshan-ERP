@@ -1,3 +1,4 @@
+import type { PurchaseOrder, RawMaterial, SparePart } from "./entity-types";
 
 const COMPANIES = [
   {
@@ -26,7 +27,7 @@ const COMPANIES = [
   },
 ];
 
-const RAW_MATERIALS = [
+const RAW_MATERIALS: RawMaterial[] = [
   { code: "RM-TAL-001", name: "Talcum Powder",            grade: "Cosmetic 600 mesh",  stock: 84.5, unit: "MT", reorder: 25, value: 6258000, location: "Plant A · Bay 1",  status: "ok",     trend: 5.2 },
   { code: "RM-CC-002",  name: "Calcium Carbonate",         grade: "Coated 2µ",          stock: 12.3, unit: "MT", reorder: 30, value: 1845000, location: "Plant A · Bay 2",  status: "low",    trend: -18.4 },
   { code: "RM-DOL-003", name: "Dolomite Powder",           grade: "200 mesh",           stock: 156,  unit: "MT", reorder: 40, value: 2496000, location: "Plant A · Bay 3",  status: "ok",     trend: 2.1 },
@@ -48,7 +49,7 @@ const PACKAGING = [
   { code: "PK-FAB-001", name: "PP Woven Fabric · 1100 GSM",  stock: 6800, unit: "mtr", reorder: 2000, status: "ok",   trend: 1.0 },
 ];
 
-const SPARE_PARTS = [
+const SPARE_PARTS: SparePart[] = [
   { code: "SP-BRG-001", name: "Pulverizer Bearing 6320",     vendor: "SKF India",          category: "Bearing",     stock: 12, unit: "pcs", reorder: 6,  value: 84000,   location: "Plant A · Stores · Rack 3", status: "ok",       trend: 0,    critical: true,  lastIssued: "May 12" },
   { code: "SP-BLT-002", name: "V-Belt B-92 (industrial)",    vendor: "Fenner India",       category: "Belt",        stock: 4,  unit: "pcs", reorder: 8,  value: 9600,    location: "Plant A · Stores · Rack 1", status: "low",      trend: -25,  critical: true,  lastIssued: "May 18" },
   { code: "SP-MOT-003", name: "Motor 50 HP TEFC 3-phase",    vendor: "Crompton Greaves",   category: "Motor",       stock: 2,  unit: "pcs", reorder: 2,  value: 184000,  location: "Plant A · Stores · Bay 4", status: "low",      trend: 0,    critical: true,  lastIssued: "Apr 22" },
@@ -74,7 +75,7 @@ const VENDORS = [
   { id: "V-006", name: "Vikas Soda Ash Trading",          city: "Mumbai, MH",  category: "Chemical",        poCount: 8,  ytd: 6200000,  rating: 4.1 },
 ];
 
-const PURCHASE_ORDERS = [
+const PURCHASE_ORDERS: PurchaseOrder[] = [
   { id: "PO-2026-0142", vendor: "Hindustan Talc Mines Pvt Ltd", items: 3, total: 1840000, date: "May 18, 2026",   status: "pending",   invoice: "awaiting" },
   { id: "PO-2026-0141", vendor: "Krishna Mineral Suppliers",    items: 2, total: 2240000, date: "May 17, 2026",   status: "approved",  invoice: "verified" },
   { id: "PO-2026-0140", vendor: "Bharat Polychem Industries",   items: 4, total: 980000,  date: "May 16, 2026",   status: "received",  invoice: "verified" },

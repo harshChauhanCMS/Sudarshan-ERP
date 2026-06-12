@@ -3,12 +3,13 @@
 
 
 import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
-import { nextEmployeeId, nextPackagingCode, formatDisplayDate } from "@/lib/id-generators";
+import { nextEmployeeId, formatDisplayDate } from "@/lib/id-generators";
 import { DashHead, SectionH } from "./dashboards";
 
 /* ============================================================
@@ -1038,31 +1039,13 @@ const HRReport = () => {
    PACKAGING INVENTORY (with bag auto-calc)
    ============================================================ */
 const PackagingInventory = () => {
+  const router = useRouter();
   const DATA = useDATA();
-  const { append, update, saving, error, clearError } = useEntityMutation();
+  const { update, saving, error, clearError } = useEntityMutation();
   const [calcOpen, setCalcOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
   const [orderQty, setOrderQty] = useState(24);
   const [bagSize, setBagSize] = useState(1000);
   const bagsNeeded = Math.ceil(orderQty * 1000 / bagSize);
-  const packForm = useFormState({ name: "", code: nextPackagingCode(DATA.PACKAGING), stock: "0", reorder: "1500", unit: "pcs" });
-
-  const savePackaging = async () => {
-    const err = requireFields(packForm.values, ["name"]);
-    if (err) throw new Error(err);
-    const stock = parseInt(packForm.values.stock, 10) || 0;
-    await append("packaging", {
-      code: packForm.values.code || nextPackagingCode(DATA.PACKAGING),
-      name: packForm.values.name.trim(),
-      stock,
-      unit: packForm.values.unit,
-      reorder: parseInt(packForm.values.reorder, 10) || 1500,
-      status: stock <= parseInt(packForm.values.reorder, 10) ? "low" : "ok",
-      trend: 0,
-    });
-    setAddOpen(false);
-  };
-
   const generateStockRequest = async () => {
     const codeMap = { 1000: "PK-FIBC-25", 500: "PK-FIBC-12", 50: "PK-PPW-50", 25: "PK-PPW-25", 20: "PK-BOPP-20" };
     const code = codeMap[bagSize];
@@ -1155,7 +1138,7 @@ const PackagingInventory = () => {
       <DashHead title="Packaging Inventory" sub="FIBC, PP woven, BOPP — stock, bag auto-calc, alerts">
         <Btn size="sm" icon="bolt" onClick={() => setCalcOpen(true)}>Bag calc</Btn>
         <Btn size="sm" icon="download">Export</Btn>
-        <Btn variant="primary" size="sm" icon="plus" onClick={() => { clearError(); setAddOpen(true); }}>Add packaging</Btn>
+        <Btn variant="primary" size="sm" icon="plus" onClick={() => { clearError(); router.push("/inventory/packaging/add"); }}>Add packaging</Btn>
       </DashHead>
 
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
@@ -1257,15 +1240,6 @@ const PackagingInventory = () => {
           );
         })}
       </Modal>
-
-      <EntityFormModal open={addOpen} onClose={() => setAddOpen(false)} title="Add packaging SKU" sub="Register a new packaging item" wide submitLabel="Save packaging" saving={saving} error={error} onSubmit={savePackaging}>
-        <FormGrid>
-          <FormField label="SKU code"><FormInput value={packForm.values.code} onChange={(v) => packForm.setField("code", v)} /></FormField>
-          <FormField label="Description"><FormInput value={packForm.values.name} onChange={(v) => packForm.setField("name", v)} /></FormField>
-          <FormField label="Opening stock"><FormInput value={packForm.values.stock} onChange={(v) => packForm.setField("stock", v)} /></FormField>
-          <FormField label="Reorder at"><FormInput value={packForm.values.reorder} onChange={(v) => packForm.setField("reorder", v)} /></FormField>
-        </FormGrid>
-      </EntityFormModal>
     </>
   );
 };

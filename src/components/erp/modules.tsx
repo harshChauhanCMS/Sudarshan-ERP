@@ -3,6 +3,7 @@
 
 
 import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button as AntButton } from "antd";
 import { DownloadOutlined, MoreOutlined } from "@ant-design/icons";
 import CommonTable from "@/components/common/CommonTable";
@@ -13,7 +14,7 @@ import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
-import { nextRawMaterialCode, nextVendorId, nextPoId, nextDispatchId, formatDisplayDate } from "@/lib/id-generators";
+import { nextDispatchId, formatDisplayDate } from "@/lib/id-generators";
 import { DashHead, SectionH } from "./dashboards";
 
 /* ============================================================
@@ -25,49 +26,20 @@ import { DashHead, SectionH } from "./dashboards";
    RAW MATERIAL INVENTORY
    ============================================================ */
 const RawMaterialInventory = () => {
+  const router = useRouter();
   const DATA = useDATA();
-  const { append, update, saving, error, clearError } = useEntityMutation();
-  const [addOpen, setAddOpen] = useState(false);
+  const { update, saving, error } = useEntityMutation();
   const [adjustOpen, setAdjustOpen] = useState(null);
   const [adjustQty, setAdjustQty] = useState("0");
-  const addForm = useFormState({
-    name: "",
-    grade: "",
-    stock: "20",
-    unit: "MT",
-    reorder: "25",
-    location: "Plant A · Bay 1",
-    rate: "74000",
-  });
-
-  const receiveStock = async () => {
-    const err = requireFields(addForm.values, ["name", "grade"]);
-    if (err) throw new Error(err);
-    const stock = parseFloat(addForm.values.stock) || 0;
-    const rate = parseFloat(addForm.values.rate) || 0;
-    await append("rawMaterials", {
-      code: nextRawMaterialCode(DATA.RAW_MATERIALS),
-      name: addForm.values.name.trim(),
-      grade: addForm.values.grade.trim(),
-      stock,
-      unit: addForm.values.unit,
-      reorder: parseFloat(addForm.values.reorder) || 25,
-      value: Math.round(stock * rate),
-      location: addForm.values.location,
-      status: stock <= parseFloat(addForm.values.reorder) ? "low" : "ok",
-      trend: 0,
-    });
-    setAddOpen(false);
-    addForm.reset({ name: "", grade: "", stock: "20", unit: "MT", reorder: "25", location: "Plant A · Bay 1", rate: "74000" });
-  };
 
   const saveAdjustment = async () => {
     if (!adjustOpen) return;
     const delta = parseFloat(adjustQty) || 0;
     const newStock = Math.max(0, adjustOpen.stock + delta);
     const reorder = adjustOpen.reorder;
+    const minStock = adjustOpen.minStock ?? 0;
     let status = "ok";
-    if (newStock <= 0) status = "critical";
+    if (newStock <= 0 || (minStock > 0 && newStock <= minStock)) status = "critical";
     else if (newStock <= reorder) status = "low";
     await update("rawMaterials", adjustOpen.code, {
       stock: newStock,
@@ -160,7 +132,7 @@ const RawMaterialInventory = () => {
       <DashHead title="Raw Material Inventory" sub="Minerals and chemicals · live stock & alerts">
         <Btn icon="filter" size="sm">Filters</Btn>
         <Btn icon="download" size="sm">Export</Btn>
-        <Btn variant="primary" size="sm" icon="plus" onClick={() => { clearError(); setAddOpen(true); }}>Add stock</Btn>
+        <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/inventory/raw-material/add")}>Add stock</Btn>
       </DashHead>
 
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
@@ -212,24 +184,6 @@ const RawMaterialInventory = () => {
         </div>
       </div>
 
-      <EntityFormModal open={addOpen} onClose={() => setAddOpen(false)} title="Add stock" sub="Receive raw material into inventory" submitLabel="Receive stock" saving={saving} error={error} onSubmit={receiveStock}>
-        <FormGrid>
-          <FormField label="Material name"><FormInput value={addForm.values.name} onChange={(v) => addForm.setField("name", v)} /></FormField>
-          <FormField label="Grade"><FormInput value={addForm.values.grade} onChange={(v) => addForm.setField("grade", v)} /></FormField>
-          <FormField label="Quantity received"><FormInput value={addForm.values.stock} onChange={(v) => addForm.setField("stock", v)} /></FormField>
-          <FormField label="Unit">
-            <FormSelect value={addForm.values.unit} onChange={(v) => addForm.setField("unit", v)}><option>MT</option><option>KL</option></FormSelect>
-          </FormField>
-          <FormField label="Reorder at"><FormInput value={addForm.values.reorder} onChange={(v) => addForm.setField("reorder", v)} /></FormField>
-          <FormField label="Rate (₹/unit)"><FormInput value={addForm.values.rate} onChange={(v) => addForm.setField("rate", v)} /></FormField>
-          <FormField label="Location">
-            <FormSelect value={addForm.values.location} onChange={(v) => addForm.setField("location", v)}>
-              <option>Plant A · Bay 1</option><option>Plant A · Bay 2</option><option>Plant B · Tank 1</option>
-            </FormSelect>
-          </FormField>
-        </FormGrid>
-      </EntityFormModal>
-
       <EntityFormModal open={!!adjustOpen} onClose={() => setAdjustOpen(null)} title={adjustOpen ? `Adjust stock · ${adjustOpen.name}` : ""} sub={adjustOpen ? `Current: ${adjustOpen.stock} ${adjustOpen.unit}` : ""} submitLabel="Save adjustment" saving={saving} error={error} onSubmit={saveAdjustment}>
         <FormGrid>
           <FormField label="Adjustment (+/- qty)"><FormInput value={adjustQty} onChange={setAdjustQty} /></FormField>
@@ -243,50 +197,9 @@ const RawMaterialInventory = () => {
    VENDORS & PROCUREMENT (Vendors list + POs)
    ============================================================ */
 const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) => {
+  const router = useRouter();
   const DATA = useDATA();
-  const { append, saving, error, clearError } = useEntityMutation();
-  const [addVendor, setAddVendor] = useState(false);
-  const [createPO, setCreatePO] = useState(false);
   const [tab, setTab] = useState(defaultTab);
-  const vendorForm = useFormState({ name: "", category: "Raw Material", city: "" });
-  const poForm = useFormState({
-    vendor: DATA.VENDORS[0]?.name ?? "",
-    poId: nextPoId(DATA.PURCHASE_ORDERS),
-    total: "1840000",
-    items: "3",
-  });
-
-  const saveVendor = async () => {
-    const err = requireFields(vendorForm.values, ["name", "city"]);
-    if (err) throw new Error(err);
-    await append("vendors", {
-      id: nextVendorId(DATA.VENDORS),
-      name: vendorForm.values.name.trim(),
-      city: vendorForm.values.city.trim(),
-      category: vendorForm.values.category,
-      poCount: 0,
-      ytd: 0,
-      rating: 4,
-    });
-    setAddVendor(false);
-    vendorForm.reset({ name: "", category: "Raw Material", city: "" });
-  };
-
-  const savePO = async (draft: boolean) => {
-    const err = requireFields(poForm.values, ["vendor"]);
-    if (err) throw new Error(err);
-    await append("purchaseOrders", {
-      id: poForm.values.poId || nextPoId(DATA.PURCHASE_ORDERS),
-      vendor: poForm.values.vendor,
-      items: parseInt(poForm.values.items, 10) || 1,
-      total: parseInt(poForm.values.total, 10) || 0,
-      date: formatDisplayDate(),
-      status: draft ? "pending" : "approved",
-      invoice: "awaiting",
-    });
-    setCreatePO(false);
-  };
-
   const vendorColumns = useMemo(
     () => [
       {
@@ -429,9 +342,9 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         <Btn icon="upload" size="sm">Import</Btn>
         <Btn icon="download" size="sm">Export</Btn>
         {tab === "vendors" ? (
-          <Btn variant="primary" size="sm" icon="plus" onClick={() => setAddVendor(true)}>Add vendor</Btn>
+          <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/procurement/vendors/add")}>Add vendor</Btn>
         ) : (
-          <Btn variant="primary" size="sm" icon="plus" onClick={() => setCreatePO(true)}>Create PO</Btn>
+          <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/procurement/po/add")}>Create PO</Btn>
         )}
       </DashHead>
 
@@ -490,31 +403,6 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
           </div>
         )}
       </div>
-
-      <EntityFormModal open={addVendor} onClose={() => setAddVendor(false)} title="Add vendor" sub="Onboard a new supplier" wide submitLabel="Save vendor" saving={saving} error={error} onSubmit={saveVendor}>
-        <FormGrid>
-          <FormField label="Vendor name"><FormInput value={vendorForm.values.name} onChange={(v) => vendorForm.setField("name", v)} /></FormField>
-          <FormField label="Category">
-            <FormSelect value={vendorForm.values.category} onChange={(v) => vendorForm.setField("category", v)}>
-              <option>Raw Material</option><option>Chemical</option><option>Packaging</option><option>Spare Parts</option>
-            </FormSelect>
-          </FormField>
-          <FormField label="City, State"><FormInput value={vendorForm.values.city} onChange={(v) => vendorForm.setField("city", v)} /></FormField>
-        </FormGrid>
-      </EntityFormModal>
-
-      <EntityFormModal open={createPO} onClose={() => setCreatePO(false)} title="Create purchase order" sub="Generate a new PO" wide submitLabel="Send for approval" secondaryLabel="Save draft" saving={saving} error={error} onSubmit={() => savePO(false)} onSecondary={() => savePO(true)}>
-        <FormGrid>
-          <FormField label="Vendor">
-            <FormSelect value={poForm.values.vendor} onChange={(v) => poForm.setField("vendor", v)}>
-              {DATA.VENDORS.map((v) => <option key={v.id} value={v.name}>{v.name}</option>)}
-            </FormSelect>
-          </FormField>
-          <FormField label="PO number"><FormInput value={poForm.values.poId} onChange={(v) => poForm.setField("poId", v)} /></FormField>
-          <FormField label="Line items"><FormInput value={poForm.values.items} onChange={(v) => poForm.setField("items", v)} /></FormField>
-          <FormField label="Total (₹)"><FormInput value={poForm.values.total} onChange={(v) => poForm.setField("total", v)} /></FormField>
-        </FormGrid>
-      </EntityFormModal>
     </>
   );
 };

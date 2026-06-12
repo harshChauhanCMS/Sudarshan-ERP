@@ -83,6 +83,132 @@ export function countSpark(count: number): number[] {
   return sparkFromSeries(count > 0 ? [count] : []);
 }
 
+export function formatLakhs(lakhs: number): string {
+  if (lakhs <= 0) return "—";
+  return `₹${lakhs.toFixed(1)} L`;
+}
+
+export function lowStockCount(items: { status?: string }[]): number {
+  return items.filter((i) => i.status === "low" || i.status === "critical").length;
+}
+
+export function productionDayActual(
+  productionData: ErpData["PRODUCTION_DATA"]
+): number {
+  if (productionData.length === 0) return 0;
+  return Number(productionData[productionData.length - 1].actual) || 0;
+}
+
+export function productionWeekTotals(
+  productionData: ErpData["PRODUCTION_DATA"]
+): { planned: number; actual: number } {
+  return productionData.reduce(
+    (acc, d) => ({
+      planned: acc.planned + (Number(d.planned) || 0),
+      actual: acc.actual + (Number(d.actual) || 0),
+    }),
+    { planned: 0, actual: 0 }
+  );
+}
+
+export function activeProductionJobs(orders: ErpData["ORDERS"]): number {
+  return orders.filter((o) => o.status === "in-production").length;
+}
+
+export function activeDispatches(dispatches: ErpData["DISPATCHES"]): number {
+  return dispatches.filter((d) => d.status !== "delivered").length;
+}
+
+export function dispatchStatusCounts(dispatches: ErpData["DISPATCHES"]): {
+  inTransit: number;
+  nearDelivery: number;
+  loading: number;
+  active: number;
+} {
+  let inTransit = 0;
+  let nearDelivery = 0;
+  let loading = 0;
+  for (const d of dispatches) {
+    if (d.status === "delivered") continue;
+    if (d.status === "in-transit") inTransit += 1;
+    else if (d.status === "near-delivery") nearDelivery += 1;
+    else if (d.status === "loading") loading += 1;
+  }
+  return {
+    inTransit,
+    nearDelivery,
+    loading,
+    active: inTransit + nearDelivery + loading,
+  };
+}
+
+/** Orders still open with due on or before the dashboard date (May 21). */
+export function overdueOpenOrders(orders: ErpData["ORDERS"]): number {
+  const cutoff = new Date("2026-05-21");
+  return orders.filter((o) => {
+    if (o.status === "delivered" || o.status === "dispatched") return false;
+    const due = new Date(`${o.due}, 2026`);
+    return !Number.isNaN(due.getTime()) && due <= cutoff;
+  }).length;
+}
+
+export function pendingInvoiceVerifications(
+  invoices: ErpData["INVOICES"]
+): number {
+  return invoices.filter((i) => i.status === "mismatch").length;
+}
+
+export function grossMarginPct(): number {
+  return 28.4;
+}
+
+export function grossProfitRupees(revenueRupees: number): number {
+  if (revenueRupees <= 0) return 0;
+  return Math.round(revenueRupees * (grossMarginPct() / 100));
+}
+
+export function topCustomerNames(
+  customers: ErpData["CUSTOMERS"],
+  limit = 5
+): string {
+  if (customers.length === 0) return "—";
+  return [...customers]
+    .sort((a, b) => (Number(b.ytd) || 0) - (Number(a.ytd) || 0))
+    .slice(0, limit)
+    .map((c) => c.name.replace(/ Limited| Ltd| India Ltd/g, ""))
+    .join(", ");
+}
+
+export function fieldVisitsTodayCount(
+  visits: ErpData["FIELD_VISITS"]
+): number {
+  return visits.filter(
+    (v) => v.ts.includes("AM") || v.status === "in-progress"
+  ).length;
+}
+
+export function dispatchesForPlant(
+  dispatches: ErpData["DISPATCHES"],
+  plant: "udaipur" | "ahmedabad"
+): { due: number; overdue: number; completed: number } {
+  const match =
+    plant === "udaipur"
+      ? (route: string) => route.startsWith("Udaipur")
+      : (route: string) => route.startsWith("Ahmedabad");
+  let due = 0;
+  let overdue = 0;
+  let completed = 0;
+  for (const d of dispatches) {
+    if (!match(d.route)) continue;
+    if (d.status === "delivered") completed += 1;
+    else {
+      due += 1;
+      if (d.progress < 30 && d.status !== "loading") overdue += 1;
+    }
+  }
+  return { due, overdue, completed };
+}
+
 export type SidebarBadgeMap = Record<string, { badge?: string; badgeAlert?: string }>;
 
 export function sidebarBadges(data: ErpData): SidebarBadgeMap {

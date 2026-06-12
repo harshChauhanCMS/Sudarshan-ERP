@@ -3,6 +3,7 @@
 
 
 import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Select, DatePicker, Button as AntButton } from "antd";
 import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS, erpStatusBadge, customerStatusBadge, invoiceStatusBadge } from "@/components/common/erpStatusBadges";
@@ -34,28 +35,10 @@ import { DashHead, SectionH } from "./dashboards";
 /* ============================================================
    CUSTOMERS
    ============================================================ */
-const customerFormInit = {
-  name: "",
-  companyType: "Private Limited",
-  gstin: "",
-  pan: "",
-  contact: "",
-  phone: "",
-  email: "",
-  city: "",
-  terms: "Net 30",
-  creditLimit: "2500000",
-  assignedTo: "",
-  appliesTo: "Both",
-};
-
 const Customers = () => {
+  const router = useRouter();
   const DATA = useDATA();
-  const { append, saving, error, clearError } = useEntityMutation();
-  const [open, setOpen] = useState(false);
   const [tab, setTab] = useState("all");
-  const form = useFormState(customerFormInit);
-  const salesReps = DATA.EMPLOYEES.filter((e) => e.dept === "Sales");
 
   const activeCount = DATA.CUSTOMERS.filter((c) => (c.status ?? "active") === "active").length;
   const holdCount = DATA.CUSTOMERS.filter((c) => c.status === "hold").length;
@@ -69,31 +52,6 @@ const Customers = () => {
         : tab === "active"
           ? DATA.CUSTOMERS.filter((c) => (c.status ?? "active") === "active")
           : DATA.CUSTOMERS.filter((c) => c.status === "prospect");
-
-  const saveCustomer = async () => {
-    const err = requireFields(form.values, ["name", "city"]);
-    if (err) throw new Error(err);
-    const rep = form.values.assignedTo || salesReps[0]?.name || "—";
-    await append("customers", {
-      id: nextCustomerId(DATA.CUSTOMERS),
-      name: form.values.name.trim(),
-      city: form.values.city.trim(),
-      orders: 0,
-      ytd: 0,
-      terms: form.values.terms,
-      status: "active",
-      gstin: form.values.gstin,
-      pan: form.values.pan,
-      contact: form.values.contact,
-      phone: form.values.phone,
-      email: form.values.email,
-      creditLimit: Number(form.values.creditLimit) || 0,
-      assignedTo: rep,
-      appliesTo: form.values.appliesTo,
-    });
-    form.reset(customerFormInit);
-    setOpen(false);
-  };
 
   const customerColumns = useMemo(
     () => [
@@ -167,7 +125,7 @@ const Customers = () => {
     <>
       <DashHead title="Customers" sub="Customer master · contacts · credit terms · order history">
         <Btn icon="upload" size="sm">Import CSV</Btn>
-        <Btn variant="primary" size="sm" icon="plus" onClick={() => { clearError(); setOpen(true); }}>Add customer</Btn>
+        <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/customers/add")}>Add customer</Btn>
       </DashHead>
 
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
@@ -206,64 +164,6 @@ const Customers = () => {
           />
         </div>
       </div>
-
-      <EntityFormModal
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Add customer"
-        wide
-        submitLabel="Save customer"
-        saving={saving}
-        error={error}
-        onSubmit={saveCustomer}
-      >
-        <FormGrid>
-          <FormField label="Customer name">
-            <FormInput value={form.values.name} onChange={(v) => form.setField("name", v)} />
-          </FormField>
-          <FormField label="Company type">
-            <FormSelect value={form.values.companyType} onChange={(v) => form.setField("companyType", v)}>
-              <option>Private Limited</option><option>Public Limited</option><option>LLP</option><option>Proprietorship</option>
-            </FormSelect>
-          </FormField>
-          <FormField label="GSTIN">
-            <FormInput value={form.values.gstin} onChange={(v) => form.setField("gstin", v)} placeholder="27AAAAA0000A1Z5" />
-          </FormField>
-          <FormField label="PAN">
-            <FormInput value={form.values.pan} onChange={(v) => form.setField("pan", v)} />
-          </FormField>
-          <FormField label="Primary contact">
-            <FormInput value={form.values.contact} onChange={(v) => form.setField("contact", v)} />
-          </FormField>
-          <FormField label="Phone">
-            <FormInput value={form.values.phone} onChange={(v) => form.setField("phone", v)} />
-          </FormField>
-          <FormField label="Email">
-            <FormInput value={form.values.email} onChange={(v) => form.setField("email", v)} />
-          </FormField>
-          <FormField label="City, State">
-            <FormInput value={form.values.city} onChange={(v) => form.setField("city", v)} />
-          </FormField>
-          <FormField label="Payment terms">
-            <FormSelect value={form.values.terms} onChange={(v) => form.setField("terms", v)}>
-              <option>Net 30</option><option>Net 45</option><option>Net 60</option><option>Advance</option>
-            </FormSelect>
-          </FormField>
-          <FormField label="Credit limit">
-            <FormInput value={form.values.creditLimit} onChange={(v) => form.setField("creditLimit", v)} />
-          </FormField>
-          <FormField label="Assigned to">
-            <FormSelect value={form.values.assignedTo || salesReps[0]?.name || ""} onChange={(v) => form.setField("assignedTo", v)}>
-              {salesReps.map((e) => <option key={e.id} value={e.name}>{e.name}</option>)}
-            </FormSelect>
-          </FormField>
-          <FormField label="Applies to">
-            <FormSelect value={form.values.appliesTo} onChange={(v) => form.setField("appliesTo", v)}>
-              <option>Both</option><option>SMI only</option><option>Microns only</option>
-            </FormSelect>
-          </FormField>
-        </FormGrid>
-      </EntityFormModal>
     </>
   );
 };
@@ -271,29 +171,10 @@ const Customers = () => {
 /* ============================================================
    CUSTOMER ORDERS
    ============================================================ */
-const orderFormInit = {
-  customer: "",
-  soNumber: "",
-  requiredBy: "",
-  product: "",
-  qty: "24",
-  rate: "74000",
-  packaging: "FIBC 1000 kg (4-loop)",
-  transport: "FOR · destination",
-  priority: "Standard",
-};
-
 const CustomerOrders = () => {
+  const router = useRouter();
   const DATA = useDATA();
-  const { append, saving, error, clearError } = useEntityMutation();
-  const [newOrder, setNewOrder] = useState(false);
   const [tab, setTab] = useState("all");
-  const form = useFormState({
-    ...orderFormInit,
-    customer: DATA.CUSTOMERS[0]?.name ?? "",
-    soNumber: nextOrderId(DATA.ORDERS),
-    requiredBy: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
-  });
 
   const ORDERS_EXT = DATA.ORDERS;
   const openOrders = ORDERS_EXT.filter((o) => o.status !== "delivered").length;
@@ -301,31 +182,6 @@ const CustomerOrders = () => {
   const atRisk = ORDERS_EXT.filter((o) => o.progress < 50 && o.status !== "delivered").length;
 
   const filtered = tab === "all" ? ORDERS_EXT : ORDERS_EXT.filter(o => o.status === tab);
-
-  const saveOrder = async (asDraft: boolean) => {
-    const err = requireFields(form.values, ["customer", "product", "qty"]);
-    if (err) throw new Error(err);
-    const qtyNum = parseFloat(String(form.values.qty).replace(/[^\d.]/g, "")) || 0;
-    const rate = parseFloat(String(form.values.rate).replace(/[^\d.]/g, "")) || 0;
-    const value = Math.round(qtyNum * rate);
-    await append("orders", {
-      id: form.values.soNumber || nextOrderId(DATA.ORDERS),
-      customer: form.values.customer,
-      product: form.values.product,
-      qty: `${qtyNum} MT`,
-      value,
-      due: formatDueDate(form.values.requiredBy),
-      status: asDraft ? "scheduled" : "in-production",
-      progress: asDraft ? 0 : 10,
-    });
-    setNewOrder(false);
-    form.reset({
-      ...orderFormInit,
-      customer: DATA.CUSTOMERS[0]?.name ?? "",
-      soNumber: nextOrderId([...DATA.ORDERS, { id: form.values.soNumber }]),
-      requiredBy: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
-    });
-  };
 
   const orderColumns = useMemo(
     () => [
@@ -398,7 +254,7 @@ const CustomerOrders = () => {
       <DashHead title="Customer Orders" sub="Sales orders across both companies">
         <Btn icon="filter" size="sm">Filters</Btn>
         <Btn icon="download" size="sm">Export</Btn>
-        <Btn variant="primary" size="sm" icon="plus" onClick={() => { clearError(); setNewOrder(true); }}>New order</Btn>
+        <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/orders/add")}>New order</Btn>
       </DashHead>
 
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
@@ -437,59 +293,6 @@ const CustomerOrders = () => {
           />
         </div>
       </div>
-
-      <EntityFormModal
-        open={newOrder}
-        onClose={() => setNewOrder(false)}
-        title="Create sales order"
-        wide
-        submitLabel="Confirm & schedule"
-        secondaryLabel="Save draft"
-        saving={saving}
-        error={error}
-        onSubmit={() => saveOrder(false)}
-        onSecondary={() => saveOrder(true)}
-      >
-        <FormGrid>
-          <FormField label="Customer">
-            <FormSelect value={form.values.customer} onChange={(v) => form.setField("customer", v)}>
-              {DATA.CUSTOMERS.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
-            </FormSelect>
-          </FormField>
-          <FormField label="SO number">
-            <FormInput value={form.values.soNumber} onChange={(v) => form.setField("soNumber", v)} />
-          </FormField>
-          <FormField label="Required by">
-            <FormInput type="date" value={form.values.requiredBy} onChange={(v) => form.setField("requiredBy", v)} />
-          </FormField>
-          <FormField label="Product">
-            <FormInput value={form.values.product} onChange={(v) => form.setField("product", v)} placeholder="Talcum Powder · 600 mesh" />
-          </FormField>
-          <FormField label="Qty (MT)">
-            <FormInput value={form.values.qty} onChange={(v) => form.setField("qty", v)} />
-          </FormField>
-          <FormField label="Rate (₹)">
-            <FormInput value={form.values.rate} onChange={(v) => form.setField("rate", v)} />
-          </FormField>
-        </FormGrid>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 14 }}>
-          <FormField label="Packaging">
-            <FormSelect value={form.values.packaging} onChange={(v) => form.setField("packaging", v)}>
-              <option>FIBC 1000 kg (4-loop)</option><option>PP Woven 50 kg</option><option>BOPP 20 kg</option><option>Bulk loose</option>
-            </FormSelect>
-          </FormField>
-          <FormField label="Transport">
-            <FormSelect value={form.values.transport} onChange={(v) => form.setField("transport", v)}>
-              <option>FOR · destination</option><option>Ex-works</option><option>Customer pickup</option>
-            </FormSelect>
-          </FormField>
-          <FormField label="Priority">
-            <FormSelect value={form.values.priority} onChange={(v) => form.setField("priority", v)}>
-              <option>Standard</option><option>Rush</option><option>Critical</option>
-            </FormSelect>
-          </FormField>
-        </div>
-      </EntityFormModal>
     </>
   );
 };

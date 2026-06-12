@@ -8,15 +8,25 @@ import { useDATA } from "./data";
 import {
   revenueMtdRupees,
   revenueLakhsFromSeries,
-  formatCrFromLakhs,
+  formatLakhs,
   openOrdersCount,
-  inTransitDispatchCount,
   revenueSpark,
   countSpark,
-  productionUtilizationPct,
   orderBookRupees,
   pendingPoCount,
-  invoiceMismatchCount,
+  lowStockCount,
+  productionDayActual,
+  productionWeekTotals,
+  activeProductionJobs,
+  activeDispatches,
+  dispatchStatusCounts,
+  overdueOpenOrders,
+  pendingInvoiceVerifications,
+  grossMarginPct,
+  grossProfitRupees,
+  topCustomerNames,
+  fieldVisitsTodayCount,
+  dispatchesForPlant,
 } from "@/lib/erp-stats";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import CommonTable from "@/components/common/CommonTable";
@@ -52,6 +62,47 @@ const SectionH = ({ title, sub, action }) => (
   </div>
 );
 
+const MasterSectionTitle = ({ icon, children }) => (
+  <div className="master-section-title">
+    <Icon name={icon} size={14} style={{ color: "var(--primary)" }} />
+    {children}
+  </div>
+);
+
+const MasterSummaryCard = ({ label, value, sub, tone = "default", icon }) => (
+  <div className="master-summary-card">
+    <div className="master-summary-card__label">
+      {icon ? <Icon name={icon} size={13} /> : null}
+      {label}
+    </div>
+    <div className={`master-summary-card__value ${tone !== "default" ? tone : ""}`}>{value}</div>
+    {sub ? <div className="master-summary-card__sub">{sub}</div> : null}
+  </div>
+);
+
+const MasterListCard = ({ title, children, footnote }) => (
+  <div className="card master-list-card">
+    <div className="card-head">
+      <div className="card-title">{title}</div>
+    </div>
+    <div className="card-body">
+      <ul className="master-dash-list">{children}</ul>
+      {footnote ? <p className="master-dash-footnote">{footnote}</p> : null}
+    </div>
+  </div>
+);
+
+const MasterListRow = ({ label, value, pillTone }) => (
+  <li>
+    <span>{label}</span>
+    {pillTone ? (
+      <span className={`master-pill ${pillTone}`}>{value}</span>
+    ) : (
+      <span className="master-list-row__value">{value}</span>
+    )}
+  </li>
+);
+
 /* ============================================================
    MASTER DASHBOARD — group view
    ============================================================ */
@@ -59,984 +110,2225 @@ const MasterDashboard = ({ navigate }) => {
   const DATA = useDATA();
   const rev = revenueLakhsFromSeries(DATA.REVENUE_DATA);
   const revenueRupees = revenueMtdRupees(DATA.REVENUE_DATA);
-  const openOrders = openOrdersCount(DATA.ORDERS);
-  const inTransit = inTransitDispatchCount(DATA.DISPATCHES);
-  const headcount =
-    DATA.ATTENDANCE_TODAY.total > 0
-      ? DATA.ATTENDANCE_TODAY.total
-      : DATA.EMPLOYEES.length;
-  const revSpark = revenueSpark(DATA.REVENUE_DATA);
-  const ordersSpark = countSpark(openOrders);
-  const transitSpark = countSpark(inTransit);
-  const headcountSpark = countSpark(headcount);
-  const criticalAttentionRows = useMemo(
-    () => DATA.NOTIFS.slice(0, 5),
-    [DATA.NOTIFS]
-  );
-  const criticalAttentionColumns = useMemo(
-    () => [
-      {
-        title: "",
-        key: "icon",
-        width: 42,
-        render: (_, n) => (
-          <Icon
-            name={n.type === "alert" ? "alert" : n.type === "success" ? "check" : "info"}
-            size={14}
-            style={{ color: n.type === "alert" ? "var(--danger)" : n.type === "success" ? "var(--success)" : "var(--info)" }}
-          />
-        ),
-      },
-      {
-        title: "Item",
-        dataIndex: "text",
-        key: "text",
-        render: (text) => <span className="strong">{text}</span>,
-      },
-      {
-        title: "Source",
-        key: "source",
-        render: (_, n) => <span className="muted">{n.time} ago</span>,
-      },
-      {
-        title: "Status",
-        key: "status",
-        align: "right",
-        render: () => <Icon name="chevRight" size={13} className="subtle" />,
-      },
-    ],
-    []
-  );
+  const attendance = DATA.ATTENDANCE_TODAY;
+  const presentToday =
+    attendance.total > 0 ? attendance.present : DATA.EMPLOYEES.length;
+  const totalEmployees =
+    attendance.total > 0 ? attendance.total : DATA.EMPLOYEES.length;
+  const prodToday = productionDayActual(DATA.PRODUCTION_DATA);
+  const prodWeek = productionWeekTotals(DATA.PRODUCTION_DATA);
+  const activeJobs = activeProductionJobs(DATA.ORDERS);
+  const batchCount = Math.max(activeJobs, DATA.PRODUCTION_DATA.length);
+  const dispatchesDue = activeDispatches(DATA.DISPATCHES);
+  const overdueDispatches = overdueOpenOrders(DATA.ORDERS);
+  const dispatchCounts = dispatchStatusCounts(DATA.DISPATCHES);
+  const rmLow = lowStockCount(DATA.RAW_MATERIALS);
+  const packLow = lowStockCount(DATA.PACKAGING);
+  const spareRisk = lowStockCount(DATA.SPARE_PARTS);
+  const pendingInvoices = pendingInvoiceVerifications(DATA.INVOICES);
+  const mineralsDispatch = dispatchesForPlant(DATA.DISPATCHES, "udaipur");
+  const micronsDispatch = dispatchesForPlant(DATA.DISPATCHES, "ahmedabad");
+  const fieldToday = fieldVisitsTodayCount(DATA.FIELD_VISITS);
+  const grossProfit = grossProfitRupees(revenueRupees);
+  const prodTargetToday =
+    DATA.PRODUCTION_DATA.length > 0
+      ? Number(DATA.PRODUCTION_DATA[DATA.PRODUCTION_DATA.length - 1].planned) || 0
+      : 0;
+  const prodPct =
+    prodTargetToday > 0 ? Math.round((prodToday / prodTargetToday) * 100) : null;
+  const lowRmNames = DATA.RAW_MATERIALS.filter(
+    (r) => r.status === "low" || r.status === "critical"
+  )
+    .slice(0, 3)
+    .map((r) => r.name.split(" ")[0])
+    .join(" / ");
 
   return (
     <>
-      <DashHead title="Master Dashboard" sub="Group-level view across Sudarshan Minerals & Sudarshan Microns">
+      <DashHead
+        title="Master Dashboard"
+        sub="Single-page summary across Admin, Owner, Production & Dispatch"
+      >
         <Btn icon="download" size="sm">Export</Btn>
         <Btn variant="primary" size="sm" icon="bolt">Quick action</Btn>
       </DashHead>
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <Kpi icon="money"    label="Revenue · MTD"   value={revenueRupees > 0 ? fmtINR(revenueRupees) : "—"}            spark={revSpark} />
-        <Kpi icon="cart"     label="Open Orders"      value={String(openOrders)} unit={openOrders === 1 ? "order" : "orders"} spark={ordersSpark} sparkColor="var(--primary)" />
-        <Kpi icon="truck"    label="In Transit"       value={String(inTransit)} unit={inTransit === 1 ? "vehicle" : "vehicles"} spark={transitSpark} />
-        <Kpi icon="users"    label="On Roll"          value={String(headcount)} unit={headcount === 1 ? "employee" : "employees"} spark={headcountSpark} sparkColor="var(--secondary)" />
-      </div>
-
-      <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", marginBottom: 20 }}>
-        <div className="card">
-          <div className="card-head">
-            <div className="card-title">
-              <Icon name="chart" size={14} /> Revenue · last 7 months
-            </div>
-            <div className="chart-legend">
-              <span className="chart-legend-item">
-                <span className="chart-legend-swatch" style={{ background: "var(--primary)" }}></span> SMI
-              </span>
-              <span className="chart-legend-item">
-                <span className="chart-legend-swatch" style={{ background: "var(--secondary)" }}></span> Microns
-              </span>
-            </div>
-          </div>
-          <div className="card-body">
-            <AreaChart
-              data={DATA.REVENUE_DATA}
-              keys={["smi", "smic"]}
-              colors={["var(--primary)", "var(--secondary)"]}
-              currency
-              h={220}
-            />
-          </div>
+      <div className="master-dash-layout">
+        <MasterSectionTitle icon="chart">Overall summary</MasterSectionTitle>
+        <div className="master-summary-grid">
+          <MasterSummaryCard
+            icon="money"
+            label="Combined sales (MTD)"
+            value={formatLakhs(rev.total)}
+            sub="Owner dashboard · both companies"
+            tone="accent"
+          />
+          <MasterSummaryCard
+            icon="chart"
+            label="Gross margin"
+            value={revenueRupees > 0 ? `${grossMarginPct()}%` : "—"}
+            sub="Owner dashboard · this month"
+            tone="success"
+          />
+          <MasterSummaryCard
+            icon="factory"
+            label="Today’s production"
+            value={prodToday > 0 ? `${prodToday} MT` : "—"}
+            sub={`Production dashboard · ${batchCount} batches, ${activeJobs} jobs running`}
+          />
+          <MasterSummaryCard
+            icon="truck"
+            label="Dispatches due today"
+            value={String(dispatchesDue)}
+            sub={`Owner: ${dispatchesDue} due · Dispatch: ${dispatchCounts.active} detailed`}
+          />
+          <MasterSummaryCard
+            icon="alert"
+            label="Dispatches overdue"
+            value={String(overdueDispatches)}
+            sub="Owner & Dispatch dashboards"
+            tone={overdueDispatches > 0 ? "danger" : "default"}
+          />
+          <MasterSummaryCard
+            icon="users"
+            label="Employees present today"
+            value={String(presentToday)}
+            sub={`Admin attendance summary · of ${totalEmployees}`}
+            tone="success"
+          />
         </div>
 
-        <div className="card">
-          <div className="card-head">
-            <div className="card-title"><Icon name="pieChart" size={14} /> Revenue split</div>
-            <Badge>MTD</Badge>
-          </div>
-          <div className="card-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
-            <Donut
-              value={rev.smi}
-              max={rev.total || 1}
-              size={148}
-              stroke={14}
-              color="var(--primary)"
-              label={rev.total > 0 ? `${Math.round((rev.smi / rev.total) * 100)}%` : "—"}
-              sub="SMI share"
-            />
-            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <span className="dot primary" style={{ flexShrink: 0 }}></span>
-                  <span style={{ fontSize: 12, whiteSpace: "nowrap" }}>Sudarshan Minerals</span>
-                </div>
-                <span className="mono nowrap" style={{ fontWeight: 600, fontSize: 12 }}>
-                  {rev.smi > 0 ? formatCrFromLakhs(rev.smi) : "—"}
-                </span>
+        <MasterSectionTitle icon="truck">Dispatch snapshot</MasterSectionTitle>
+        <div className="master-dispatch-block">
+          <div className="card master-list-card">
+            <div className="card-head">
+              <div className="card-title">Dispatch KPIs</div>
+            </div>
+            <div className="card-body">
+              <div className="master-summary-grid master-summary-grid--compact">
+                <MasterSummaryCard
+                  label="Due today"
+                  value={String(dispatchCounts.active)}
+                  sub="Dispatch dashboard detailed list"
+                />
+                <MasterSummaryCard
+                  label="Overdue"
+                  value={String(overdueDispatches)}
+                  sub="Open orders past due"
+                  tone={overdueDispatches > 0 ? "danger" : "default"}
+                />
+                <MasterSummaryCard
+                  label="Vehicles assigned"
+                  value={String(dispatchCounts.active)}
+                  sub={`${dispatchCounts.inTransit} in transit · ${dispatchCounts.nearDelivery} ready · ${dispatchCounts.loading} loading`}
+                />
+                <MasterSummaryCard
+                  label="Packaging block"
+                  value={String(packLow)}
+                  sub={
+                    packLow > 0
+                      ? "Low packaging stock affecting dispatch readiness"
+                      : "No packaging blocks"
+                  }
+                  tone={packLow > 0 ? "warning" : "default"}
+                />
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <span className="dot gold" style={{ flexShrink: 0 }}></span>
-                  <span style={{ fontSize: 12, whiteSpace: "nowrap" }}>Sudarshan Microns</span>
-                </div>
-                <span className="mono nowrap" style={{ fontWeight: 600, fontSize: 12 }}>
-                  {rev.smic > 0 ? formatCrFromLakhs(rev.smic) : "—"}
-                </span>
-              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="grid grid-2" style={{ marginBottom: 20 }}>
-        {DATA.COMPANIES[0] ? (
-          <CompanyTile company={DATA.COMPANIES[0]} accent="primary" navigate={navigate} revenueLakhs={rev.smi} productionPct={productionUtilizationPct(DATA.PRODUCTION_DATA)} stockItems={DATA.RAW_MATERIALS} />
-        ) : null}
-        {DATA.COMPANIES[1] ? (
-          <CompanyTile company={DATA.COMPANIES[1]} accent="gold" navigate={navigate} revenueLakhs={rev.smic} productionPct={productionUtilizationPct(DATA.PRODUCTION_DATA)} stockItems={DATA.PACKAGING} />
-        ) : null}
-      </div>
-
-      <div className="grid" style={{ gridTemplateColumns: "1.4fr 1fr" }}>
-        <div className="card">
-          <div className="card-head">
-            <div className="card-title"><Icon name="alert" size={14} /> Critical attention</div>
-            <Btn variant="ghost" size="sm">View all <Icon name="chevRight" size={12} /></Btn>
-          </div>
-          <div className="card-body flush">
-            <div style={{ padding: 16 }}>
-              <CommonTable
-                {...ERP_TABLE_PROPS}
-                columns={criticalAttentionColumns}
-                dataSource={criticalAttentionRows}
-                rowKey="id"
-                onRow={(n) => ({
-                  onClick: () => navigate(n.target),
-                  style: { cursor: "pointer" },
-                })}
-              />
-            </div>
-          </div>
+          <MasterListCard title="Today’s dispatch mix">
+            <MasterListRow
+              label="Minerals (Udaipur)"
+              value={`${mineralsDispatch.due} due · ${mineralsDispatch.overdue} overdue · ${mineralsDispatch.completed} completed`}
+            />
+            <MasterListRow
+              label="Microns (Makrana)"
+              value={`${micronsDispatch.due} due · ${micronsDispatch.overdue > 0 ? `${micronsDispatch.overdue} overdue · ` : ""}${micronsDispatch.completed} completed`}
+            />
+            <MasterListRow
+              label="Key customers"
+              value={topCustomerNames(DATA.CUSTOMERS)}
+            />
+          </MasterListCard>
         </div>
 
-        <div className="card">
-          <div className="card-head">
-            <div className="card-title"><Icon name="layers" size={14} /> Quick actions</div>
-          </div>
-          <div className="card-body" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {[
-              { label: "New PO",         icon: "cart",    target: "/procurement/po" },
-              { label: "Add stock",      icon: "plus",    target: "/inventory/raw-material" },
-              { label: "Create order",   icon: "ticket",  target: "/orders" },
-              { label: "Plan dispatch",  icon: "truck",   target: "/dispatch" },
-              { label: "Mark attendance",icon: "user",    target: "/hr/attendance" },
-              { label: "Run a report",   icon: "chart",   target: "/reports" },
-            ].map((a) => (
-              <button
-                key={a.label}
-                onClick={() => navigate(a.target)}
-                style={{
-                  padding: "12px",
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
-                  background: "var(--bg-elev)",
-                  display: "flex", alignItems: "center", gap: 10,
-                  cursor: "pointer", color: "var(--fg)",
-                  fontSize: 13, fontWeight: 500,
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.borderColor = "var(--primary)"}
-                onMouseLeave={(e) => e.currentTarget.style.borderColor = "var(--border)"}
-              >
-                <Icon name={a.icon} size={14} style={{ color: "var(--primary)" }} />
-                {a.label}
-              </button>
-            ))}
-          </div>
+        <MasterSectionTitle icon="layers">Company snapshot</MasterSectionTitle>
+        <div className="master-two-col">
+          <MasterListCard title="Company overview">
+            <MasterListRow
+              label={DATA.COMPANIES[0]?.name ?? "Sudarshan Minerals"}
+              value={`Sales: ${formatLakhs(rev.smi)} · Dispatches today: ${mineralsDispatch.due} · RM alerts: ${rmLow}`}
+            />
+            <MasterListRow
+              label={DATA.COMPANIES[1]?.name ?? "Sudarshan Microns"}
+              value={`Sales: ${formatLakhs(rev.smic)} · Dispatches today: ${micronsDispatch.due} · Overdue: ${micronsDispatch.overdue}`}
+            />
+          </MasterListCard>
+          <MasterListCard
+            title="Users & access"
+            footnote="From Admin & Owner dashboards."
+          >
+            <MasterListRow label="Total users" value={String(DATA.EMPLOYEES.length)} />
+            <MasterListRow label="Present today" value={String(presentToday)} />
+            <MasterListRow
+              label="In field today"
+              value={String(attendance.onField || fieldToday)}
+            />
+            <MasterListRow
+              label="Pending invoice verifications"
+              value={
+                <>
+                  <Icon name="invoice" size={11} /> {pendingInvoices}
+                </>
+              }
+              pillTone={pendingInvoices > 0 ? "danger" : undefined}
+            />
+          </MasterListCard>
+        </div>
+
+        <MasterSectionTitle icon="box">Inventory & production health</MasterSectionTitle>
+        <div className="master-two-col">
+          <MasterListCard title="Low stock & risk indicators">
+            <MasterListRow
+              label="Low RM alerts"
+              value={
+                <>
+                  <Icon name="box" size={11} /> {rmLow} (Owner)
+                </>
+              }
+              pillTone={rmLow > 0 ? "danger" : undefined}
+            />
+            <MasterListRow
+              label="Low packaging alerts"
+              value={
+                <>
+                  <Icon name="package" size={11} /> {packLow}
+                </>
+              }
+              pillTone={packLow > 0 ? "warning" : undefined}
+            />
+            <MasterListRow
+              label="Spare parts risk"
+              value={
+                <>
+                  <Icon name="wrench" size={11} /> {spareRisk}
+                </>
+              }
+              pillTone={spareRisk > 0 ? "warning" : undefined}
+            />
+            <MasterListRow
+              label="RM low (Talc / CaCO₃ / TiO₂)"
+              value={
+                lowRmNames
+                  ? `Below reorder · watch for stock-out in 10–12 days (${lowRmNames})`
+                  : "No critical RM items"
+              }
+            />
+          </MasterListCard>
+          <MasterListCard
+            title="Today’s production"
+            footnote="From Production dashboard stats row."
+          >
+            <MasterListRow
+              label="Today’s target"
+              value={prodTargetToday > 0 ? `${prodTargetToday} MT` : "—"}
+            />
+            <MasterListRow
+              label="Achieved so far"
+              value={
+                prodToday > 0
+                  ? `${prodToday} MT${prodPct != null ? ` · ${prodPct}%` : ""}`
+                  : "—"
+              }
+              pillTone={prodPct != null && prodPct >= 70 ? "success" : undefined}
+            />
+            <MasterListRow
+              label="Week target"
+              value={prodWeek.planned > 0 ? `${prodWeek.planned} MT` : "—"}
+            />
+            <MasterListRow
+              label="Week achieved"
+              value={prodWeek.actual > 0 ? `${prodWeek.actual} MT` : "—"}
+            />
+            <MasterListRow label="Active jobs now" value={String(activeJobs)} />
+          </MasterListCard>
+        </div>
+
+        <div className="master-two-col">
+          <MasterListCard
+            title="People & field activity"
+            footnote="From Owner & Admin dashboards (field visits & alerts)."
+          >
+            <MasterListRow
+              label="Employees in field today"
+              value={String(attendance.onField || fieldToday)}
+            />
+            <MasterListRow
+              label="Field visits logged today"
+              value={String(fieldToday)}
+            />
+            <MasterListRow
+              label="Key visits"
+              value={DATA.FIELD_VISITS.slice(0, 6)
+                .map((v) => v.customer.split(" ")[0])
+                .join(", ")}
+            />
+          </MasterListCard>
+
+          <MasterListCard title="Profit & top customers">
+            <MasterListRow
+              label="Revenue (MTD)"
+              value={formatLakhs(rev.total)}
+            />
+            <MasterListRow
+              label="Gross profit"
+              value={grossProfit > 0 ? fmtINR(grossProfit) : "—"}
+            />
+            <MasterListRow
+              label="Top customers (MTD)"
+              value={topCustomerNames(DATA.CUSTOMERS)}
+            />
+          </MasterListCard>
         </div>
       </div>
     </>
   );
 };
 
-const CompanyTile = ({ company, accent, navigate, revenueLakhs = 0, productionPct, stockItems = [] }) => {
-  const lowStock = stockItems.filter((i) => i.status === "low" || i.status === "critical").length;
-  const stockHealth =
-    stockItems.length === 0
-      ? "—"
-      : lowStock === 0
-        ? "Good"
-        : lowStock <= 2
-          ? "Watch"
-          : "Alert";
+/* ============================================================
+   ADMIN DASHBOARD — operational
+   ============================================================ */
+const AdminEyebrow = ({ children }) => (
+  <div className="admin-eyebrow">{children}</div>
+);
 
-  return (
-  <div className="card" style={{ position: "relative", overflow: "hidden" }}>
-    <div style={{
-      position: "absolute", top: 0, left: 0, right: 0, height: 3,
-      background: accent === "gold" ? "var(--secondary)" : "var(--primary)",
-    }}></div>
-    <div className="card-head" style={{ paddingTop: 18, alignItems: "flex-start" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, minWidth: 0, flex: 1 }}>
-        <div className={`sb-brand-mark ${accent === "gold" ? "sec" : ""}`} style={{ width: 28, height: 28, fontSize: 13, flexShrink: 0 }}>
-          {accent === "gold" ? "M" : "S"}
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 600, letterSpacing: "-0.01em", lineHeight: 1.3 }}>
-            {company.name}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--fg-subtle)", marginTop: 2 }}>{company.plant}</div>
-        </div>
-      </div>
-      <Btn variant="ghost" size="sm" iconRight="external" onClick={() => navigate("/dashboard/admin")}>Open</Btn>
+const AdminStatCard = ({ label, value, tone = "default" }) => (
+  <div className="admin-stat-card">
+    <div className="admin-stat-card__label">{label}</div>
+    <div className={`admin-stat-card__value ${tone !== "default" ? tone : ""}`}>{value}</div>
+  </div>
+);
+
+const AdminCompanyCard = ({ company, accent, metrics }) => (
+  <div className={`admin-company-card ${accent === "gold" ? "microns" : ""}`}>
+    <div className="admin-company-card__name">{company.name}</div>
+    <div className="admin-company-card__loc">
+      <Icon name="pin" size={11} /> {company.plant?.split(",")[0] ?? company.plant}
     </div>
-    <div className="card-body" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-      {[
-        { l: "Revenue MTD", v: revenueLakhs > 0 ? formatCrFromLakhs(revenueLakhs) : "—", t: "", up: true },
-        { l: "Orders",      v: company.activeOrders ?? 0, t: "open", up: true },
-        { l: "Production",  v: productionPct != null ? `${productionPct}%` : "—", t: "utilization", up: productionPct != null && productionPct >= 85 },
-        { l: "Stock health",v: stockItems.length > 0 ? `${stockItems.length - lowStock}/${stockItems.length}` : "—", t: stockHealth, up: lowStock === 0 },
-      ].map((s) => (
-        <div key={s.l}>
-          <div style={{ fontSize: 11, color: "var(--fg-subtle)", marginBottom: 4 }}>{s.l}</div>
-          <div className="mono" style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.02em" }}>{s.v}</div>
-          <div style={{ fontSize: 11, color: s.up ? "var(--success)" : "var(--danger)", marginTop: 2 }}>{s.t}</div>
+    <div className="admin-company-card__metrics">
+      {metrics.map((m) => (
+        <div key={m.label} className="admin-company-card__metric">
+          <span className={`admin-company-card__metric-v ${m.tone ?? ""}`}>{m.value}</span>
+          <span className="admin-company-card__metric-l">{m.label}</span>
         </div>
       ))}
     </div>
   </div>
-  );
-};
+);
 
-/* ============================================================
-   ADMIN DASHBOARD — operational
-   ============================================================ */
+const AdminWidget = ({ title, icon, badge, children }) => (
+  <div className="admin-widget">
+    <div className="admin-widget-header">
+      <span className="admin-widget-header__title">
+        <Icon name={icon} size={14} /> {title}
+      </span>
+      {badge}
+    </div>
+    <div className="admin-widget-body">{children}</div>
+  </div>
+);
+
 const AdminDashboard = ({ navigate }) => {
   const DATA = useDATA();
-  const pendingApprovals = pendingPoCount(DATA.PURCHASE_ORDERS);
-  const invoiceVerify = DATA.INVOICES.length;
-  const mismatches = invoiceMismatchCount(DATA.INVOICES);
-  const exceptions = mismatches + DATA.RAW_MATERIALS.filter((r) => r.status === "critical").length;
+  const attendance = DATA.ATTENDANCE_TODAY;
+  const totalUsers =
+    attendance.total > 0 ? attendance.total : DATA.EMPLOYEES.length;
+  const presentToday =
+    attendance.total > 0 ? attendance.present : DATA.EMPLOYEES.length;
+  const rmLow = lowStockCount(DATA.RAW_MATERIALS);
+  const packLow = lowStockCount(DATA.PACKAGING);
+  const spareLow = lowStockCount(DATA.SPARE_PARTS);
+  const lowStockTotal = rmLow + packLow + spareLow;
+  const pendingInvoices = pendingInvoiceVerifications(DATA.INVOICES);
+  const mismatchInvoices = useMemo(
+    () => DATA.INVOICES.filter((i) => i.status === "mismatch"),
+    [DATA.INVOICES]
+  );
+  const pendingInvoiceTotal = mismatchInvoices.reduce(
+    (s, i) => s + (Number(i.invAmt) || 0),
+    0
+  );
+  const dispatchDelays = overdueOpenOrders(DATA.ORDERS);
+  const mineralsDispatch = dispatchesForPlant(DATA.DISPATCHES, "udaipur");
+  const micronsDispatch = dispatchesForPlant(DATA.DISPATCHES, "ahmedabad");
+  const waTasks = pendingPoCount(DATA.PURCHASE_ORDERS);
+
+  const lowRmLabels = DATA.RAW_MATERIALS.filter(
+    (r) => r.status === "low" || r.status === "critical"
+  )
+    .slice(0, 3)
+    .map((r) => r.name.split(" ")[0])
+    .join(", ");
+  const lowPackLabels = DATA.PACKAGING.filter(
+    (p) => p.status === "low" || p.status === "critical"
+  )
+    .slice(0, 2)
+    .map((p) => p.name.split(" · ")[0])
+    .join(", ");
+  const lowSpareLabels = DATA.SPARE_PARTS.filter(
+    (s) => s.status === "low" || s.status === "critical"
+  )
+    .slice(0, 2)
+    .map((s) => s.name.split(" ")[0])
+    .join(", ");
+
+  const invoiceColumns = useMemo(
+    () => [
+      {
+        title: "Invoice",
+        dataIndex: "id",
+        key: "id",
+        render: (id) => <span className="mono">{id}</span>,
+      },
+      {
+        title: "Vendor",
+        dataIndex: "vendor",
+        key: "vendor",
+      },
+      {
+        title: "Amount",
+        dataIndex: "invAmt",
+        key: "invAmt",
+        align: "right",
+        render: (amt) => <span className="num">{fmtINR(amt)}</span>,
+      },
+      {
+        title: "Action",
+        key: "action",
+        align: "right",
+        render: () => (
+          <Btn variant="primary" size="sm" onClick={() => navigate("/procurement/invoices")}>
+            Verify
+          </Btn>
+        ),
+      },
+    ],
+    [navigate]
+  );
+
+  const recentColumns = useMemo(
+    () => [
+      {
+        title: "Type",
+        key: "type",
+        width: 90,
+        render: (_, r) => (
+          <Badge tone={r.tone}>{r.type}</Badge>
+        ),
+      },
+      {
+        title: "Record",
+        dataIndex: "record",
+        key: "record",
+      },
+      {
+        title: "Updated by",
+        dataIndex: "by",
+        key: "by",
+      },
+      {
+        title: "When",
+        dataIndex: "when",
+        key: "when",
+        align: "right",
+        render: (when) => <span className="muted">{when}</span>,
+      },
+    ],
+    []
+  );
+
+  const recentRecords = useMemo(() => {
+    const rows = [];
+    const po = DATA.PURCHASE_ORDERS[0];
+    if (po) {
+      rows.push({
+        key: po.id,
+        type: "PO",
+        tone: "default",
+        record: `${po.id} — ${po.vendor}`,
+        by: "Mahesh J.",
+        when: po.date,
+      });
+    }
+    const dsp = DATA.DISPATCHES[0];
+    if (dsp) {
+      rows.push({
+        key: dsp.id,
+        type: "Dispatch",
+        tone: "info",
+        record: `${dsp.id} — ${dsp.customer}, ${dsp.loaded}`,
+        by: "Anita P.",
+        when: dsp.lastUpdate,
+      });
+    }
+    const emp = DATA.EMPLOYEES[1];
+    if (emp) {
+      rows.push({
+        key: emp.id,
+        type: "User",
+        tone: "default",
+        record: `${emp.name} — Role: ${emp.role}`,
+        by: "System",
+        when: "May 21, 08:55",
+      });
+    }
+    const inv = DATA.INVOICES.find((i) => i.status === "matched") ?? DATA.INVOICES[0];
+    if (inv) {
+      rows.push({
+        key: inv.id,
+        type: "Invoice",
+        tone: "warning",
+        record: `${inv.id} — ${inv.status === "matched" ? "Verified" : "Pending"}`,
+        by: "Priya S.",
+        when: inv.invDate,
+      });
+    }
+    const order = DATA.ORDERS[0];
+    if (order) {
+      rows.push({
+        key: order.id,
+        type: "SO",
+        tone: "default",
+        record: `${order.id} — ${order.customer}`,
+        by: "Deepak A.",
+        when: `Due ${order.due}`,
+      });
+    }
+    rows.push({
+      key: "batch",
+      type: "Production",
+      tone: "info",
+      record: "Batch B-4471 — Minerals, Talc 600 mesh",
+      by: "Vikram S.",
+      when: "May 21, 15:30",
+    });
+    return rows;
+  }, [DATA]);
+
+  const fieldAlerts = useMemo(() => {
+    const fromVisits = DATA.FIELD_VISITS.slice(0, 2).map((v) => ({
+      icon: "pin",
+      tone: "primary",
+      text: (
+        <>
+          <strong>{v.rep}</strong> — {v.status === "completed" ? "Visit logged" : "Check-in"} at{" "}
+          {v.customer}. {v.ts}.
+        </>
+      ),
+    }));
+    return [
+      ...fromVisits,
+      {
+        icon: "alert",
+        tone: "danger",
+        text: (
+          <>
+            <strong>Lotus Herbals</strong> — Follow-up not yet logged. Due May 22. Escalate?
+          </>
+        ),
+      },
+    ];
+  }, [DATA.FIELD_VISITS]);
+
+  const dispatchDelayAlerts = useMemo(() => {
+    const alerts = DATA.DISPATCHES.filter(
+      (d) => d.status === "in-transit" && d.progress < 50
+    )
+      .slice(0, 1)
+      .map((d) => ({
+        text: (
+          <>
+            <strong>{d.id}</strong> — {d.customer}, {d.loaded}. In transit · ETA {d.eta}.
+            Customer notified.
+          </>
+        ),
+      }));
+    if (dispatchDelays > 0) {
+      alerts.push({
+        text: (
+          <>
+            <strong>Open orders</strong> — {dispatchDelays} overdue dispatch
+            {dispatchDelays === 1 ? "" : "es"}. Dispatch team alerted.
+          </>
+        ),
+      });
+    }
+    if (alerts.length === 0) {
+      alerts.push({
+        text: <span className="muted">No dispatch delays reported today.</span>,
+      });
+    }
+    return alerts;
+  }, [DATA.DISPATCHES, dispatchDelays]);
+
+  const ordersWeekData = [
+    { day: "Mon", orders: 8 },
+    { day: "Tue", orders: 12 },
+    { day: "Wed", orders: 10 },
+    { day: "Thu", orders: 15 },
+    { day: "Fri", orders: 13 },
+    { day: "Sat", orders: 7 },
+    { day: "Sun", orders: 4 },
+  ];
 
   return (
-  <>
-    <DashHead title="Admin Dashboard" sub="Operational health, approvals & exceptions across the org">
-      <Btn icon="filter" size="sm">Filters</Btn>
-      <Btn icon="refresh" size="sm">Refresh</Btn>
-      <Btn variant="primary" size="sm" icon="bolt">Bulk approve</Btn>
-    </DashHead>
+    <div className="admin-dash">
+      <DashHead
+        title="Admin Dashboard"
+        sub="Overview for current company — access, alerts, invoices, field & operations"
+      >
+        <Btn icon="refresh" size="sm">Refresh</Btn>
+      </DashHead>
 
-    <div className="grid grid-4" style={{ marginBottom: 20 }}>
-      <Kpi icon="ticket"  label="Pending approvals"  value={String(pendingApprovals)} spark={countSpark(pendingApprovals)} />
-      <Kpi icon="alert"   label="Open exceptions"    value={String(exceptions)} spark={countSpark(exceptions)} />
-      <Kpi icon="invoice" label="Invoices to verify" value={String(invoiceVerify)} spark={countSpark(invoiceVerify)} />
-      <Kpi icon="user"    label="Employees"   value={String(DATA.EMPLOYEES.length)} spark={countSpark(DATA.EMPLOYEES.length)} sparkColor="var(--primary)" />
-    </div>
-
-    <div className="grid" style={{ gridTemplateColumns: "1.6fr 1fr", marginBottom: 20 }}>
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title"><Icon name="speech" size={14} /> Activity feed</div>
-          <div className="row">
-            <div className="tabs" style={{ border: "none" }}>
-              <span className="tab active">All <span className="tab-count">142</span></span>
-              <span className="tab">Approvals <span className="tab-count">14</span></span>
-              <span className="tab">Errors <span className="tab-count">3</span></span>
-            </div>
-          </div>
-        </div>
-        <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {[
-            { who: "Anil Kapoor",    act: "raised", what: "PO-2026-0142 for Hindustan Talc Mines", amt: "₹18.4 L", t: "12m", ico: "cart",    tone: "primary" },
-            { who: "Manish Joshi",   act: "completed", what: "Production batch B-4471 (Talc 600 mesh)", amt: "24 MT", t: "44m", ico: "factory", tone: "success" },
-            { who: "Suresh Patel",   act: "started",   what: "Dispatch DSP-1041 → Pidilite Mumbai", amt: "18 MT", t: "1h", ico: "truck",   tone: "info" },
-            { who: "Neha Iyer",      act: "approved",  what: "Leave application: Vinod Sharma (3 days)", amt: "", t: "2h", ico: "calendar", tone: "success" },
-            { who: "System",         act: "flagged",   what: "Invoice mismatch on PO-2026-0139", amt: "₹6.5k diff", t: "3h", ico: "alert",   tone: "danger" },
-            { who: "Karan Singh",    act: "checked in",what: "Asian Paints HO — Mumbai", amt: "10:45 AM", t: "4h", ico: "pin", tone: "default" },
-          ].map((a, i) => (
-            <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-              <div style={{
-                width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-                display: "grid", placeItems: "center",
-                background: `var(--${a.tone === "default" ? "bg-sunken" : a.tone + "-soft"})`,
-                color: a.tone === "default" ? "var(--fg-muted)" : `var(--${a.tone})`,
-              }}>
-                <Icon name={a.ico} size={14} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: "var(--fg)" }}>
-                  <strong>{a.who}</strong> <span className="muted">{a.act}</span> {a.what}
-                </div>
-                <div style={{ fontSize: 11, color: "var(--fg-subtle)", marginTop: 2, display: "flex", gap: 10 }}>
-                  <span>{a.t} ago</span>
-                  {a.amt && <span style={{ fontFamily: "var(--font-mono)" }}>{a.amt}</span>}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+      <AdminEyebrow>Current company</AdminEyebrow>
+      <div className="admin-company-overview">
+        {DATA.COMPANIES[0] ? (
+          <AdminCompanyCard
+            company={DATA.COMPANIES[0]}
+            accent="primary"
+            metrics={[
+              { label: "Active users", value: DATA.COMPANIES[0].employees ?? "—" },
+              { label: "RM alerts", value: rmLow, tone: rmLow > 0 ? "warn" : "" },
+              { label: "Dispatches today", value: mineralsDispatch.due },
+              { label: "Pending invoices", value: pendingInvoices },
+            ]}
+          />
+        ) : null}
+        {DATA.COMPANIES[1] ? (
+          <AdminCompanyCard
+            company={DATA.COMPANIES[1]}
+            accent="gold"
+            metrics={[
+              { label: "Active users", value: DATA.COMPANIES[1].employees ?? "—" },
+              { label: "Pack alerts", value: packLow, tone: packLow > 0 ? "warn" : "" },
+              { label: "Dispatches today", value: micronsDispatch.due },
+              { label: "Overdue", value: micronsDispatch.overdue, tone: micronsDispatch.overdue > 0 ? "danger" : "" },
+            ]}
+          />
+        ) : null}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <div className="card">
-          <div className="card-head">
-            <div className="card-title"><Icon name="user" size={14} /> Attendance today</div>
-            <Badge tone="success" dot>Live</Badge>
-          </div>
-          <div className="card-body" style={{ display: "flex", gap: 16, alignItems: "center" }}>
-            <Donut value={DATA.ATTENDANCE_TODAY.present} max={DATA.ATTENDANCE_TODAY.total} size={110} stroke={11} label={`${Math.round(DATA.ATTENDANCE_TODAY.present / DATA.ATTENDANCE_TODAY.total * 100)}%`} sub="present" />
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-              {[
-                { l: "Present", v: DATA.ATTENDANCE_TODAY.present, tone: "success" },
-                { l: "Late",    v: DATA.ATTENDANCE_TODAY.late,    tone: "warning" },
-                { l: "On leave",v: DATA.ATTENDANCE_TODAY.leave,   tone: "info" },
-                { l: "Absent",  v: DATA.ATTENDANCE_TODAY.absent,  tone: "danger" },
-                { l: "On field",v: DATA.ATTENDANCE_TODAY.onField, tone: "default" },
-              ].map((r) => (
-                <div key={r.l} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12 }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                    <span className={`dot ${r.tone === "default" ? "" : r.tone === "success" ? "success" : r.tone === "warning" ? "warning" : r.tone === "danger" ? "danger" : "primary"}`}></span>
-                    {r.l}
-                  </span>
-                  <span className="mono" style={{ fontWeight: 600 }}>{r.v}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+      <div className="admin-stats-row">
+        <AdminStatCard label="Total users" value={String(totalUsers)} />
+        <AdminStatCard label="Low stock alerts" value={String(lowStockTotal)} tone="warning" />
+        <AdminStatCard label="Pending invoices" value={String(pendingInvoices)} tone="danger" />
+        <AdminStatCard label="Dispatch delays" value={String(dispatchDelays)} tone="warning" />
+        <AdminStatCard label="Present today" value={String(presentToday)} tone="success" />
+        <AdminStatCard label="WA tasks (week)" value={String(waTasks)} tone="accent" />
+      </div>
 
-        <div className="card">
-          <div className="card-head">
-            <div className="card-title"><Icon name="shield" size={14} /> Permission requests</div>
-            <Badge tone="warning">3 pending</Badge>
+      <div className="admin-quick-actions">
+        <Btn variant="secondary" size="sm" icon="users" onClick={() => navigate("/users")}>
+          User management
+        </Btn>
+        <Btn variant="secondary" size="sm" icon="invoice" onClick={() => navigate("/procurement/invoices")}>
+          Verify invoices
+        </Btn>
+        <Btn variant="secondary" size="sm" icon="alert" onClick={() => navigate("/hrms/notifications")}>
+          Review alerts
+        </Btn>
+      </div>
+
+      <div className="admin-dash-grid">
+        <AdminWidget
+          title="User access issues"
+          icon="shield"
+          badge={<Badge tone="warning">3</Badge>}
+        >
+          <ul className="admin-issue-list">
+            <li>
+              <span className="admin-issue-list__icon danger"><Icon name="user" size={13} /></span>
+              <div><strong>Arun Nair</strong> — account disabled. Last login 28 Feb. Re-enable or archive.</div>
+            </li>
+            <li>
+              <span className="admin-issue-list__icon warning"><Icon name="shield" size={13} /></span>
+              <div><strong>Kiran Desai</strong> — password reset requested. Pending since 8 Mar.</div>
+            </li>
+            <li>
+              <span className="admin-issue-list__icon warning"><Icon name="check" size={13} /></span>
+              <div><strong>2 new users</strong> — awaiting role assignment (Stores, Microns).</div>
+            </li>
+          </ul>
+        </AdminWidget>
+
+        <AdminWidget title="Low stock alerts by module" icon="box">
+          <div className="admin-alert-mod-section">
+            <div className="admin-alert-mod-title"><Icon name="box" size={12} /> Raw material</div>
+            <ul className="admin-alert-mod-list">
+              <li>
+                <span>{lowRmLabels || "No RM alerts"}</span>
+                {rmLow > 0 ? <Badge tone="danger">{rmLow}</Badge> : null}
+              </li>
+            </ul>
           </div>
-          <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {[
-              { who: "Pooja Aggarwal", req: "Edit access · Customers", time: "2h ago" },
-              { who: "Vikram Bhatia",  req: "Approve POs > ₹5L",        time: "Yesterday" },
-              { who: "Karan Singh",    req: "Reports · view",            time: "Yesterday" },
-            ].map((r, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Avatar name={r.who} color={(i % 5) + 1} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 500 }}>{r.who}</div>
-                  <div style={{ fontSize: 11, color: "var(--fg-subtle)" }}>{r.req} · {r.time}</div>
-                </div>
-                <Btn variant="ghost" size="sm"><Icon name="x" size={12} /></Btn>
-                <Btn variant="primary" size="sm"><Icon name="check" size={12} /></Btn>
-              </div>
+          <div className="admin-alert-mod-section">
+            <div className="admin-alert-mod-title"><Icon name="package" size={12} /> Packaging</div>
+            <ul className="admin-alert-mod-list">
+              <li>
+                <span>{lowPackLabels || "No packaging alerts"}</span>
+                {packLow > 0 ? <Badge tone="warning">{packLow}</Badge> : null}
+              </li>
+            </ul>
+          </div>
+          <div className="admin-alert-mod-section">
+            <div className="admin-alert-mod-title"><Icon name="wrench" size={12} /> Spare parts</div>
+            <ul className="admin-alert-mod-list">
+              <li>
+                <span>{lowSpareLabels || "No spare parts alerts"}</span>
+                {spareLow > 0 ? <Badge tone="warning">{spareLow}</Badge> : null}
+              </li>
+            </ul>
+          </div>
+        </AdminWidget>
+
+        <AdminWidget
+          title="Pending invoice verifications"
+          icon="invoice"
+          badge={pendingInvoices > 0 ? <Badge tone="danger">{pendingInvoices}</Badge> : null}
+        >
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            size="small"
+            columns={invoiceColumns}
+            dataSource={mismatchInvoices}
+            rowKey="id"
+            pagination={false}
+          />
+          <p className="admin-widget-footnote">
+            Total pending: {pendingInvoiceTotal > 0 ? fmtINR(pendingInvoiceTotal) : "—"}.{" "}
+            <button type="button" className="admin-link-btn" onClick={() => navigate("/procurement/invoices")}>
+              Verify all
+            </button>
+          </p>
+        </AdminWidget>
+      </div>
+
+      <div className="admin-dash-grid">
+        <AdminWidget title="Field activity alerts" icon="user">
+          <ul className="admin-activity-list">
+            {fieldAlerts.map((item, i) => (
+              <li key={i}>
+                <span className={`admin-activity-list__icon ${item.tone}`}>
+                  <Icon name={item.icon} size={13} />
+                </span>
+                <div>{item.text}</div>
+              </li>
             ))}
-          </div>
-        </div>
-      </div>
-    </div>
+          </ul>
+        </AdminWidget>
 
-    <div className="card">
-      <div className="card-head">
-        <div className="card-title"><Icon name="users" size={14} /> Module activity (last 7 days)</div>
-        <Btn variant="ghost" size="sm">All modules <Icon name="chevRight" size={12} /></Btn>
+        <AdminWidget title="Attendance summary" icon="calendar">
+          <div className="admin-attendance-bar">
+            <div className="admin-attendance-box present">
+              <div className="admin-attendance-box__n">{presentToday}</div>
+              <div className="admin-attendance-box__l">Present</div>
+            </div>
+            <div className="admin-attendance-box absent">
+              <div className="admin-attendance-box__n">{attendance.absent || 0}</div>
+              <div className="admin-attendance-box__l">Absent</div>
+            </div>
+            <div className="admin-attendance-box leave">
+              <div className="admin-attendance-box__n">{attendance.leave || 0}</div>
+              <div className="admin-attendance-box__l">On leave</div>
+            </div>
+            <div className="admin-attendance-box field">
+              <div className="admin-attendance-box__n">{attendance.onField || fieldVisitsTodayCount(DATA.FIELD_VISITS)}</div>
+              <div className="admin-attendance-box__l">In field</div>
+            </div>
+          </div>
+          <p className="admin-widget-footnote">
+            Of {totalUsers} users · Both companies. Marked as of May 21, 10:00.
+          </p>
+        </AdminWidget>
+
+        <AdminWidget
+          title="Dispatch delay alerts"
+          icon="truck"
+          badge={dispatchDelays > 0 ? <Badge tone="danger">{dispatchDelays}</Badge> : null}
+        >
+          <ul className="admin-delay-list">
+            {dispatchDelayAlerts.map((item, i) => (
+              <li key={i}>
+                <span className="admin-delay-list__icon"><Icon name="clock" size={13} /></span>
+                <div>{item.text}</div>
+              </li>
+            ))}
+          </ul>
+        </AdminWidget>
       </div>
-      <div className="card-body">
-        <BarChart
-          data={[
-            { day: "Mon", inv: 124, proc: 42, prod: 86, disp: 38 },
-            { day: "Tue", inv: 142, proc: 38, prod: 92, disp: 41 },
-            { day: "Wed", inv: 118, proc: 56, prod: 88, disp: 36 },
-            { day: "Thu", inv: 156, proc: 48, prod: 95, disp: 44 },
-            { day: "Fri", inv: 140, proc: 62, prod: 90, disp: 48 },
-            { day: "Sat", inv: 98,  proc: 28, prod: 72, disp: 32 },
-            { day: "Sun", inv: 42,  proc: 12, prod: 38, disp: 14 },
-          ]}
-          keys={["inv", "proc", "prod", "disp"]}
-          colors={["var(--primary)", "var(--secondary)", "#60a5fa", "#34d399"]}
-          h={180}
-        />
-        <div className="chart-legend" style={{ marginTop: 8, justifyContent: "center" }}>
-          <span className="chart-legend-item"><span className="chart-legend-swatch" style={{ background: "var(--primary)" }}></span> Inventory</span>
-          <span className="chart-legend-item"><span className="chart-legend-swatch" style={{ background: "var(--secondary)" }}></span> Procurement</span>
-          <span className="chart-legend-item"><span className="chart-legend-swatch" style={{ background: "#60a5fa" }}></span> Production</span>
-          <span className="chart-legend-item"><span className="chart-legend-swatch" style={{ background: "#34d399" }}></span> Dispatch</span>
+
+      <div className="admin-dash-grid admin-dash-grid--single">
+        <AdminWidget title="Recently updated records" icon="chart">
+          <CommonTable
+            {...ERP_TABLE_PROPS}
+            size="small"
+            columns={recentColumns}
+            dataSource={recentRecords}
+            rowKey="key"
+            pagination={false}
+          />
+        </AdminWidget>
+      </div>
+
+      <div className="card admin-orders-week">
+        <div className="card-head">
+          <div className="card-title">Orders this week</div>
+          <span className="muted" style={{ fontSize: 12 }}>Both companies</span>
+        </div>
+        <div className="card-body">
+          <p className="admin-widget-footnote" style={{ marginTop: 0, marginBottom: 12 }}>
+            Daily order count
+          </p>
+          <BarChart
+            data={ordersWeekData}
+            keys={["orders"]}
+            colors={["var(--primary)"]}
+            h={120}
+          />
         </div>
       </div>
     </div>
-  </>
   );
 };
 
 /* ============================================================
    OWNER DASHBOARD — strategic & financial
    ============================================================ */
+const OwnerEyebrow = ({ children }) => (
+  <div className="owner-eyebrow">{children}</div>
+);
+
+const OwnerCompanyTile = ({ company, accent, metrics, footnote }) => (
+  <div className={`owner-company-tile ${accent === "gold" ? "microns" : ""}`}>
+    <div>
+      <div className="owner-company-tile__name">{company.name}</div>
+      <div className="owner-company-tile__loc">
+        <Icon name="pin" size={11} /> {company.plant?.split(",")[0] ?? company.plant}
+      </div>
+    </div>
+    <div className="owner-company-tile__metrics">
+      {metrics.map((m) => (
+        <div key={m.label} className="owner-company-tile__metric">
+          <div className={`owner-company-tile__metric-v ${m.tone ?? ""}`}>{m.value}</div>
+          <div className="owner-company-tile__metric-l">{m.label}</div>
+        </div>
+      ))}
+    </div>
+    {footnote ? <p className="owner-company-tile__note">{footnote}</p> : null}
+  </div>
+);
+
+const OwnerWidget = ({ title, icon, badge, wide, children }) => (
+  <div className={`owner-widget ${wide ? "owner-widget--wide" : ""}`}>
+    <div className="owner-widget-header">
+      <span className="owner-widget-header__title">
+        {icon ? <Icon name={icon} size={14} /> : null} {title}
+      </span>
+      {badge}
+    </div>
+    <div className="owner-widget-body">{children}</div>
+  </div>
+);
+
+const OwnerCoTag = ({ microns, children }) => (
+  <span className={`owner-co-tag ${microns ? "microns" : ""}`}>{children}</span>
+);
+
 const OwnerDashboard = () => {
   const DATA = useDATA();
-  const revCr = revenueMtdRupees(DATA.REVENUE_DATA) / 1_00_00_000;
-  const orderBookCr = orderBookRupees(DATA.ORDERS) / 1_00_00_000;
-  const topCustomerColumns = useMemo(
-    () => [
-      {
-        title: "Customer",
-        dataIndex: "name",
-        key: "customer",
-        render: (name, c, i) => (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Avatar name={name} color={(i % 5) + 1} />
-            <div>
-              <div className="strong">{name}</div>
-              <div className="subtle" style={{ fontSize: 11 }}>{c.city} · {c.terms}</div>
-            </div>
-          </div>
-        ),
-      },
-      {
-        title: "YTD",
-        dataIndex: "ytd",
-        key: "ytd",
-        align: "right",
-        render: (ytd) => <span className="num">{fmtINR(ytd)}</span>,
-      },
-      {
-        title: "Δ",
-        key: "delta",
-        align: "right",
-        render: (_, __, i) => (
-          <span style={{ color: i % 3 === 0 ? "var(--danger)" : "var(--success)", fontSize: 11, fontWeight: 500 }}>
-            {i % 3 === 0 ? "−2.4%" : `+${(4 + i * 0.7).toFixed(1)}%`}
-          </span>
-        ),
-      },
-    ],
-    []
+  const rev = revenueLakhsFromSeries(DATA.REVENUE_DATA);
+  const revenueRupees = revenueMtdRupees(DATA.REVENUE_DATA);
+  const grossProfit = grossProfitRupees(revenueRupees);
+  const cogs = revenueRupees - grossProfit;
+  const attendance = DATA.ATTENDANCE_TODAY;
+  const rmLow = lowStockCount(DATA.RAW_MATERIALS);
+  const packLow = lowStockCount(DATA.PACKAGING);
+  const spareLow = lowStockCount(DATA.SPARE_PARTS);
+  const dispatchesDue = activeDispatches(DATA.DISPATCHES);
+  const overdueCount = overdueOpenOrders(DATA.ORDERS);
+  const mineralsDispatch = dispatchesForPlant(DATA.DISPATCHES, "udaipur");
+  const micronsDispatch = dispatchesForPlant(DATA.DISPATCHES, "ahmedabad");
+  const dispatchCounts = dispatchStatusCounts(DATA.DISPATCHES);
+  const prodToday = productionDayActual(DATA.PRODUCTION_DATA);
+  const activeJobs = activeProductionJobs(DATA.ORDERS);
+  const fieldCount = attendance.onField || fieldVisitsTodayCount(DATA.FIELD_VISITS);
+
+  const lowRmAlerts = useMemo(
+    () =>
+      DATA.RAW_MATERIALS.filter((r) => r.status === "low" || r.status === "critical")
+        .slice(0, 6)
+        .map((r) => ({
+          key: r.code,
+          microns: false,
+          name: r.name,
+          meta:
+            r.status === "critical"
+              ? `Critical · ${r.stock} ${r.unit}`
+              : `Below reorder · ${r.stock} ${r.unit}`,
+        })),
+    [DATA.RAW_MATERIALS]
+  );
+
+  const lowPackAlerts = useMemo(
+    () =>
+      DATA.PACKAGING.filter((p) => p.status === "low" || p.status === "critical")
+        .slice(0, 4)
+        .map((p, i) => ({
+          key: p.code,
+          microns: i >= 2,
+          name: p.name.split(" · ")[0],
+          meta: `${p.stock.toLocaleString()} left · reorder ${p.reorder.toLocaleString()}`,
+        })),
+    [DATA.PACKAGING]
+  );
+
+  const spareAlerts = useMemo(
+    () =>
+      DATA.SPARE_PARTS.filter((s) => s.status === "low" || s.status === "critical")
+        .slice(0, 3)
+        .map((s, i) => ({
+          key: s.code,
+          microns: i === 2,
+          name: s.name,
+          meta:
+            s.status === "critical"
+              ? "Critical stock"
+              : s.lastIssued
+                ? `Last issued ${s.lastIssued}`
+                : "Low stock",
+        })),
+    [DATA.SPARE_PARTS]
+  );
+
+  const vendorPriceAlerts = [
+    { name: "Titanium Dioxide — Pigments & Fillers", change: "+8.2%", up: true },
+    { name: "HDPE Bags — Prime Pack Ltd", change: "+3.5%", up: true },
+    { name: "Calcium Carbonate — Minerals & Chem", change: "−2.1%", up: false },
+    { name: "Kaolin Clay — Minerals & Chemicals", change: "+5.0%", up: true },
+  ];
+
+  const dispatchDueItems = useMemo(
+    () =>
+      DATA.DISPATCHES.filter((d) => d.status !== "delivered")
+        .slice(0, 5)
+        .map((d) => ({
+          key: d.id,
+          label: `${d.customer} — ${d.loaded}`,
+          microns: d.route.startsWith("Ahmedabad"),
+        })),
+    [DATA.DISPATCHES]
+  );
+
+  const dispatchOverdueItems = useMemo(() => {
+    const items = DATA.ORDERS.filter(
+      (o) => o.status !== "delivered" && o.status !== "dispatched"
+    )
+      .slice(0, 2)
+      .map((o) => ({
+        key: o.id,
+        label: `${o.customer.split(" ")[0]} — ${o.qty} (due ${o.due})`,
+        microns: false,
+      }));
+    if (items.length === 0 && overdueCount > 0) {
+      return [
+        {
+          key: "overdue",
+          label: `${overdueCount} open order${overdueCount === 1 ? "" : "s"} past due`,
+          microns: false,
+        },
+      ];
+    }
+    return items;
+  }, [DATA.ORDERS, overdueCount]);
+
+  const topCustomers = useMemo(
+    () =>
+      [...DATA.CUSTOMERS]
+        .sort((a, b) => (Number(b.ytd) || 0) - (Number(a.ytd) || 0))
+        .slice(0, 5)
+        .map((c, i) => ({
+          rank: i + 1,
+          name: c.name,
+          meta: fmtINR(Math.round((Number(c.ytd) || 0) / 12)),
+        })),
+    [DATA.CUSTOMERS]
+  );
+
+  const topMaterials = [
+    { rank: 1, name: "Talc 400/500 Mesh", meta: "186 MT" },
+    { rank: 2, name: "Calcium Carbonate 300M", meta: "142 MT" },
+    { rank: 3, name: "Kaolin Clay 200M", meta: "98 MT" },
+    { rank: 4, name: "Detergent Base Powder", meta: "75 MT" },
+    { rank: 5, name: "Barytes 200 Mesh", meta: "62 MT" },
+  ];
+
+  const fieldVisits = useMemo(
+    () =>
+      DATA.FIELD_VISITS.slice(0, 5).map((v) => ({
+        key: v.id,
+        customer: `${v.customer.split(" ")[0]} — ${v.city}`,
+        rep: v.rep.split(" ")[0] + " " + (v.rep.split(" ")[1]?.[0] ?? "") + ".",
+      })),
+    [DATA.FIELD_VISITS]
+  );
+
+  const employeesInField = useMemo(() => {
+    const sales = DATA.EMPLOYEES.filter((e) =>
+      e.role.toLowerCase().includes("field sales")
+    ).slice(0, 2);
+    const extras = [
+      { name: "Sunita Meena", role: "Prod (Microns)" },
+      { name: "Anita Patel", role: "Dispatch" },
+      { name: "Rakesh Purohit", role: "Logistics" },
+    ];
+    return [
+      ...sales.map((e) => ({ key: e.id, name: e.name, role: e.role })),
+      ...extras.map((e, i) => ({ key: `extra-${i}`, ...e })),
+    ].slice(0, 5);
+  }, [DATA.EMPLOYEES]);
+
+  const operationalRisks = useMemo(() => {
+    const risks = [];
+    if (rmLow > 0) {
+      risks.push({
+        sev: "high",
+        icon: "box",
+        title: "Raw material stock-out risk (Minerals)",
+        desc: `${lowRmAlerts.slice(0, 3).map((a) => a.name.split(" ")[0]).join(", ") || "Key RM items"} below reorder. If not ordered this week, paint-grade production may be impacted in 10–12 days.`,
+      });
+    }
+    if (overdueCount > 0) {
+      risks.push({
+        sev: "high",
+        icon: "truck",
+        title: `${overdueCount} dispatch${overdueCount === 1 ? "" : "es"} overdue`,
+        desc: "Open orders past due. Customer notified. Escalate if not shipped by EOD.",
+      });
+    }
+    risks.push({
+      sev: "med",
+      icon: "money",
+      title: "Vendor price increases",
+      desc: "TiO₂ +8.2%, Kaolin +5%. Review margins on running orders and quotes for paint segment.",
+    });
+    if (spareLow > 0) {
+      risks.push({
+        sev: "med",
+        icon: "wrench",
+        title: "Spare parts lead time",
+        desc: "Grinder blade set and belt assembly — order before 15 Mar to avoid unplanned downtime.",
+      });
+    }
+    return risks.slice(0, 4);
+  }, [rmLow, overdueCount, spareLow, lowRmAlerts]);
+
+  const criticalNotifs = useMemo(
+    () => DATA.NOTIFS.slice(0, 3),
+    [DATA.NOTIFS]
   );
 
   return (
-  <>
-    <DashHead title="Owner Dashboard" sub="Strategic and financial view across both companies">
-      <Btn icon="calendar" size="sm">May 2026</Btn>
-      <Btn icon="download" size="sm">Export PDF</Btn>
-    </DashHead>
+    <div className="owner-dash">
+      <DashHead
+        title="Owner Dashboard"
+        sub="High-level view across both companies — alerts, dispatch, production, field & risks"
+      >
+        <Btn icon="calendar" size="sm">May 2026</Btn>
+        <Btn icon="download" size="sm">Export PDF</Btn>
+      </DashHead>
 
-    <div className="grid grid-4" style={{ marginBottom: 20 }}>
-      <Kpi icon="money"  label="Group revenue · MTD" value={revCr > 0 ? revCr.toFixed(2) : "—"} unit={revCr > 0 ? "Cr" : undefined} spark={revenueSpark(DATA.REVENUE_DATA)} />
-      <Kpi icon="bolt"   label="Open orders"        value={String(openOrdersCount(DATA.ORDERS))} unit="orders" spark={countSpark(openOrdersCount(DATA.ORDERS))} sparkColor="var(--success)" />
-      <Kpi icon="chart"  label="Customers"        value={String(DATA.CUSTOMERS.length)} unit="accounts" spark={countSpark(DATA.CUSTOMERS.length)} />
-      <Kpi icon="cart"   label="Order book"          value={orderBookCr > 0 ? orderBookCr.toFixed(2) : "—"} unit={orderBookCr > 0 ? "Cr" : undefined} spark={countSpark(Math.round(orderBookCr))} sparkColor="var(--primary)" />
-    </div>
-
-    <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 20 }}>
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title"><Icon name="pieChart" size={14} /> Revenue by product line · MTD</div>
-        </div>
-        <div className="card-body">
-          {[
-            { name: "Talcum Powder",        v: 322, color: "var(--primary)" },
-            { name: "Calcium Carbonate",    v: 245, color: "#5b6dc2" },
-            { name: "China Clay",           v: 196, color: "#8497d8" },
-            { name: "Dolomite & Quartz",    v: 158, color: "#a8b6e3" },
-            { name: "Chemicals (Soda, STPP)", v: 132, color: "#cbd3ee" },
-            { name: "FIBC + PP Woven",      v: 287, color: "var(--secondary)" },
-            { name: "BOPP & Fabrics",       v: 142, color: "#f0c861" },
-          ].map((r, i) => {
-            const total = 1482;
-            return (
-              <div key={r.name} style={{ marginBottom: i === 6 ? 0 : 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 12 }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: r.color }}></span>
-                    {r.name}
-                  </span>
-                  <span className="mono"><strong>₹{(r.v / 100).toFixed(2)} Cr</strong> <span className="subtle">· {Math.round(r.v / total * 100)}%</span></span>
-                </div>
-                <div className="bar" style={{ height: 4 }}>
-                  <span style={{ width: `${(r.v / total) * 100}%`, background: r.color }}></span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title"><Icon name="users" size={14} /> Top customers · MTD</div>
-          <Btn variant="ghost" size="sm">All</Btn>
-        </div>
-        <div className="card-body flush">
-          <div style={{ padding: 16 }}>
-            <CommonTable
-              {...ERP_TABLE_PROPS}
-              columns={topCustomerColumns}
-              dataSource={DATA.CUSTOMERS}
-              rowKey="id"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div className="grid" style={{ gridTemplateColumns: "2fr 1fr" }}>
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title"><Icon name="chart" size={14} /> Cash flow · last 7 months</div>
-          <div className="chart-legend">
-            <span className="chart-legend-item"><span className="chart-legend-swatch" style={{ background: "var(--success)" }}></span> Inflow</span>
-            <span className="chart-legend-item"><span className="chart-legend-swatch" style={{ background: "var(--danger)" }}></span> Outflow</span>
-          </div>
-        </div>
-        <div className="card-body">
-          <AreaChart
-            data={[
-              { month: "Nov", in: 58, out: 41 },
-              { month: "Dec", in: 64, out: 46 },
-              { month: "Jan", in: 71, out: 52 },
-              { month: "Feb", in: 67, out: 49 },
-              { month: "Mar", in: 82, out: 58 },
-              { month: "Apr", in: 88, out: 61 },
-              { month: "May", in: 96, out: 68 },
+      <OwnerEyebrow>Company summary</OwnerEyebrow>
+      <div className="owner-company-switch">
+        {DATA.COMPANIES[0] ? (
+          <OwnerCompanyTile
+            company={DATA.COMPANIES[0]}
+            accent="primary"
+            metrics={[
+              { label: "Sales (MTD)", value: formatLakhs(rev.smi) },
+              { label: "RM alerts", value: rmLow, tone: rmLow > 0 ? "warn" : "" },
+              { label: "Dispatches today", value: String(mineralsDispatch.due) },
             ]}
-            keys={["in", "out"]}
-            colors={["var(--success)", "var(--danger)"]}
-            currency h={220}
+            footnote="Minerals processing, paint & paper grades. 12 batches produced today."
           />
+        ) : null}
+        {DATA.COMPANIES[1] ? (
+          <OwnerCompanyTile
+            company={DATA.COMPANIES[1]}
+            accent="gold"
+            metrics={[
+              { label: "Sales (MTD)", value: formatLakhs(rev.smic) },
+              { label: "Overdue", value: String(micronsDispatch.overdue), tone: micronsDispatch.overdue > 0 ? "danger" : "" },
+              { label: "Dispatches today", value: String(micronsDispatch.due) },
+            ]}
+            footnote="Micronized fillers. 6 batches produced today. Switch company for detail."
+          />
+        ) : null}
+      </div>
+
+      <div className="owner-stats-row">
+        <AdminStatCard label="Combined sales (MTD)" value={formatLakhs(rev.total)} tone="accent" />
+        <AdminStatCard label="Gross margin" value={revenueRupees > 0 ? `${grossMarginPct()}%` : "—"} tone="success" />
+        <AdminStatCard label="Dispatches due today" value={String(dispatchesDue)} />
+        <AdminStatCard label="Overdue" value={String(overdueCount)} tone={overdueCount > 0 ? "danger" : "default"} />
+        <AdminStatCard label="Vendor price alerts" value="4" tone="warning" />
+        <AdminStatCard label="Employees in field" value={String(fieldCount)} />
+      </div>
+
+      <div className="owner-dash-grid">
+        <OwnerWidget
+          title="Low raw material alerts"
+          icon="box"
+          badge={rmLow > 0 ? <Badge tone="danger">{rmLow}</Badge> : null}
+        >
+          <ul className="owner-alert-list">
+            {(lowRmAlerts.length ? lowRmAlerts : [{ key: "none", microns: false, name: "No RM alerts", meta: "Stock healthy" }]).map((item) => (
+              <li key={item.key}>
+                <OwnerCoTag microns={item.microns}>{item.microns ? "Microns" : "Minerals"}</OwnerCoTag>
+                <span className="owner-alert-list__name">{item.name}</span>
+                <span className="owner-alert-list__meta">{item.meta}</span>
+              </li>
+            ))}
+          </ul>
+        </OwnerWidget>
+
+        <OwnerWidget
+          title="Low packaging alerts"
+          icon="package"
+          badge={packLow > 0 ? <Badge tone="warning">{packLow}</Badge> : null}
+        >
+          <ul className="owner-alert-list">
+            {(lowPackAlerts.length ? lowPackAlerts : [{ key: "none", microns: false, name: "No packaging alerts", meta: "—" }]).map((item) => (
+              <li key={item.key}>
+                <OwnerCoTag microns={item.microns}>{item.microns ? "Microns" : "Minerals"}</OwnerCoTag>
+                <span className="owner-alert-list__name">{item.name}</span>
+                <span className="owner-alert-list__meta">{item.meta}</span>
+              </li>
+            ))}
+          </ul>
+        </OwnerWidget>
+
+        <OwnerWidget
+          title="Spare parts alerts"
+          icon="wrench"
+          badge={spareLow > 0 ? <Badge tone="warning">{spareLow}</Badge> : null}
+        >
+          <ul className="owner-alert-list">
+            {(spareAlerts.length ? spareAlerts : [{ key: "none", microns: false, name: "No spare alerts", meta: "—" }]).map((item) => (
+              <li key={item.key}>
+                <OwnerCoTag microns={item.microns}>{item.microns ? "Microns" : "Minerals"}</OwnerCoTag>
+                <span className="owner-alert-list__name">{item.name}</span>
+                <span className="owner-alert-list__meta">{item.meta}</span>
+              </li>
+            ))}
+          </ul>
+        </OwnerWidget>
+      </div>
+
+      <div className="owner-dash-grid owner-dash-grid--dispatch">
+        <OwnerWidget
+          title="Vendor price change alerts"
+          icon="money"
+          badge={<Badge tone="warning">4</Badge>}
+        >
+          <ul className="owner-price-var-list">
+            {vendorPriceAlerts.map((item) => (
+              <li key={item.name}>
+                <span>{item.name}</span>
+                <span className={item.up ? "up" : "down"}>{item.change}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="owner-widget-footnote">Review margin impact. Both companies.</p>
+        </OwnerWidget>
+
+        <OwnerWidget title="Dispatch due & overdue summary" icon="truck" wide>
+          <div className="owner-dispatch-summary">
+            <div>
+              <div className="owner-dispatch-box due">
+                <div className="owner-dispatch-box__num">{dispatchCounts.active}</div>
+                <div className="owner-dispatch-box__lbl">Due today</div>
+              </div>
+              <div className="owner-dispatch-list">
+                {dispatchDueItems.map((item) => (
+                  <div key={item.key} className="owner-dispatch-list__item">
+                    <span>{item.label}</span>
+                    <OwnerCoTag microns={item.microns}>{item.microns ? "Microns" : "Minerals"}</OwnerCoTag>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="owner-dispatch-box overdue">
+                <div className="owner-dispatch-box__num">{overdueCount}</div>
+                <div className="owner-dispatch-box__lbl">Overdue</div>
+              </div>
+              <div className="owner-dispatch-list">
+                {dispatchOverdueItems.map((item) => (
+                  <div key={item.key} className="owner-dispatch-list__item">
+                    <span>{item.label}</span>
+                    <OwnerCoTag microns={item.microns}>Minerals</OwnerCoTag>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </OwnerWidget>
+      </div>
+
+      <div className="owner-dash-grid">
+        <OwnerWidget title="Production overview" icon="factory">
+          <div className="owner-prod-overview">
+            <div className="owner-prod-stat">
+              <div className="owner-prod-stat__val">{activeJobs + 12}</div>
+              <div className="owner-prod-stat__lbl">Batches completed today</div>
+            </div>
+            <div className="owner-prod-stat">
+              <div className="owner-prod-stat__val">12</div>
+              <div className="owner-prod-stat__lbl">Minerals (Udaipur)</div>
+            </div>
+            <div className="owner-prod-stat">
+              <div className="owner-prod-stat__val">6</div>
+              <div className="owner-prod-stat__lbl">Microns (Makrana)</div>
+            </div>
+            <div className="owner-prod-stat">
+              <div className="owner-prod-stat__val">{prodToday > 0 ? `~${prodToday} MT` : "—"}</div>
+              <div className="owner-prod-stat__lbl">Total output (est.)</div>
+            </div>
+          </div>
+          <p className="owner-widget-footnote">No line stoppages reported. Plan vs actual on track.</p>
+        </OwnerWidget>
+
+        <OwnerWidget title="Field sales / visits today" icon="user">
+          <ul className="owner-field-visit-list">
+            {fieldVisits.map((v) => (
+              <li key={v.key}>
+                <span className="owner-field-visit-list__cust">{v.customer}</span>
+                <span className="owner-field-visit-list__rep">{v.rep}</span>
+              </li>
+            ))}
+          </ul>
+        </OwnerWidget>
+
+        <OwnerWidget title="Employees in field today" icon="users">
+          <ul className="owner-employees-field">
+            {employeesInField.map((e) => (
+              <li key={e.key}>
+                <span className="owner-employees-field__avatar">
+                  {e.name.split(" ").map((p) => p[0]).join("").slice(0, 2)}
+                </span>
+                <span>{e.name}</span>
+                <span className="owner-employees-field__role">{e.role}</span>
+              </li>
+            ))}
+          </ul>
+        </OwnerWidget>
+      </div>
+
+      <div className="owner-dash-grid owner-dash-grid--single">
+        <OwnerWidget title="Top operational risks" icon="alert">
+          <ul className="owner-risks-list">
+            {operationalRisks.map((risk) => (
+              <li key={risk.title}>
+                <span className={`owner-risks-list__icon ${risk.sev}`}>
+                  <Icon name={risk.icon} size={14} />
+                </span>
+                <div>
+                  <div className="owner-risks-list__title">{risk.title}</div>
+                  <div className="owner-risks-list__desc">{risk.desc}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </OwnerWidget>
+      </div>
+
+      <div className="owner-grid">
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">Profit overview</div>
+          </div>
+          <div className="card-body">
+            <div className="owner-profit-overview">
+              <h3>This month (May 2026) — combined</h3>
+              <div className="owner-profit-row">
+                <span>Revenue</span>
+                <span className="val">{formatLakhs(rev.total)}</span>
+              </div>
+              <div className="owner-profit-row">
+                <span>COGS</span>
+                <span className="val">{cogs > 0 ? fmtINR(cogs) : "—"}</span>
+              </div>
+              <div className="owner-profit-row">
+                <span>Gross profit</span>
+                <span className="val positive">{grossProfit > 0 ? fmtINR(grossProfit) : "—"}</span>
+              </div>
+              <div className="owner-profit-row">
+                <span>Gross margin</span>
+                <span className="val positive">{revenueRupees > 0 ? `${grossMarginPct()}%` : "—"}</span>
+              </div>
+            </div>
+            <p className="owner-widget-footnote">
+              Estimate. Final P&amp;L at month close. Split by company in Reports.
+            </p>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">Top customers (MTD)</div>
+          </div>
+          <div className="card-body">
+            <ul className="owner-top-list">
+              {topCustomers.map((c) => (
+                <li key={c.rank}>
+                  <span className="owner-top-list__rank">{c.rank}</span>
+                  <span className="owner-top-list__name">{c.name}</span>
+                  <span className="owner-top-list__meta">{c.meta}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title"><Icon name="alert" size={14} /> Risk register</div>
-        </div>
-        <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {[
-            { sev: "high",   t: "PCC stock critical", d: "7.8 MT vs 15 MT reorder · affects 2 orders" },
-            { sev: "med",    t: "Vendor concentration", d: "Krishna Minerals = 32% of RM spend" },
-            { sev: "med",    t: "Receivables aging",    d: "₹84 L · over 60 days · 4 customers" },
-            { sev: "low",    t: "Plant B power consumption", d: "+12% vs Apr · audit recommended" },
-          ].map((r, i) => (
-            <div key={i} style={{ display: "flex", gap: 10, padding: 10, background: "var(--bg-sunken)", borderRadius: 8 }}>
-              <span style={{
-                width: 3, borderRadius: 2,
-                background: r.sev === "high" ? "var(--danger)" : r.sev === "med" ? "var(--warning)" : "var(--info)",
-              }}></span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, fontWeight: 600 }}>{r.t}</div>
-                <div style={{ fontSize: 11, color: "var(--fg-muted)", marginTop: 2 }}>{r.d}</div>
+      <div className="owner-dash-grid owner-dash-grid--two">
+        <OwnerWidget title="Top supplied materials (MTD)">
+          <ul className="owner-top-list">
+            {topMaterials.map((m) => (
+              <li key={m.rank}>
+                <span className="owner-top-list__rank">{m.rank}</span>
+                <span className="owner-top-list__name">{m.name}</span>
+                <span className="owner-top-list__meta">{m.meta}</span>
+              </li>
+            ))}
+          </ul>
+        </OwnerWidget>
+
+        <OwnerWidget title="Recent critical notifications">
+          <div className="owner-critical-notifs">
+            {criticalNotifs.map((n) => (
+              <div key={n.id} className="owner-critical-notifs__item">
+                <strong>{n.type === "alert" ? "Alert:" : n.type === "success" ? "Update:" : "Info:"}</strong>{" "}
+                {n.text}
               </div>
-              <Badge tone={r.sev === "high" ? "danger" : r.sev === "med" ? "warning" : "info"}>
-                {r.sev === "high" ? "High" : r.sev === "med" ? "Med" : "Low"}
-              </Badge>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </OwnerWidget>
       </div>
     </div>
-  </>
   );
 };
 
 /* ============================================================
    PRODUCTION DASHBOARD
    ============================================================ */
+const ProdStatCard = ({ label, value, tone = "default" }) => (
+  <div className="prod-dash-stat">
+    <div className="prod-dash-stat__label">{label}</div>
+    <div className={`prod-dash-stat__value ${tone !== "default" ? tone : ""}`}>{value}</div>
+  </div>
+);
+
+const ProdWidget = ({ title, icon, badge, meta, children, footnote }) => (
+  <div className="prod-dash-widget">
+    <div className="prod-dash-widget__head">
+      <span className="prod-dash-widget__title">
+        {icon ? <Icon name={icon} size={14} /> : null} {title}
+      </span>
+      {badge}
+      {meta}
+    </div>
+    <div className="prod-dash-widget__body">{children}</div>
+    {footnote ? <p className="prod-dash-widget__footnote">{footnote}</p> : null}
+  </div>
+);
+
+const PROD_MACHINES = ["Ball Mill #1", "Ball Mill #2", "Raymond Mill #1", "Raymond Mill #2"];
+
+const PENDING_CONSUMPTION = [
+  { id: "PO-2025-035", product: "TiO₂ Blend 325M" },
+  { id: "PO-2025-034", product: "Talc 500 Mesh" },
+  { id: "PO-2025-033", product: "Barytes 200 Mesh" },
+];
+
+const BAG_IMPACT = [
+  { label: "Reserved for today’s production", value: "3,680 bags" },
+  { label: "HDPE 50 kg (reserved)", value: "800" },
+  { label: "HDPE 25 kg (reserved)", value: "2,400" },
+  { label: "Laminated 25 kg (reserved)", value: "480 — tight", warn: true },
+  { label: "After today (est. balance)", value: "HDPE 50 kg: 3,400" },
+];
+
+const MACHINE_UTIL = [
+  { name: "Ball Mill #1", meta: "PO-2025-037 — Calcium Carbonate · Est. complete 14:00", pct: 78, tone: "default" },
+  { name: "Ball Mill #2", meta: "PO-2025-039 — Barytes · Est. complete 16:30", pct: 35, tone: "default" },
+  { name: "Raymond Mill #1", meta: "PO-2025-038 — Talc 400 Mesh · Est. complete 15:00", pct: 55, tone: "default" },
+  { name: "Raymond Mill #2", meta: "PO-2025-036 — Kaolin · QC hold", pct: 95, tone: "warning" },
+];
+
+const PACK_REQUIRED = [
+  { type: "HDPE Valve Bag 25 kg", required: 2400, available: 8500, status: "OK", tone: "success" },
+  { type: "HDPE Valve Bag 50 kg", required: 800, available: 4200, status: "OK", tone: "success" },
+  { type: "Laminated Paper Bag 25 kg", required: 480, available: 1200, status: "Tight", tone: "warning" },
+  { type: "Jumbo Bag 500 kg", required: 24, available: 320, status: "OK", tone: "success" },
+];
+
+const COMPLETED_BATCHES = [
+  { order: "PO-2025-035", product: "Titanium Dioxide Blend 325M", qty: 8, machine: "Ball Mill #2", time: "08:45" },
+  { order: "PO-2025-034", product: "Talc 500 Mesh", qty: 10, machine: "Raymond #1", time: "07:30" },
+  { order: "PO-2025-033", product: "Barytes 200 Mesh", qty: 25, machine: "Ball Mill #1", time: "06:15" },
+  { order: "PO-2025-032", product: "Iron Oxide Red 325M", qty: 5, machine: "Raymond #2", time: "05:50" },
+  { order: "PO-2025-031", product: "Calcium Carbonate 300M", qty: 12, machine: "Ball Mill #1", time: "04:20" },
+];
+
+const DELAYED_TASKS = [
+  {
+    id: "PO-2025-032",
+    text: "Detergent Base Powder (30 MT). On hold: raw material shortfall. Expected start: tomorrow.",
+  },
+  {
+    id: "PO-2025-030",
+    text: "Talc 400 Mesh (15 MT). Delayed 4 hrs: Raymond #1 breakdown. Resumed 08:00; est. complete 15:00.",
+  },
+];
+
+const PRODUCTION_QUEUE = [
+  { order: "PO-2025-040", product: "Talc Powder", spec: "500 Mesh", qty: 15, date: "2025-03-10", machine: "Raymond #1", status: "Planned", priority: "High" },
+  { order: "PO-2025-041", product: "Calcium Carbonate", spec: "300 Mesh", qty: 20, date: "2025-03-10", machine: "Ball Mill #1", status: "Planned", priority: "High" },
+  { order: "PO-2025-042", product: "Kaolin Clay", spec: "200 Mesh", qty: 12, date: "2025-03-10", machine: "Raymond #2", status: "Planned", priority: "Medium" },
+  { order: "PO-2025-043", product: "Detergent Base Powder", spec: "Custom", qty: 30, date: "2025-03-11", machine: "—", status: "On Hold", priority: "High", hold: true },
+  { order: "PO-2025-044", product: "Barytes Powder", spec: "200 Mesh", qty: 25, date: "2025-03-11", machine: "Ball Mill #1", status: "Planned", priority: "Medium" },
+  { order: "PO-2025-045", product: "Zinc Oxide", spec: "325 Mesh", qty: 8, date: "2025-03-11", machine: "Ball Mill #2", status: "Planned", priority: "Low" },
+];
+
+const SPARES_RISK_STATIC = [
+  { machine: "Ball Mill #2", text: "Grinder blade set (SP-102) low. Order before 15 Mar." },
+  { machine: "Conveyor C3", text: "Belt drive assembly. Lead time 2 weeks." },
+  { machine: "Raymond #1", text: "Wear parts due next month. Monitor." },
+];
+
+function rmAvailClass(status) {
+  if (status === "critical") return "critical";
+  if (status === "low") return "low";
+  return "ok";
+}
+
+function rmAvailLabel(stock, unit, status) {
+  const label = status === "critical" ? "Low" : status === "low" ? "Low" : "OK";
+  return `${stock} ${unit} — ${label}`;
+}
+
 const ProductionDashboard = ({ navigate }) => {
   const DATA = useDATA();
-  const activeProductionOrders = useMemo(
-    () => DATA.ORDERS.filter((o) => o.status === "in-production" || o.status === "scheduled"),
-    [DATA.ORDERS]
+
+  const week = productionWeekTotals(DATA.PRODUCTION_DATA);
+  const todayActual = productionDayActual(DATA.PRODUCTION_DATA);
+  const todayTarget =
+    DATA.PRODUCTION_DATA.find((d) => d.day === "Fri")?.planned ?? 85;
+  const targetPct =
+    todayTarget > 0 ? Math.round((todayActual / todayTarget) * 100) : 0;
+  const activeJobs = activeProductionJobs(DATA.ORDERS);
+
+  const activeJobRows = useMemo(() => {
+    const running = DATA.ORDERS.filter((o) => o.status === "in-production");
+    if (running.length > 0) {
+      return running.slice(0, 4).map((o, i) => ({
+        id: o.id,
+        label: `${o.product} (${o.qty})`,
+        machine: PROD_MACHINES[i % PROD_MACHINES.length],
+      }));
+    }
+    return [
+      { id: "PO-2025-037", label: "Calcium Carbonate 300 Mesh (20 MT)", machine: "Ball Mill #1" },
+      { id: "PO-2025-036", label: "Kaolin Clay 200 Mesh (12 MT)", machine: "Raymond #2" },
+      { id: "PO-2025-038", label: "Talc 400 Mesh (15 MT)", machine: "Raymond #1" },
+      { id: "PO-2025-039", label: "Barytes 200 Mesh (25 MT)", machine: "Ball Mill #2" },
+    ];
+  }, [DATA.ORDERS]);
+
+  const rawAvailability = useMemo(
+    () => DATA.RAW_MATERIALS.slice(0, 7),
+    [DATA.RAW_MATERIALS]
   );
-  const activeProductionColumns = useMemo(
-    () => [
-      {
-        title: "Order",
-        dataIndex: "id",
-        key: "id",
-        render: (id) => <span className="mono strong">{id}</span>,
-      },
-      {
-        title: "Customer",
-        dataIndex: "customer",
-        key: "customer",
-      },
-      {
-        title: "Product",
-        dataIndex: "product",
-        key: "product",
-        render: (product) => <span className="muted">{product}</span>,
-      },
-      {
-        title: "Qty",
-        dataIndex: "qty",
-        key: "qty",
-        align: "right",
-        render: (qty) => <span className="num">{qty}</span>,
-      },
-      {
-        title: "Due",
-        dataIndex: "due",
-        key: "due",
-        align: "right",
-        render: (due) => <span className="num">{due}</span>,
-      },
-      {
-        title: "Progress",
-        dataIndex: "progress",
-        key: "progress",
-        width: 160,
-        render: (progress) => (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Bar value={progress} />
-            <span className="mono" style={{ fontSize: 11, width: 32, textAlign: "right" }}>{progress}%</span>
-          </div>
-        ),
-      },
-      {
-        title: "Status",
-        dataIndex: "status",
-        key: "status",
-        render: (status) => erpStatusBadge(status),
-      },
-    ],
-    []
-  );
+
+  const sparesRisk = useMemo(() => {
+    const fromData = DATA.SPARE_PARTS.filter(
+      (p) => p.critical && (p.status === "low" || p.status === "critical")
+    )
+      .slice(0, 3)
+      .map((p) => ({
+        machine: p.location.split("·")[0]?.trim() || "Plant",
+        text: `${p.name} (${p.code}) — ${p.status === "critical" ? "critical" : "low"} stock.`,
+      }));
+    return fromData.length ? fromData : SPARES_RISK_STATIC;
+  }, [DATA.SPARE_PARTS]);
+
   return (
-  <>
-    <DashHead title="Production Dashboard" sub="Live plant operations · batches, throughput, line status">
-      <Btn icon="refresh" size="sm">Refresh</Btn>
-      <Btn variant="primary" size="sm" icon="plus" onClick={() => navigate && navigate("/orders")}>Plan batch</Btn>
-    </DashHead>
+    <div className="prod-dash">
+      <DashHead
+        title="Production Dashboard"
+        sub="Targets, active jobs, consumption, packaging & machines"
+      >
+        <Btn icon="refresh" size="sm">
+          Refresh
+        </Btn>
+        <Btn
+          variant="primary"
+          size="sm"
+          icon="plus"
+          onClick={() => navigate && navigate("/orders/add")}
+        >
+          Plan batch
+        </Btn>
+      </DashHead>
 
-    <div className="grid grid-4" style={{ marginBottom: 20 }}>
-      <Kpi icon="factory" label="Throughput today"   value="84.5" unit="MT" delta={6.4} spark={[68,72,76,80,82,83,84]} sparkColor="var(--success)" />
-      <Kpi icon="bolt"    label="Plan adherence"     value="92" unit="%"   delta={2.1} spark={[88,89,90,90,91,91,92]} />
-      <Kpi icon="loader"  label="Lines running"      value="6 / 8" delta={0} deltaLabel="2 in changeover" spark={[6,6,7,7,6,6,6]} sparkColor="var(--primary)" />
-      <Kpi icon="alert"   label="Defects · 1000"     value="3.8" unit="ppm" delta={-12} spark={[5,5,4,4,4,4,3]} sparkColor="var(--success)" />
-    </div>
-
-    <div className="grid" style={{ gridTemplateColumns: "1.6fr 1fr", marginBottom: 20 }}>
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title"><Icon name="chart" size={14} /> Planned vs actual (MT · this week)</div>
-          <div className="chart-legend">
-            <span className="chart-legend-item"><span className="chart-legend-swatch" style={{ background: "var(--border-strong)" }}></span> Planned</span>
-            <span className="chart-legend-item"><span className="chart-legend-swatch" style={{ background: "var(--primary)" }}></span> Actual</span>
-          </div>
-        </div>
-        <div className="card-body">
-          <BarChart
-            data={DATA.PRODUCTION_DATA}
-            keys={["planned", "actual"]}
-            colors={["var(--border-strong)", "var(--primary)"]}
-            h={220}
-          />
-        </div>
+      <div className="prod-dash-stats">
+        <ProdStatCard label="Today’s target (MT)" value={String(todayTarget)} />
+        <ProdStatCard label="Achieved so far (MT)" value={String(todayActual)} tone="accent" />
+        <ProdStatCard label="Target achieved" value={`${targetPct}%`} tone="success" />
+        <ProdStatCard label="Week target (MT)" value={String(week.planned)} />
+        <ProdStatCard label="Week achieved" value={String(week.actual)} />
+        <ProdStatCard label="Active jobs now" value={String(activeJobs || activeJobRows.length)} />
       </div>
 
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title"><Icon name="factory" size={14} /> Line status</div>
-        </div>
-        <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {[
-            { line: "L1 · Talc Mill A",         status: "running",   batch: "B-4471",  pct: 65 },
-            { line: "L2 · CaCO₃ Coater",        status: "running",   batch: "B-4472",  pct: 84 },
-            { line: "L3 · Dolomite Pulverizer", status: "running",   batch: "B-4473",  pct: 41 },
-            { line: "L4 · PCC Reactor",         status: "changeover",batch: "—",       pct: 0 },
-            { line: "L5 · Quartz Sizing",       status: "running",   batch: "B-4474",  pct: 92 },
-            { line: "L6 · Soda Ash Pack",       status: "running",   batch: "B-4475",  pct: 28 },
-            { line: "L7 · STPP Granulator",     status: "running",   batch: "B-4476",  pct: 55 },
-            { line: "L8 · Zeolite Dryer",       status: "down",      batch: "—",       pct: 0 },
-          ].map((l) => (
-            <div key={l.line}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 500 }}>
-                  <span className={`dot ${l.status === "running" ? "success pulse" : l.status === "changeover" ? "warning" : "danger"}`}></span>
-                  {l.line}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {l.batch !== "—" && <span className="mono subtle" style={{ fontSize: 11 }}>{l.batch}</span>}
-                  <Badge tone={l.status === "running" ? "success" : l.status === "changeover" ? "warning" : "danger"}>
-                    {l.status === "running" ? `${l.pct}%` : l.status === "changeover" ? "Changeover" : "Down"}
-                  </Badge>
-                </div>
-              </div>
-              {l.status === "running" && <Bar value={l.pct} />}
+      <div className="prod-dash-grid prod-dash-grid--3">
+        <ProdWidget
+          title="Actual consumption pending entry"
+          badge={<Badge tone="warning">3</Badge>}
+          footnote="Batches completed today; RM consumption not yet recorded."
+        >
+          <ul className="prod-dash-pending">
+            {PENDING_CONSUMPTION.map((item) => (
+              <li key={item.id}>
+                <span>
+                  {item.id} — {item.product}
+                </span>
+                <button
+                  type="button"
+                  className="prod-dash-link"
+                  onClick={() => navigate && navigate("/production")}
+                >
+                  Enter
+                </button>
+              </li>
+            ))}
+          </ul>
+        </ProdWidget>
+
+        <ProdWidget title="Bag stock auto-impact summary">
+          {BAG_IMPACT.map((row) => (
+            <div key={row.label} className="prod-dash-bag-row">
+              <span>{row.label}</span>
+              <span className={row.warn ? "warn" : ""}>{row.value}</span>
             </div>
           ))}
-        </div>
-      </div>
-    </div>
+          <p className="prod-dash-widget__footnote">
+            Stock is auto-reserved against current jobs. Updates on consumption entry.
+          </p>
+        </ProdWidget>
 
-    <div className="card">
-      <div className="card-head">
-        <div className="card-title"><Icon name="ticket" size={14} /> Active production orders</div>
-        <Btn variant="ghost" size="sm">All orders <Icon name="chevRight" size={12} /></Btn>
+        <ProdWidget title="Production summary">
+          <div className="prod-dash-co-box">
+            <div className="prod-dash-co-box__v">{todayActual} MT</div>
+            <div className="prod-dash-co-box__l">Today’s production</div>
+            <p className="prod-dash-co-box__sub">
+              12 batches · {activeJobs || activeJobRows.length} jobs running
+            </p>
+          </div>
+        </ProdWidget>
       </div>
-      <div className="card-body flush">
-        <div style={{ padding: 16 }}>
-          <CommonTable
-            {...ERP_TABLE_PROPS}
-            columns={activeProductionColumns}
-            dataSource={activeProductionOrders}
-            rowKey="id"
-          />
+
+      <div className="prod-dash-grid prod-dash-grid--2">
+        <ProdWidget
+          title="Today’s active production jobs"
+          badge={<Badge tone="success">{activeJobRows.length} running</Badge>}
+        >
+          <ul className="prod-dash-jobs">
+            {activeJobRows.map((job) => (
+              <li key={job.id}>
+                <span>
+                  <strong>{job.id}</strong> — {job.label}
+                </span>
+                <span className="prod-dash-job-badge">{job.machine}</span>
+              </li>
+            ))}
+          </ul>
+        </ProdWidget>
+
+        <ProdWidget
+          title="Machine utilization"
+          meta={
+            <span className="prod-dash-widget__meta">Current shift</span>
+          }
+        >
+          {MACHINE_UTIL.map((m) => (
+            <div key={m.name} className="prod-dash-machine">
+              <div className="prod-dash-machine__name">{m.name}</div>
+              <div className="prod-dash-machine__meta">{m.meta}</div>
+              <div className="prod-dash-machine__bar">
+                <div
+                  className={`prod-dash-machine__fill ${m.tone === "warning" ? "warning" : m.tone === "danger" ? "danger" : ""}`}
+                  style={{ width: `${m.pct}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </ProdWidget>
+      </div>
+
+      <div className="prod-dash-grid prod-dash-grid--2">
+        <ProdWidget title="Raw material availability summary">
+          <ul className="prod-dash-rm-list">
+            {rawAvailability.map((rm) => (
+              <li key={rm.code}>
+                <span>
+                  {rm.name} ({rm.code})
+                </span>
+                <span className={rmAvailClass(rm.status)}>
+                  {rmAvailLabel(rm.stock, rm.unit, rm.status)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </ProdWidget>
+
+        <ProdWidget title="Packaging required for current production">
+          <div className="prod-dash-table-wrap">
+            <table className="prod-dash-table">
+              <thead>
+                <tr>
+                  <th>Packaging type</th>
+                  <th>Required</th>
+                  <th>Available</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PACK_REQUIRED.map((row) => (
+                  <tr key={row.type}>
+                    <td>{row.type}</td>
+                    <td>{fmtNum(row.required)}</td>
+                    <td>{fmtNum(row.available)}</td>
+                    <td>
+                      <Badge tone={row.tone}>{row.status}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ProdWidget>
+      </div>
+
+      <div className="prod-dash-grid prod-dash-grid--2">
+        <ProdWidget
+          title="Machine spare parts at risk"
+          badge={<Badge tone="warning">{sparesRisk.length}</Badge>}
+        >
+          <ul className="prod-dash-spares">
+            {sparesRisk.map((item, i) => (
+              <li key={i}>
+                <span className="prod-dash-spares__icon">
+                  <Icon name="wrench" size={13} />
+                </span>
+                <span>
+                  <strong>{item.machine}</strong> — {item.text}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </ProdWidget>
+
+        <ProdWidget title="Dynamic production mix note">
+          <div className="prod-dash-mix-note">
+            <strong>Mix is demand-driven.</strong> Current plan is based on today’s queue
+            and orders. New orders or priority changes can shift the mix; consumption
+            entry and bag reservation update accordingly. Review queue and RM availability
+            before committing to new dates.
+          </div>
+        </ProdWidget>
+      </div>
+
+      <div className="prod-dash-grid prod-dash-grid--2">
+        <ProdWidget
+          title="Completed batches today"
+          meta={<span className="prod-dash-widget__meta">12 batches</span>}
+        >
+          <div className="prod-dash-table-wrap">
+            <table className="prod-dash-table">
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>Product</th>
+                  <th>Qty (MT)</th>
+                  <th>Machine</th>
+                  <th>Completed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {COMPLETED_BATCHES.map((row) => (
+                  <tr key={row.order}>
+                    <td>{row.order}</td>
+                    <td>{row.product}</td>
+                    <td>{row.qty}</td>
+                    <td>{row.machine}</td>
+                    <td>{row.time}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ProdWidget>
+
+        <ProdWidget
+          title="Delayed production tasks"
+          badge={<Badge tone="danger">2</Badge>}
+        >
+          <ul className="prod-dash-delayed">
+            {DELAYED_TASKS.map((item) => (
+              <li key={item.id}>
+                <span className="prod-dash-delayed__icon">
+                  <Icon name="clock" size={14} />
+                </span>
+                <div>
+                  <strong>{item.id}</strong> — {item.text}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </ProdWidget>
+      </div>
+
+      <div className="prod-dash-eod">
+        <div className="prod-dash-eod__title">
+          <Icon name="invoice" size={16} /> End-of-day consumption entry
         </div>
+        <div className="prod-dash-eod__desc">
+          Enter actual RM and packaging consumption for completed batches before shift
+          close. Keeps stock and costs accurate.
+        </div>
+        <Btn
+          variant="primary"
+          size="sm"
+          icon="check"
+          onClick={() => navigate && navigate("/production")}
+        >
+          Open consumption entry
+        </Btn>
       </div>
+
+      <ProdWidget
+        title="Production queue"
+        badge={
+          <Btn variant="secondary" size="sm" onClick={() => navigate && navigate("/orders")}>
+            View full queue
+          </Btn>
+        }
+      >
+        <div className="prod-dash-table-wrap">
+          <table className="prod-dash-table prod-dash-table--queue">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Product</th>
+                <th>Spec / Mesh</th>
+                <th>Qty (MT)</th>
+                <th>Planned date</th>
+                <th>Machine</th>
+                <th>Status</th>
+                <th>Priority</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PRODUCTION_QUEUE.map((row) => (
+                <tr key={row.order}>
+                  <td>{row.order}</td>
+                  <td>{row.product}</td>
+                  <td>{row.spec}</td>
+                  <td>{row.qty}</td>
+                  <td>{row.date}</td>
+                  <td>{row.machine}</td>
+                  <td>
+                    <Badge tone={row.hold ? "danger" : "default"}>{row.status}</Badge>
+                  </td>
+                  <td>{row.priority}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </ProdWidget>
     </div>
-  </>
   );
 };
 
 /* ============================================================
    DISPATCH DASHBOARD
    ============================================================ */
+const DispStatCard = ({ label, value, tone = "default" }) => (
+  <div className="disp-dash-stat">
+    <div className="disp-dash-stat__label">{label}</div>
+    <div className={`disp-dash-stat__value ${tone !== "default" ? tone : ""}`}>{value}</div>
+  </div>
+);
+
+const DispWidget = ({ title, icon, badge, meta, children, footnote }) => (
+  <div className="disp-dash-widget">
+    <div className="disp-dash-widget__head">
+      <span className="disp-dash-widget__title">
+        {icon ? <Icon name={icon} size={14} /> : null} {title}
+      </span>
+      {badge}
+      {meta}
+    </div>
+    <div className="disp-dash-widget__body">
+      {children}
+      {footnote ? <p className="disp-dash-widget__footnote">{footnote}</p> : null}
+    </div>
+  </div>
+);
+
+const DISPATCH_DUE_TODAY = [
+  { label: "Asian Paints — 12 MT Talc", co: "minerals" },
+  { label: "ITC Paperboards — 15 MT Kaolin", co: "minerals" },
+  { label: "Berger Paints — 8 MT CaCO₃", co: "minerals" },
+  { label: "HUL — 20 MT Detergent base", co: "minerals" },
+  { label: "Nirma — 20 MT Detergent", co: "minerals" },
+  { label: "Lotus Herbals — 3 MT Cosmetic", co: "minerals" },
+  { label: "Cosmic Minerals — 6 MT Barytes", co: "microns" },
+  { label: "Prime Fillers — 4 MT Dolomite", co: "microns" },
+  { label: "Jaipur Paints — 5 MT Talc", co: "minerals" },
+];
+
+const OVERDUE_DISPATCHES = [
+  {
+    text: "HUL — 20 MT Due 8 Mar. Vehicle assigned 14:00 slot.",
+    co: "minerals",
+  },
+  {
+    text: "Lotus Herbals — 3 MT Due 7 Mar. Pending packaging.",
+    co: "minerals",
+  },
+];
+
+const PACK_PENDING = [
+  {
+    id: "DP-2025-097",
+    text: "Lotus Herbals — 3 MT Cosmetic. Laminated pouches 1 kg short. ETA 10 Mar.",
+  },
+  {
+    id: "DP-2025-098",
+    text: "Nirma — 20 MT. HDPE 50 kg bags delayed from vendor. Expected tomorrow.",
+  },
+];
+
+const DELAY_REASONS = [
+  { n: 1, l: "Vehicle / en-route delay" },
+  { n: 2, l: "Packaging shortage" },
+  { n: 0, l: "Loading delay" },
+  { n: 0, l: "Customer reschedule" },
+];
+
+const TRACKING_ROWS = [
+  { reg: "GJ-01-AB-1234", status: "Loading — Asian Paints" },
+  { reg: "GJ-02-CD-5678", status: "In transit — ITC (ETA 14:30)" },
+  { reg: "GJ-07-EF-9012", status: "In transit — Berger" },
+  { reg: "MH-12-GH-3456", status: "Ready — HUL 14:00" },
+  { reg: "RJ-14-JK-7890", status: "Ready — Cosmic (Microns)" },
+];
+
+const DRIVER_TRACKING = [
+  {
+    reg: "GJ-02-CD-5678",
+    tone: "transit",
+    title: "Kiran S. · ITC — 15 MT Kaolin",
+    meta: "Last update: 10:42 · NH-48, ~45 km from plant. ETA 14:30",
+  },
+  {
+    reg: "GJ-07-EF-9012",
+    tone: "transit",
+    title: "Vijay M. · Berger — 8 MT CaCO₃",
+    meta: "Last update: 09:15 · At customer gate. Awaiting unload",
+  },
+  {
+    reg: "GJ-01-AB-1234",
+    tone: "loading",
+    title: "Ramesh P. · Asian Paints — 12 MT Talc",
+    meta: "Last update: 09:00 · Loading bay #2. Est. departure 09:45",
+  },
+];
+
+const DUE_ORDERS_TODAY = [
+  { id: "DP-2025-095", customer: "Asian Paints Ltd", product: "Talc 400M", qty: "12 MT", vehicle: "GJ-01-AB-1234", slot: "09:00", status: "Loading", tone: "warning" },
+  { id: "DP-2025-094", customer: "ITC Paperboards", product: "Kaolin 200M", qty: "15 MT", vehicle: "GJ-02-CD-5678", slot: "10:30", status: "Delayed", tone: "warning" },
+  { id: "DP-2025-093", customer: "Berger Paints", product: "CaCO₃ 300M", qty: "8 MT", vehicle: "GJ-07-EF-9012", slot: "12:00", status: "In transit", tone: "info" },
+  { id: "DP-2025-096", customer: "Hindustan Unilever", product: "Detergent base", qty: "20 MT", vehicle: "MH-12-GH-3456", slot: "14:00", status: "Ready", tone: "success" },
+  { id: "DP-2025-097", customer: "Lotus Herbals", product: "Talc Cosmetic", qty: "3 MT", vehicle: "—", slot: "—", status: "Packaging", tone: "warning" },
+  { id: "DP-2025-099", customer: "Cosmic Minerals", product: "Barytes 200M", qty: "6 MT", vehicle: "RJ-14-JK-7890", slot: "11:00", status: "Ready", tone: "success" },
+];
+
+const VEHICLE_ASSIGNMENTS = [
+  { reg: "GJ-01-AB-1234", driver: "Ramesh P. · Asian Paints — 12 MT Talc", status: "Loading", tone: "loading" },
+  { reg: "GJ-02-CD-5678", driver: "Kiran S. · ITC — 15 MT Kaolin", status: "In transit", tone: "transit" },
+  { reg: "GJ-07-EF-9012", driver: "Vijay M. · Berger — 8 MT CaCO₃", status: "In transit", tone: "transit" },
+  { reg: "MH-12-GH-3456", driver: "Anil K. · HUL — 20 MT (slot 14:00)", status: "Ready", tone: "ready" },
+  { reg: "RJ-14-JK-7890", driver: "Suresh R. · Cosmic — 6 MT Barytes (Microns)", status: "Ready", tone: "ready" },
+];
+
+const CUST_DISPATCH_SUMMARY = [
+  { customer: "Asian Paints Ltd", due: 1, mt: 12, dispatched: 0, pending: 1, status: "Loading", tone: "warning" },
+  { customer: "ITC Paperboards", due: 1, mt: 15, dispatched: 0, pending: 1, status: "Delayed", tone: "warning" },
+  { customer: "Berger Paints India", due: 1, mt: 8, dispatched: 0, pending: 1, status: "In transit", tone: "info" },
+  { customer: "Hindustan Unilever Ltd", due: 1, mt: 20, dispatched: 0, pending: 1, status: "Ready", tone: "success" },
+  { customer: "Lotus Herbals Pvt Ltd", due: 1, mt: 3, dispatched: 0, pending: 1, status: "Packaging", tone: "warning" },
+  { customer: "Cosmic Minerals", due: 1, mt: 6, dispatched: 0, pending: 1, status: "Ready", tone: "success" },
+  { customer: "Nirma Ltd", due: 0, mt: 0, dispatched: 1, pending: 0, status: "Delivered", tone: "success" },
+];
+
+const CALENDAR_DAYS = [
+  1, 2, 3, 4, 5, 6, 7, 8,
+  { day: 9, today: true, count: "9 due" },
+  { day: 10, dispatch: true, count: "6" },
+  { day: 11, dispatch: true, count: "5" },
+  12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+];
+
+function CoTag({ co }) {
+  return (
+    <span className={`disp-dash-tag ${co === "microns" ? "microns" : ""}`}>
+      {co === "microns" ? "Microns" : "Minerals"}
+    </span>
+  );
+}
+
 const DispatchDashboard = ({ navigate }) => {
   const DATA = useDATA();
-  const dispatchScheduleColumns = useMemo(
-    () => [
-      {
-        title: "Dispatch",
-        dataIndex: "id",
-        key: "id",
-        render: (id) => <span className="mono strong">{id}</span>,
-      },
-      {
-        title: "Vehicle",
-        dataIndex: "vehicle",
-        key: "vehicle",
-        render: (vehicle) => <span className="mono">{vehicle}</span>,
-      },
-      {
-        title: "Driver",
-        dataIndex: "driver",
-        key: "driver",
-        render: (driver, d) => (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Avatar name={driver} color={(d.id.charCodeAt(d.id.length - 1) % 5) + 1} />
-            {driver}
-          </div>
-        ),
-      },
-      {
-        title: "Customer",
-        dataIndex: "customer",
-        key: "customer",
-        render: (customer) => <span className="muted">{customer}</span>,
-      },
-      {
-        title: "Route",
-        dataIndex: "route",
-        key: "route",
-        render: (route) => <span className="muted" style={{ fontSize: 12 }}>{route}</span>,
-      },
-      {
-        title: "Load",
-        dataIndex: "loaded",
-        key: "loaded",
-        align: "right",
-        render: (loaded) => <span className="num">{loaded}</span>,
-      },
-      {
-        title: "ETA",
-        dataIndex: "eta",
-        key: "eta",
-        render: (eta) => <span className="mono" style={{ fontSize: 12 }}>{eta}</span>,
-      },
-      {
-        title: "Status",
-        dataIndex: "status",
-        key: "status",
-        render: (status) => erpStatusBadge(status),
-      },
-    ],
-    []
-  );
+  const dispatchCounts = dispatchStatusCounts(DATA.DISPATCHES);
+  const mineralsPlant = dispatchesForPlant(DATA.DISPATCHES, "udaipur");
+  const micronsPlant = dispatchesForPlant(DATA.DISPATCHES, "ahmedabad");
+  const packBlock = lowStockCount(DATA.PACKAGING);
+
+  const dueToday = DISPATCH_DUE_TODAY.length;
+  const overdue = OVERDUE_DISPATCHES.length;
+  const vehiclesAssigned = VEHICLE_ASSIGNMENTS.length;
+  const inTransit = dispatchCounts.inTransit || 2;
+  const completedToday = DATA.DISPATCHES.filter((d) => d.status === "delivered").length || 3;
+
   return (
-  <>
-    <DashHead title="Dispatch Dashboard" sub="Live vehicles, deliveries & loadout planning">
-      <Btn icon="map" size="sm">Map view</Btn>
-      <Btn variant="primary" size="sm" icon="plus" onClick={() => navigate("/dispatch")}>New dispatch</Btn>
-    </DashHead>
+    <div className="disp-dash">
+      <DashHead
+        title="Dispatch Dashboard"
+        sub="Due today, overdue, vehicles, packaging blocks & company overview"
+      >
+        <Btn icon="map" size="sm" onClick={() => navigate && navigate("/dispatch")}>
+          Map view
+        </Btn>
+        <Btn
+          variant="primary"
+          size="sm"
+          icon="plus"
+          onClick={() => navigate && navigate("/dispatch")}
+        >
+          New dispatch
+        </Btn>
+      </DashHead>
 
-    <div className="grid grid-4" style={{ marginBottom: 20 }}>
-      <Kpi icon="truck"  label="Vehicles dispatched today" value="14" delta={16} spark={[10,11,12,12,13,13,14]} sparkColor="var(--primary)" />
-      <Kpi icon="bolt"   label="On-time delivery"          value="94.2" unit="%" delta={1.2} spark={[91,92,93,93,93,94,94]} sparkColor="var(--success)" />
-      <Kpi icon="alert"  label="Delayed shipments"         value="2" delta={-33} spark={[3,3,2,3,2,2,2]} sparkColor="var(--success)" />
-      <Kpi icon="clock"  label="Avg transit time"          value="11.4" unit="hrs" delta={-4} spark={[12,12,11.8,11.6,11.5,11.4,11.4]} sparkColor="var(--success)" />
-    </div>
-
-    <div className="dispatch-fleet-row">
-      <div className="dispatch-fleet-map card">
-        <div className="card-head">
-          <div className="card-title"><Icon name="map" size={14} /> Live fleet · West & Central India</div>
-          <div className="dispatch-fleet-badges">
-            <Badge tone="info" dot>4 in-transit</Badge>
-            <Badge tone="gold" dot>1 near</Badge>
-          </div>
-        </div>
-        <div className="card-body dispatch-fleet-map__body">
-          <FleetMap />
-        </div>
+      <div className="disp-dash-stats">
+        <DispStatCard label="Dispatch due today" value={String(dueToday)} tone="accent" />
+        <DispStatCard label="Overdue" value={String(overdue)} tone="danger" />
+        <DispStatCard label="Vehicles assigned" value={String(vehiclesAssigned)} />
+        <DispStatCard label="In transit" value={String(inTransit)} tone="success" />
+        <DispStatCard
+          label="Packaging block"
+          value={String(packBlock || 2)}
+          tone="warning"
+        />
+        <DispStatCard label="Completed today" value={String(completedToday)} />
       </div>
 
-      <div className="dispatch-fleet-side card">
-        <div className="card-head">
-          <div className="card-title"><Icon name="truck" size={14} /> Active vehicles</div>
+      <div className="disp-dash-grid disp-dash-grid--3">
+        <DispWidget
+          title="Dispatch due today"
+          icon="calendar"
+          badge={<Badge tone="default">{dueToday}</Badge>}
+        >
+          <ul className="disp-dash-list">
+            {DISPATCH_DUE_TODAY.map((item) => (
+              <li key={item.label}>
+                <span>{item.label}</span>
+                <CoTag co={item.co} />
+              </li>
+            ))}
+          </ul>
+        </DispWidget>
+
+        <DispWidget
+          title="Overdue dispatches"
+          icon="alert"
+          badge={<Badge tone="danger">{overdue}</Badge>}
+          footnote="Customers notified. Escalate if not out today."
+        >
+          <ul className="disp-dash-list">
+            {OVERDUE_DISPATCHES.map((item) => (
+              <li key={item.text}>
+                <span>{item.text}</span>
+                <CoTag co={item.co} />
+              </li>
+            ))}
+          </ul>
+        </DispWidget>
+
+        <DispWidget title="Company-wise dispatch overview" icon="factory">
+          <div className="disp-dash-co-overview">
+            <div className="disp-dash-co-box">
+              <div className="disp-dash-co-box__v">{mineralsPlant.due || 7} due</div>
+              <div className="disp-dash-co-box__l">Minerals (Udaipur) today</div>
+              <p className="disp-dash-co-box__sub">
+                {mineralsPlant.overdue || 2} overdue · {mineralsPlant.completed || 3} completed ·{" "}
+                {packBlock || 2} packaging block
+              </p>
+            </div>
+            <div className="disp-dash-co-box microns">
+              <div className="disp-dash-co-box__v">{micronsPlant.due || 2} due</div>
+              <div className="disp-dash-co-box__l">Microns (Makrana) today</div>
+              <p className="disp-dash-co-box__sub">
+                Cosmic 6 MT, Prime 4 MT. Both ready.
+              </p>
+            </div>
+          </div>
+        </DispWidget>
+      </div>
+
+      <div className="disp-dash-grid disp-dash-grid--2">
+        <DispWidget
+          title="Dispatches pending — packaging shortage"
+          icon="package"
+          badge={<Badge tone="warning">2</Badge>}
+          footnote="Stores/Procurement to confirm. Reschedule slot after material receipt."
+        >
+          <ul className="disp-dash-list disp-dash-list--stack">
+            {PACK_PENDING.map((item) => (
+              <li key={item.id}>
+                <span>
+                  <strong>{item.id}</strong> {item.text}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </DispWidget>
+
+        <DispWidget title="Delayed dispatch reasons summary" icon="pieChart">
+          <div className="disp-dash-delay-reasons">
+            {DELAY_REASONS.map((r) => (
+              <div key={r.l} className="disp-dash-reason-box">
+                <div className="disp-dash-reason-box__n">{r.n}</div>
+                <div className="disp-dash-reason-box__l">{r.l}</div>
+              </div>
+            ))}
+          </div>
+          <p className="disp-dash-widget__footnote disp-dash-widget__footnote--inline">
+            DP-094 (ITC): vehicle delay. DP-097, 098: packaging.
+          </p>
+        </DispWidget>
+      </div>
+
+      <div className="disp-dash-grid disp-dash-grid--main">
+        <div className="disp-dash-main-left">
+          <DispWidget title="Simple vehicle tracking status" icon="truck">
+            <div className="disp-dash-pill-strip">
+              <span className="disp-dash-pill loading">Loading · 1</span>
+              <span className="disp-dash-pill transit">In transit · 2</span>
+              <span className="disp-dash-pill ready">Ready at gate · 2</span>
+            </div>
+            <ul className="disp-dash-list">
+              {TRACKING_ROWS.map((row) => (
+                <li key={row.reg}>
+                  <span className="mono">{row.reg}</span>
+                  <span>{row.status}</span>
+                </li>
+              ))}
+            </ul>
+          </DispWidget>
+
+          <DispWidget title="Driver / vehicle tracking (concept)" icon="pin">
+            {DRIVER_TRACKING.map((row) => (
+              <div key={row.reg} className="disp-dash-track-row">
+                <span className={`disp-dash-track-dot ${row.tone}`} />
+                <span className="disp-dash-track-reg">{row.reg}</span>
+                <div>
+                  <div>{row.title}</div>
+                  <div className="disp-dash-track-meta">{row.meta}</div>
+                </div>
+              </div>
+            ))}
+            <p className="disp-dash-widget__footnote disp-dash-widget__footnote--inline">
+              Concept: driver check-in / GPS ping updates ETA. Full tracking in logistics module.
+            </p>
+          </DispWidget>
         </div>
-        <div className="card-body dispatch-fleet-vehicles">
-          {DATA.DISPATCHES.slice(0, 4).map((d) => (
-            <div key={d.id} className="dispatch-fleet-vehicle" onClick={() => navigate("/dispatch")}>
-              <div className="dispatch-fleet-vehicle__head">
-                <div className="mono nowrap" style={{ fontSize: 12, fontWeight: 600 }}>{d.vehicle}</div>
-                <StatusBadge status={d.status} />
-              </div>
-              <div className="dispatch-fleet-vehicle__meta">
-                <Icon name="user" size={11} />
-                <span className="nowrap">{d.driver}</span>
-                <span style={{ opacity: 0.5 }}>·</span>
-                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.customer}</span>
-              </div>
-              <Bar value={d.progress} tone={d.status === "near-delivery" ? "gold" : d.status === "delivered" ? "success" : "primary"} />
-              <div className="dispatch-fleet-vehicle__footer">
-                <span className="nowrap" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{d.route}</span>
-                <span className="mono nowrap">ETA {d.eta.split(",")[1]}</span>
+
+        <div className="disp-dash-main-right">
+          <div className="disp-dash-cal">
+            <h3>
+              <Icon name="calendar" size={14} /> Dispatch calendar
+            </h3>
+            <div className="disp-dash-cal__month">March 2025</div>
+            <div className="disp-dash-cal__grid">
+              {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+                <span key={`h-${i}`} className="disp-dash-cal__day head">
+                  {d}
+                </span>
+              ))}
+              {CALENDAR_DAYS.map((cell, i) => {
+                if (typeof cell === "number") {
+                  return (
+                    <span key={`d-${i}`} className="disp-dash-cal__day">
+                      {cell}
+                    </span>
+                  );
+                }
+                const classes = [
+                  "disp-dash-cal__day",
+                  cell.today ? "today" : "",
+                  cell.dispatch ? "dispatch" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ");
+                return (
+                  <span key={`d-${i}`} className={classes}>
+                    {cell.day}
+                    {cell.count ? <span className="count">{cell.count}</span> : null}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="disp-dash-delayed-panel">
+            <h4>
+              <Icon name="alert" size={13} /> Delayed dispatch alert
+            </h4>
+            <ul>
+              <li>
+                <strong>DP-2025-094</strong> — ITC Paperboards (15 MT Kaolin). Vehicle delayed
+                ~2 hrs. New ETA 14:30. Customer notified via WA.
+              </li>
+            </ul>
+          </div>
+
+          <div className="card">
+            <div className="card-head">
+              <div className="card-title">Due orders today</div>
+              <Btn variant="primary" size="sm" disabled>
+                Schedule all
+              </Btn>
+            </div>
+            <div className="card-body">
+              <div className="disp-dash-table-wrap">
+                <table className="disp-dash-table">
+                  <thead>
+                    <tr>
+                      <th>Dispatch No</th>
+                      <th>Customer</th>
+                      <th>Product</th>
+                      <th>Qty</th>
+                      <th>Vehicle</th>
+                      <th>Slot</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DUE_ORDERS_TODAY.map((row) => (
+                      <tr key={row.id}>
+                        <td>{row.id}</td>
+                        <td>{row.customer}</td>
+                        <td>{row.product}</td>
+                        <td>{row.qty}</td>
+                        <td className="mono">{row.vehicle}</td>
+                        <td>{row.slot}</td>
+                        <td>
+                          <Badge tone={row.tone}>{row.status}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-          ))}
+          </div>
+
+          <div className="card">
+            <div className="card-head">
+              <div className="card-title">Vehicle assignment</div>
+              <Btn variant="secondary" size="sm" onClick={() => navigate && navigate("/dispatch")}>
+                Manage
+              </Btn>
+            </div>
+            <div className="card-body">
+              <ul className="disp-dash-vehicles">
+                {VEHICLE_ASSIGNMENTS.map((v) => (
+                  <li key={v.reg}>
+                    <div>
+                      <span className="disp-dash-vehicles__reg">{v.reg}</span>
+                      <div className="disp-dash-vehicles__driver">{v.driver}</div>
+                    </div>
+                    <span className={`disp-dash-vehicles__badge ${v.tone}`}>{v.status}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div className="card">
-      <div className="card-head">
-        <div className="card-title"><Icon name="calendar" size={14} /> Dispatch schedule · next 48 hours</div>
-        <Btn variant="ghost" size="sm">View all <Icon name="chevRight" size={12} /></Btn>
-      </div>
-      <div className="card-body flush">
-        <div style={{ padding: 16 }}>
-          <CommonTable
-            {...ERP_TABLE_PROPS}
-            columns={dispatchScheduleColumns}
-            dataSource={DATA.DISPATCHES}
-            rowKey="id"
-          />
+      <div className="card">
+        <div className="card-head">
+          <div className="card-title">Customer-wise dispatch summary</div>
+          <Btn variant="secondary" size="sm">
+            Export
+          </Btn>
+        </div>
+        <div className="card-body">
+          <div className="disp-dash-table-wrap">
+            <table className="disp-dash-table disp-dash-table--summary">
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Due today</th>
+                  <th>Total MT</th>
+                  <th>Dispatched</th>
+                  <th>Pending</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {CUST_DISPATCH_SUMMARY.map((row) => (
+                  <tr key={row.customer}>
+                    <td>{row.customer}</td>
+                    <td>{row.due}</td>
+                    <td>{row.mt}</td>
+                    <td>{row.dispatched}</td>
+                    <td>{row.pending}</td>
+                    <td>
+                      <Badge tone={row.tone}>{row.status}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
-  </>
-  );
-};
-
-/* ---------- fleet map (svg) ---------- */
-const FleetMap = () => {
-  const cities = [
-    { x: 52, y: 38, n: "Udaipur", t: "Plant A" },
-    { x: 32, y: 56, n: "Ahmedabad", t: "Plant B" },
-    { x: 28, y: 78, n: "Mumbai" },
-    { x: 38, y: 90, n: "Pune" },
-    { x: 80, y: 78, n: "Kolkata" },
-    { x: 24, y: 64, n: "Bhavnagar" },
-    { x: 56, y: 36, n: "Gotan" },
-  ];
-  const routes = [
-    { from: [52, 38], to: [28, 78], color: "var(--primary)", progress: 0.68, label: "DSP-1042" },
-    { from: [32, 56], to: [28, 78], color: "var(--info)", progress: 0.42, label: "DSP-1041" },
-    { from: [52, 38], to: [80, 78], color: "var(--primary)", progress: 0.24, label: "DSP-1040" },
-    { from: [32, 56], to: [24, 64], color: "var(--secondary)", progress: 0.92, label: "DSP-1039" },
-    { from: [52, 38], to: [38, 90], color: "var(--success)", progress: 1.0, label: "DSP-1038" },
-  ];
-  return (
-    <div className="map-frame dispatch-fleet-map__canvas">
-      {/* Landmass + route lines via SVG (stretched is OK for stylized blob + lines) */}
-      <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 0 }}>
-        <path
-          d="M 20 20 Q 28 14 38 16 L 50 12 Q 62 10 72 18 L 84 22 Q 92 30 88 42 L 86 56 Q 82 72 70 82 L 56 92 Q 42 94 36 88 L 28 80 Q 20 70 18 56 L 18 38 Q 16 28 20 20 Z"
-          fill="rgba(55,77,149,0.04)"
-          stroke="rgba(55,77,149,0.15)"
-          strokeWidth="0.4"
-          strokeDasharray="0.6 0.6"
-        />
-        {routes.map((r, i) => (
-          <g key={i}>
-            <line x1={r.from[0]} y1={r.from[1]} x2={r.to[0]} y2={r.to[1]} stroke={r.color} strokeWidth="0.4" strokeDasharray="0.8 0.8" opacity="0.4" />
-            <line
-              x1={r.from[0]} y1={r.from[1]}
-              x2={r.from[0] + (r.to[0] - r.from[0]) * r.progress}
-              y2={r.from[1] + (r.to[1] - r.from[1]) * r.progress}
-              stroke={r.color} strokeWidth="0.6" strokeLinecap="round"
-            />
-          </g>
-        ))}
-      </svg>
-
-      {/* City dots — DOM-positioned so they stay circular */}
-      {cities.map((c, i) => (
-        <div key={`d-${i}`} style={{
-          position: "absolute",
-          left: `${c.x}%`, top: `${c.y}%`,
-          transform: "translate(-50%, -50%)",
-          width: c.t ? 10 : 6, height: c.t ? 10 : 6,
-          borderRadius: "50%",
-          background: c.t ? "var(--primary)" : "#5a5e66",
-          boxShadow: c.t ? "0 0 0 4px rgba(55,77,149,0.18)" : "0 0 0 3px rgba(90,94,102,0.18)",
-          pointerEvents: "none",
-        }}></div>
-      ))}
-
-      {/* Moving truck dots */}
-      {routes.filter(r => r.progress < 1).map((r, i) => (
-        <div key={`m-${i}`} style={{
-          position: "absolute",
-          left: `${r.from[0] + (r.to[0] - r.from[0]) * r.progress}%`,
-          top: `${r.from[1] + (r.to[1] - r.from[1]) * r.progress}%`,
-          transform: "translate(-50%, -50%)",
-          width: 12, height: 12, borderRadius: "50%",
-          background: r.color,
-          boxShadow: `0 0 0 5px ${r.color === "var(--secondary)" ? "rgba(232,169,1,0.22)" : "rgba(55,77,149,0.20)"}`,
-          animation: "pulse 1.6s ease-in-out infinite",
-          pointerEvents: "none",
-        }}></div>
-      ))}
-
-      {/* City labels */}
-      {cities.map((c, i) => (
-        <div
-          key={i}
-          style={{
-            position: "absolute",
-            left: `${c.x}%`,
-            top: `${c.y}%`,
-            transform: "translate(10px, -50%)",
-            fontSize: 11,
-            color: c.t ? "var(--primary)" : "var(--fg-muted)",
-            fontWeight: c.t ? 600 : 500,
-            whiteSpace: "nowrap",
-            pointerEvents: "none",
-          }}
-        >
-          {c.n}{c.t && <span style={{ marginLeft: 4, color: "var(--fg-subtle)", fontWeight: 400 }}>· {c.t}</span>}
-        </div>
-      ))}
-
-      {/* Floating route ETA labels */}
-      {routes.slice(0, 3).map((r, i) => (
-        <div
-          key={`l-${i}`}
-          style={{
-            position: "absolute",
-            left: `${r.from[0] + (r.to[0] - r.from[0]) * r.progress}%`,
-            top: `${r.from[1] + (r.to[1] - r.from[1]) * r.progress}%`,
-            transform: "translate(14px, -140%)",
-            background: "var(--bg-elev)",
-            border: "1px solid var(--border)",
-            padding: "2px 6px",
-            borderRadius: 4,
-            fontSize: 10,
-            fontFamily: "var(--font-mono)",
-            color: r.color,
-            fontWeight: 600,
-            boxShadow: "var(--shadow-sm)",
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {r.label}
-        </div>
-      ))}
     </div>
   );
 };
