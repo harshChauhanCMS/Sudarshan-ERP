@@ -16,6 +16,12 @@ export type Customer = {
   creditLimit?: number;
   assignedTo?: string;
   appliesTo?: string;
+  industryType?: string;
+  billingAddress?: string;
+  dispatchAddress?: string;
+  preferredGrades?: string;
+  paymentTerms?: string;
+  notes?: string;
 };
 
 export type Order = {
@@ -27,6 +33,21 @@ export type Order = {
   due: string;
   status: string;
   progress: number;
+  orderDate?: string;
+  materialCode?: string;
+  grade?: string;
+  quantity?: number;
+  unit?: string;
+  packaging?: string;
+  bagSize?: number;
+  bagsPerTon?: number;
+  bagsRequired?: number;
+  palletised?: boolean;
+  bagsPerPallet?: number;
+  dispatchDate?: string;
+  priority?: string;
+  assignedUnit?: string;
+  specialInstructions?: string;
 };
 
 export type Invoice = {
@@ -48,6 +69,15 @@ export type Vendor = {
   poCount: number;
   ytd: number;
   rating: number;
+  contactPerson?: string;
+  phone?: string;
+  email?: string;
+  gstin?: string;
+  address?: string;
+  materialsSupplied?: string;
+  paymentTerms?: string;
+  leadTime?: number;
+  status?: string;
 };
 
 export type PurchaseOrder = {
@@ -58,6 +88,16 @@ export type PurchaseOrder = {
   date: string;
   status: string;
   invoice: string;
+  materialCode?: string;
+  materialName?: string;
+  grade?: string;
+  quantity?: number;
+  unit?: string;
+  rate?: number;
+  expectedDelivery?: string;
+  deliveryLocation?: string;
+  notes?: string;
+  poDate?: string;
 };
 
 export type RawMaterial = {
@@ -71,6 +111,10 @@ export type RawMaterial = {
   location: string;
   status: string;
   trend: number;
+  category?: string;
+  minStock?: number;
+  preferredVendor?: string;
+  notes?: string;
 };
 
 export type Packaging = {
@@ -81,6 +125,12 @@ export type Packaging = {
   reorder: number;
   status: string;
   trend: number;
+  capacity?: number;
+  gradeCompatibility?: string;
+  supplier?: string;
+  materialType?: string;
+  minStock?: number;
+  notes?: string;
 };
 
 export type SparePart = {
@@ -97,6 +147,10 @@ export type SparePart = {
   trend: number;
   critical: boolean;
   lastIssued: string;
+  machineName?: string;
+  standardRate?: number;
+  criticality?: string;
+  notes?: string;
 };
 
 export type Dispatch = {

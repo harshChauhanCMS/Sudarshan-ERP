@@ -3,6 +3,7 @@
 
 
 import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button as AntButton } from "antd";
 import { MoreOutlined } from "@ant-design/icons";
 import CommonTable from "@/components/common/CommonTable";
@@ -12,7 +13,7 @@ import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
-import { nextSpareCode, formatDisplayDate } from "@/lib/id-generators";
+import { formatDisplayDate } from "@/lib/id-generators";
 import { DashHead, SectionH } from "./dashboards";
 
 /* ============================================================
@@ -24,48 +25,12 @@ import { DashHead, SectionH } from "./dashboards";
    SPARE PARTS INVENTORY
    ============================================================ */
 const SparePartsInventory = () => {
+  const router = useRouter();
   const DATA = useDATA();
-  const { append, update, saving, error, clearError } = useEntityMutation();
-  const [addOpen, setAddOpen] = useState(false);
+  const { update, saving, error, clearError } = useEntityMutation();
   const [issueOpen, setIssueOpen] = useState(null);
   const [issueQty, setIssueQty] = useState("1");
   const [tab, setTab] = useState("all");
-  const spareForm = useFormState({
-    name: "",
-    code: nextSpareCode(DATA.SPARE_PARTS),
-    category: DATA.SPARE_CATEGORIES[0] ?? "Bearing",
-    vendor: "SKF India",
-    unit: "pcs",
-    stock: "0",
-    reorder: "6",
-    rate: "7000",
-    location: "Plant A · Stores · Rack 1",
-    critical: false,
-  });
-
-  const saveSpare = async () => {
-    const err = requireFields(spareForm.values, ["name"]);
-    if (err) throw new Error(err);
-    const stock = parseInt(spareForm.values.stock, 10) || 0;
-    const rate = parseInt(spareForm.values.rate, 10) || 0;
-    await append("spareParts", {
-      code: spareForm.values.code || nextSpareCode(DATA.SPARE_PARTS),
-      name: spareForm.values.name.trim(),
-      vendor: spareForm.values.vendor,
-      category: spareForm.values.category,
-      stock,
-      unit: spareForm.values.unit,
-      reorder: parseInt(spareForm.values.reorder, 10) || 6,
-      value: stock * rate,
-      location: spareForm.values.location,
-      status: stock === 0 ? "critical" : stock <= parseInt(spareForm.values.reorder, 10) ? "low" : "ok",
-      trend: 0,
-      critical: spareForm.values.critical,
-      lastIssued: "—",
-    });
-    setAddOpen(false);
-  };
-
   const issueSpare = async () => {
     if (!issueOpen) return;
     const qty = parseInt(issueQty, 10) || 0;
@@ -197,7 +162,7 @@ const SparePartsInventory = () => {
       <DashHead title="Spare Parts Inventory" sub="Mechanical, electrical & instrumentation spares · reorder & breakdown alerts">
         <Btn size="sm" icon="filter">Filters</Btn>
         <Btn size="sm" icon="download">Export</Btn>
-        <Btn variant="primary" size="sm" icon="plus" onClick={() => { clearError(); setAddOpen(true); }}>Add spare part</Btn>
+        <Btn variant="primary" size="sm" icon="plus" onClick={() => { clearError(); router.push("/inventory/spare-parts/add"); }}>Add spare part</Btn>
       </DashHead>
 
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
@@ -238,21 +203,6 @@ const SparePartsInventory = () => {
           />
         </div>
       </div>
-
-      <EntityFormModal open={addOpen} onClose={() => setAddOpen(false)} title="Add spare part" sub="Register a new spare in inventory" wide submitLabel="Add spare" saving={saving} error={error} onSubmit={saveSpare}>
-        <FormGrid>
-          <FormField label="Part name"><FormInput value={spareForm.values.name} onChange={(v) => spareForm.setField("name", v)} /></FormField>
-          <FormField label="SKU code"><FormInput value={spareForm.values.code} onChange={(v) => spareForm.setField("code", v)} /></FormField>
-          <FormField label="Category">
-            <FormSelect value={spareForm.values.category} onChange={(v) => spareForm.setField("category", v)}>
-              {DATA.SPARE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </FormSelect>
-          </FormField>
-          <FormField label="Opening stock"><FormInput value={spareForm.values.stock} onChange={(v) => spareForm.setField("stock", v)} /></FormField>
-          <FormField label="Reorder at"><FormInput value={spareForm.values.reorder} onChange={(v) => spareForm.setField("reorder", v)} /></FormField>
-          <FormField label="Unit rate (₹)"><FormInput value={spareForm.values.rate} onChange={(v) => spareForm.setField("rate", v)} /></FormField>
-        </FormGrid>
-      </EntityFormModal>
 
       <EntityFormModal open={!!issueOpen} onClose={() => setIssueOpen(null)} title={issueOpen ? `Issue ${issueOpen.name}` : ""} sub={issueOpen ? `In stock: ${issueOpen.stock} ${issueOpen.unit}` : ""} submitLabel="Issue & update stock" saving={saving} error={error} onSubmit={issueSpare}>
         <FormGrid>

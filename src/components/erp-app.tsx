@@ -36,6 +36,8 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
     pathname === "/reset-password"
       ? pathname
       : pathname.startsWith("/hrms/") ||
+          pathname.startsWith("/inventory/") ||
+          pathname.startsWith("/procurement/") ||
           (ERP_ROUTES as readonly string[]).includes(pathname)
         ? pathname
         : pathToRoute(
