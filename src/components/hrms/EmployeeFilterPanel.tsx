@@ -159,7 +159,6 @@ export default function EmployeeFilterPanel({
 
           <div className="ap-filters-spacer" aria-hidden="true" />
           <div className="arf-item ap-filters-actions ap-filters-actions--multi">
-            <Button onClick={handleClear}>Clear filters</Button>
             <Button
               type="primary"
               icon={<FilterOutlined />}
@@ -168,6 +167,7 @@ export default function EmployeeFilterPanel({
             >
               Apply filters
             </Button>
+            <Button onClick={handleClear}>Clear filters</Button>
           </div>
         </div>
       </div>

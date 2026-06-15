@@ -381,11 +381,11 @@ export default function LeaveApprovalPage() {
   ];
 
   const tabItems = [
-    { key: "all", label: "All" },
-    { key: "pending", label: `Pending (${kpi.pending})` },
-    { key: "approved", label: "Approved" },
-    { key: "completed", label: "Completed" },
-    { key: "rejected", label: "Rejected" },
+    { key: "all", label: `All (${approvalLeaves.length})` },
+    { key: "pending", label: `Pending (${approvalLeaves.filter((r) => r.status === "pending").length})` },
+    { key: "approved", label: `Approved (${approvalLeaves.filter((r) => r.status === "approved").length})` },
+    { key: "completed", label: `Completed (${approvalLeaves.filter((r) => r.status === "completed").length})` },
+    { key: "rejected", label: `Rejected (${approvalLeaves.filter((r) => r.status === "rejected").length})` },
   ];
 
   return (

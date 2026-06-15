@@ -189,7 +189,7 @@ export async function getEmployeeCredentialStatus(
       hasAccount: false,
       requiresPasswordReset: false,
       expired: false,
-      canResend: false,
+      canResend: !!loginEmail,
       loginEmail: loginEmail || undefined,
       reason: "no_account",
     };
@@ -241,7 +241,13 @@ export async function resendExpiredEmployeeTemporaryPassword(
   });
 
   if (!user) {
-    return { sent: false, reason: "no_account" };
+    const welcomeResult = await provisionEmployeeLoginAndSendWelcomeEmail({
+      fullName: String(employee.fullName ?? "").trim() || normalizedId,
+      employeeId: normalizedId,
+      email: loginEmail,
+      role: employee.department,
+    });
+    return { sent: welcomeResult.sent, reason: welcomeResult.reason, loginEmail };
   }
 
   if (!user.requiresPasswordReset) {

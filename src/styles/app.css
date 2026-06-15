@@ -654,12 +654,14 @@ button.sb-section-label {
   grid-column: 1 / -1;
   justify-self: end;
   display: flex;
+  flex-direction: row;
   align-items: flex-end;
   margin-top: 4px;
   padding-top: 4px;
 }
 
 .ap-filters-actions--multi {
+  flex-direction: row;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
@@ -2704,6 +2706,7 @@ button.sb-section-label {
   grid-row: -1;
   justify-self: end;
   display: flex;
+  flex-direction: row;
   align-items: flex-end;
 }
 

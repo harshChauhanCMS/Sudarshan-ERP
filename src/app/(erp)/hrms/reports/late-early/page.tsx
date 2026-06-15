@@ -613,7 +613,6 @@ export default function LateEarlyReportPage() {
             <div className="ap-filters-row-break" aria-hidden="true" />
             <div className="ap-filters-spacer" aria-hidden="true" />
             <div className="arf-item ap-filters-actions ap-filters-actions--multi">
-              <Button onClick={handleClearFilters}>Clear filters</Button>
               <Button
                 type="primary"
                 icon={<FilterOutlined />}
@@ -621,6 +620,7 @@ export default function LateEarlyReportPage() {
               >
                 Apply filters
               </Button>
+              <Button onClick={handleClearFilters}>Clear filters</Button>
             </div>
           </div>
         </div>

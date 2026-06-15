@@ -343,7 +343,7 @@ export default function PayrollBulkPage() {
                 onChange={setStatusFilter}
                 options={[
                   { value: "all", label: "All statuses" },
-                  { value: "pending", label: "Not generated" },
+                  { value: "pending", label: "Pending" },
                   { value: "draft", label: "Draft" },
                   { value: "approved", label: "Approved" },
                   { value: "disbursed", label: "Disbursed" },
@@ -353,10 +353,10 @@ export default function PayrollBulkPage() {
             <div className="ap-filters-row-break" aria-hidden="true" />
             <div className="ap-filters-spacer" aria-hidden="true" />
             <div className="arf-item ap-filters-actions ap-filters-actions--multi">
-              <Button onClick={handleClearFilters}>Clear filters</Button>
               <Button type="primary" icon={<FilterOutlined />} onClick={() => void load()}>
                 Apply filters
               </Button>
+              <Button onClick={handleClearFilters}>Clear filters</Button>
               <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
                 Refresh
               </Button>

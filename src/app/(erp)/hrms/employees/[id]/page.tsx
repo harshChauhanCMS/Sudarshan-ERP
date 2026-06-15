@@ -416,20 +416,37 @@ export default function EmployeeDetailsPage({
           }
           actions={
             <Space>
-              {canManageCredentials && credentialStatus?.canResend ? (
+              {canManageCredentials && credentialStatus ? (
                 <Popconfirm
-                  title="Resend temporary password?"
-                  description={`A new temporary password will be emailed to ${credentialStatus.loginEmail ?? "the employee"}. They must log in and reset it within 1 hour.`}
+                  title={credentialStatus.hasAccount ? "Resend temporary password?" : "Send temporary password email?"}
+                  description={
+                    credentialStatus.hasAccount
+                      ? `A new temporary password will be emailed to ${credentialStatus.loginEmail ?? "the employee"}. They must log in and reset it within 1 hour.`
+                      : `A temporary password will be generated and emailed to ${credentialStatus.loginEmail ?? "the employee"} to set up their account.`
+                  }
                   okText="Send email"
                   cancelText="Cancel"
                   onConfirm={() => void handleResendCredentials()}
+                  disabled={!credentialStatus.canResend}
                 >
                   <Button
                     icon={<MailOutlined />}
                     loading={resendingCredentials}
+                    disabled={!credentialStatus.canResend}
+                    title={
+                      !credentialStatus.canResend
+                        ? !credentialStatus.loginEmail || credentialStatus.reason === "no_email"
+                          ? "Employee has no email address. Please edit their details and add an email first."
+                          : credentialStatus.reason === "not_expired" && credentialStatus.passwordResetDeadline
+                            ? `Cannot resend yet. The previous temporary password is still valid until ${new Date(credentialStatus.passwordResetDeadline).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.`
+                            : credentialStatus.reason === "already_activated"
+                              ? "Account already activated. The employee should use the 'Forgot Password' link on the login page."
+                              : "Cannot send temporary password."
+                        : undefined
+                    }
                     style={{ height: 38, borderRadius: 6, fontWeight: 600 }}
                   >
-                    Resend temporary password
+                    {credentialStatus.hasAccount ? "Resend temporary password" : "Send temporary password"}
                   </Button>
                 </Popconfirm>
               ) : null}

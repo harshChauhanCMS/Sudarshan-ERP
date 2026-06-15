@@ -57,7 +57,7 @@ const STATUS_OPTIONS = [
   { value: "paid", label: "Paid (disbursed)" },
   { value: "approved", label: "Approved" },
   { value: "draft", label: "Draft" },
-  { value: "pending", label: "Not generated" },
+  { value: "pending", label: "Pending" },
 ];
 
 const fmt = (n: number) =>
@@ -325,7 +325,7 @@ function MonthlySalaryContent() {
             textTransform: "capitalize",
           }}
         >
-          {v === "disbursed" ? "Paid" : v === "pending" ? "Not generated" : v}
+          {v === "disbursed" ? "Paid" : v === "pending" ? "Pending" : v}
         </Tag>
       ),
     },
@@ -407,7 +407,6 @@ function MonthlySalaryContent() {
               />
             </div>
             <div className="ap-filters-toolbar-actions">
-              <Button onClick={handleClearFilters}>Clear filters</Button>
               <Button
                 type="primary"
                 icon={<FilterOutlined />}
@@ -416,6 +415,7 @@ function MonthlySalaryContent() {
               >
                 Apply filters
               </Button>
+              <Button onClick={handleClearFilters}>Clear filters</Button>
               <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
                 Refresh
               </Button>
