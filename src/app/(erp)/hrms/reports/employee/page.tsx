@@ -247,6 +247,7 @@ export default function EmployeeReportPage() {
         units={r.units}
         loading={r.loading}
         onApply={r.handleApply}
+        onClear={r.handleClearFilters}
         search={r.search}
         setSearch={r.setSearch}
         splitApplyRow

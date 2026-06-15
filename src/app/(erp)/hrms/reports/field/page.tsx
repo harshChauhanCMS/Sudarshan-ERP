@@ -126,7 +126,7 @@ export default function FieldAttendancePage() {
         unit={r.unit} setUnit={r.setUnit}
         period={r.period} setPeriod={r.setPeriod}
         departments={r.departments} units={r.units}
-        loading={r.loading} onApply={r.handleApply}
+        loading={r.loading} onApply={r.handleApply} onClear={r.handleClearFilters}
         search={r.search} setSearch={r.setSearch}
         periodOptions={FIELD_PERIOD_OPTIONS}
         showShift={false}

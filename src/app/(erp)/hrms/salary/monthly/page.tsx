@@ -118,6 +118,12 @@ function MonthlySalaryContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cycleKey, statusFilter]);
 
+  const handleClearFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setMonth(dayjs());
+  };
+
   const generate = async () => {
     setGenerating(true);
     try {
@@ -401,6 +407,7 @@ function MonthlySalaryContent() {
               />
             </div>
             <div className="ap-filters-toolbar-actions">
+              <Button onClick={handleClearFilters}>Clear filters</Button>
               <Button
                 type="primary"
                 icon={<FilterOutlined />}

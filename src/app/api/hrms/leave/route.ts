@@ -13,6 +13,8 @@ import {
   scopeEmployeeFilter,
 } from "@/lib/hrms-access";
 import { validateLeaveReason } from "@/lib/hrms-validation";
+import { filterLeavesForHrApproval } from "@/lib/leave-approval-rules";
+import { LEAVE_BALANCE_USAGE_STATUSES, syncCompletedLeaveStatuses } from "@/lib/leave-status-sync";
 import {
   canApplyLeaveOnBehalf,
   resolveSessionEmployee,
@@ -23,6 +25,7 @@ import { getSession } from "@/lib/session";
 export async function GET(request: Request) {
   try {
     await connectDB();
+    await syncCompletedLeaveStatuses();
     const session = await getSession();
     const scope = await resolveHrDataScope(session.user);
     const url = new URL(request.url);
@@ -52,6 +55,10 @@ export async function GET(request: Request) {
       if (to)   q.fromDate.$lte = new Date(to);
     }
 
+    const forApproval =
+      url.searchParams.get("forApproval") === "1" ||
+      url.searchParams.get("forApproval") === "true";
+
     const leaves = await LeaveRequest.find(q).sort({ createdAt: -1 }).lean();
     const visible = filterRowsByHrScope(
       leaves.map((leave) => ({
@@ -60,7 +67,10 @@ export async function GET(request: Request) {
       })),
       scope,
     );
-    return ok(visible);
+    const result = forApproval
+      ? filterLeavesForHrApproval(session.user, visible)
+      : visible;
+    return ok(result);
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Failed", 500);
   }
@@ -74,7 +84,7 @@ async function getLeaveUsageForYear(employeeId: string, year: number) {
 
   const leaves = await LeaveRequest.find({
     employeeId,
-    status: { $in: ["pending", "hod_approved", "approved"] },
+    status: { $in: [...LEAVE_BALANCE_USAGE_STATUSES] },
     fromDate: { $gte: start, $lte: end },
   })
     .select({ leaveType: 1, days: 1 })

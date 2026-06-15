@@ -30,7 +30,7 @@ export async function PATCH(
     );
     if (!access.ok) return fail(access.message, 403);
 
-    if (["approved", "rejected", "cancelled", "rolled_back"].includes(leave.status)) {
+    if (["approved", "rejected", "cancelled", "rolled_back", "completed"].includes(leave.status)) {
       return fail(`Cannot reject leave in status: ${leave.status}`, 409);
     }
 

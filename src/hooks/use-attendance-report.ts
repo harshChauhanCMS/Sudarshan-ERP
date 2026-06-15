@@ -179,6 +179,12 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
     }
   };
 
+  const defaultPeriod = isDaily ? "today" : "month";
+  const defaultRange = (): [dayjs.Dayjs, dayjs.Dayjs] =>
+    isDaily
+      ? [dayjs().startOf("day"), dayjs().endOf("day")]
+      : [dayjs().startOf("month"), dayjs().endOf("month")];
+
   const handleApply = () => {
     let newRange = range;
     if (period === "today") {
@@ -197,6 +203,24 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
       setRange(newRange);
     }
     void load({ dept, shift, unit, employeeId, range: newRange });
+  };
+
+  const handleClearFilters = () => {
+    const nextRange = defaultRange();
+    setPeriod(defaultPeriod);
+    setDept("all");
+    setShift("all");
+    setUnit("all");
+    setEmployeeId(undefined);
+    setSearch("");
+    setRange(nextRange);
+    void load({
+      dept: "all",
+      shift: "all",
+      unit: "all",
+      employeeId: undefined,
+      range: nextRange,
+    });
   };
 
   const buildCsvUrl = () => {
@@ -381,7 +405,7 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
     daily: searchedDaily,
     weeklyTrend, deptBreakdown,
     fieldRows, officeStats, unitTable, deptCompliance,
-    handleApply, buildCsvUrl,
+    handleApply, handleClearFilters, buildCsvUrl,
     rangeLabel,
   };
 }

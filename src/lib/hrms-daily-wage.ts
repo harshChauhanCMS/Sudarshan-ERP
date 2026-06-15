@@ -2,6 +2,14 @@ import type { DailyWageWorker, SkillLevel, PayMode } from "@/lib/daily-wage-dumm
 
 export const DAILY_WAGE_COMPENSATION = "Daily wage";
 
+/** Calendar date in local timezone (YYYY-MM-DD). */
+export function localDayKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function parsePayPeriod(period: string): { start: Date; end: Date } | null {
   if (!/^\d{4}-\d{2}$/.test(period)) return null;
   const [year, month] = period.split("-").map(Number);
@@ -50,7 +58,7 @@ export function buildAttendanceStats(
 
   while (cur <= endD) {
     if (cur.getDay() !== 0) {
-      const k = `${employeeId}|${cur.toISOString().slice(0, 10)}`;
+      const k = `${employeeId}|${localDayKey(cur)}`;
       const entry = punchDayMap.get(k);
       if (entry?.inAt) {
         days++;

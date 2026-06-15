@@ -6127,6 +6127,77 @@ select.input {
   grid-column: 1 / -1;
 }
 
+/* Salary edit — full-width centered form */
+.salary-edit-page__main {
+  width: 100%;
+  padding: 0 0 48px;
+}
+
+.salary-edit-page__card {
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.salary-edit-page__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 20px;
+  align-items: start;
+}
+
+.salary-edit-page__grid > .ant-form-item {
+  min-width: 0;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.salary-edit-page__grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.salary-edit-page__readonly {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 20px;
+  padding: 4px 0 8px;
+}
+
+.salary-edit-page__readonly-item dt {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted, #71717a);
+  margin: 0 0 4px;
+}
+
+.salary-edit-page__readonly-item dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+  word-break: break-word;
+}
+
+@media (max-width: 1100px) {
+  .salary-edit-page__grid,
+  .salary-edit-page__readonly {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .salary-edit-page__grid,
+  .salary-edit-page__grid--3,
+  .salary-edit-page__readonly {
+    grid-template-columns: 1fr;
+  }
+}
+
 .emp-add-main {
   min-width: 0;
   display: flex;

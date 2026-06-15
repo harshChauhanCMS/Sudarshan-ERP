@@ -8,12 +8,9 @@ import {
   DAILY_WAGE_COMPENSATION,
   buildAttendanceStats,
   employeeToDailyWageWorker,
+  localDayKey,
   parsePayPeriod,
 } from "@/lib/hrms-daily-wage";
-
-function dayKey(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
 
 export async function GET(request: Request) {
   const session = await getSession();
@@ -69,7 +66,7 @@ export async function GET(request: Request) {
       for (const p of punches) {
         const eid = String(p.employeeId || "");
         if (!eid) continue;
-        const d = dayKey(new Date(p.punchedAt));
+        const d = localDayKey(new Date(p.punchedAt));
         const k = `${eid}|${d}`;
         const cur = punchDayMap.get(k) ?? { inAt: null, outAt: null };
         const t = new Date(p.punchedAt);

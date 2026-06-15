@@ -3,6 +3,7 @@ import { ok, fail } from "@/lib/api-response";
 import LeaveRequest from "@/lib/models/LeaveRequest";
 import LeavePolicy, { DEFAULT_LEAVE_POLICIES } from "@/lib/models/LeavePolicy";
 import { assertCanAccessEmployee } from "@/lib/hrms-access";
+import { LEAVE_BALANCE_USAGE_STATUSES, syncCompletedLeaveStatuses } from "@/lib/leave-status-sync";
 import { getSession } from "@/lib/session";
 
 export async function GET(
@@ -11,6 +12,7 @@ export async function GET(
 ) {
   try {
     await connectDB();
+    await syncCompletedLeaveStatuses();
     const session = await getSession();
     if (!session.isLoggedIn || !session.user) return fail("Unauthorized", 401);
 
@@ -30,7 +32,7 @@ export async function GET(
 
     const usedLeaves = await LeaveRequest.find({
       employeeId,
-      status: { $in: ["approved", "hod_approved"] },
+      status: { $in: [...LEAVE_BALANCE_USAGE_STATUSES] },
       fromDate: { $gte: start, $lte: end },
     }).lean();
 

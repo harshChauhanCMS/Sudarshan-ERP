@@ -242,6 +242,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
         companies={data.COMPANIES}
         dataWarning={meta?.warning}
         userEmail={sessionUser?.email}
+        userRole={sessionUser?.role}
         onSelect={(c) => {
           setCompany(c);
           navigate(

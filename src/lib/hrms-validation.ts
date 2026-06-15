@@ -1,5 +1,6 @@
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
+import { HR_EMPLOYEE_EXCLUDED_ROLE_KEYS } from "@/lib/hrms-employee-options";
 
 dayjs.extend(customParseFormat);
 
@@ -95,6 +96,12 @@ export function validateEmployeePayload(payload: Record<string, unknown>): strin
 
   if (Array.isArray(payload.companies) && payload.companies.length === 0) {
     return "At least one company / unit access is required";
+  }
+
+  const department =
+    typeof payload.department === "string" ? payload.department.trim().toLowerCase() : "";
+  if (department && HR_EMPLOYEE_EXCLUDED_ROLE_KEYS.has(department)) {
+    return "Owner, Admin, and Master roles cannot be assigned during employee onboarding.";
   }
 
   return null;

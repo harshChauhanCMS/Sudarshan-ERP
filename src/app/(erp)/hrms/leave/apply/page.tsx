@@ -50,6 +50,7 @@ const STATUS_COLOR: Record<string, string> = {
   rejected: "error",
   cancelled: "error",
   rolled_back: "default",
+  completed: "cyan",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -59,6 +60,7 @@ const STATUS_LABEL: Record<string, string> = {
   rejected: "Rejected",
   cancelled: "Cancelled",
   rolled_back: "Rolled back",
+  completed: "Completed",
 };
 
 export default function LeaveApplyPage() {

@@ -66,3 +66,15 @@ const LEAVE_TYPE_TAG_COLORS: Record<string, string> = {
 export function leaveTypeColor(code: string) {
   return LEAVE_TYPE_TAG_COLORS[code] ?? "default";
 }
+
+/** True when leave is stored as completed or the end date is before today. */
+export function isLeavePeriodCompleted(
+  toDate: unknown,
+  status?: unknown,
+): boolean {
+  if (String(status ?? "").toLowerCase() === "completed") return true;
+  if (toDate == null || toDate === "") return false;
+  const end = dayjs(String(toDate));
+  if (!end.isValid()) return false;
+  return end.endOf("day").isBefore(dayjs());
+}

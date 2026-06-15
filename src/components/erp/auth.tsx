@@ -191,9 +191,7 @@ const Login = ({ onLogin, onForgot, userEmail }) => {
                 color: "var(--fg-subtle)",
                 fontSize: 11,
               }}
-            >
-              <Icon name="shield" size={11} /> 256-bit TLS
-            </span>
+            ></span>
           </div>
 
           {error && (
@@ -214,9 +212,9 @@ const Login = ({ onLogin, onForgot, userEmail }) => {
             <Icon name="arrowRight" size={14} />
           </Btn>
 
-          <div className="auth-foot">
+          {/* <div className="auth-foot">
             New to Sudarshan? <a>Request an account</a>
-          </div>
+          </div> */}
         </form>
       </div>
     </div>
@@ -375,7 +373,11 @@ const Forgot = ({ onBack, onComplete }) => {
               </div>
               {error && (
                 <div
-                  style={{ fontSize: 12, color: "var(--danger)", marginBottom: 8 }}
+                  style={{
+                    fontSize: 12,
+                    color: "var(--danger)",
+                    marginBottom: 8,
+                  }}
                 >
                   {error}
                 </div>
@@ -425,7 +427,11 @@ const Forgot = ({ onBack, onComplete }) => {
               )}
               {error && (
                 <div
-                  style={{ fontSize: 12, color: "var(--danger)", marginBottom: 8 }}
+                  style={{
+                    fontSize: 12,
+                    color: "var(--danger)",
+                    marginBottom: 8,
+                  }}
                 >
                   {error}
                 </div>
@@ -464,6 +470,7 @@ const Forgot = ({ onBack, onComplete }) => {
 const CompanySelect = ({
   onSelect,
   userEmail,
+  userRole,
   onLogout,
   companies: companiesProp,
   dataWarning,
@@ -471,6 +478,14 @@ const CompanySelect = ({
   const DATA = useDATA();
   const companies = companiesProp ?? DATA.COMPANIES;
   const [hover, setHover] = useState(null);
+  const roleLabel =
+    DATA.ROLES.find((r) => r.key === userRole)?.label ??
+    (userRole
+      ? userRole.charAt(0).toUpperCase() + userRole.slice(1)
+      : null);
+  const signedInLine = [userEmail || "rajiv@sudarshan.co.in", roleLabel]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <div
       style={{
@@ -509,9 +524,7 @@ const CompanySelect = ({
             </div>
             <div style={{ fontSize: 11, color: "var(--fg-subtle)" }}>
               Signed in as{" "}
-              <strong style={{ color: "var(--fg-muted)" }}>
-                {userEmail || "rajiv@sudarshan.co.in"}
-              </strong>
+              <strong style={{ color: "var(--fg-muted)" }}>{signedInLine}</strong>
             </div>
           </div>
           <div style={{ marginLeft: "auto" }}>
@@ -728,7 +741,7 @@ const ResetPassword = ({ userEmail, userName, onComplete, onLogout }) => {
     onChange,
     show,
     setShow,
-    placeholder
+    placeholder,
   ) => (
     <div className="field">
       <label className="field-label">{label}</label>
@@ -772,9 +785,9 @@ const ResetPassword = ({ userEmail, userName, onComplete, onLogout }) => {
             <div className="auth-form-sub">
               {userName ? (
                 <>
-                  Welcome, <strong>{userName}</strong>. Use the temporary password
-                  from your email, then choose a new password. You must complete this
-                  within 1 hour of account creation.
+                  Welcome, <strong>{userName}</strong>. Use the temporary
+                  password from your email, then choose a new password. You must
+                  complete this within 1 hour of account creation.
                 </>
               ) : (
                 "Use your temporary password, then choose a new secure password."
@@ -794,7 +807,8 @@ const ResetPassword = ({ userEmail, userName, onComplete, onLogout }) => {
                 color: "var(--fg-muted)",
               }}
             >
-              Signed in as <strong style={{ color: "var(--fg)" }}>{userEmail}</strong>
+              Signed in as{" "}
+              <strong style={{ color: "var(--fg)" }}>{userEmail}</strong>
             </div>
           )}
 
@@ -804,7 +818,7 @@ const ResetPassword = ({ userEmail, userName, onComplete, onLogout }) => {
             setTemporaryPassword,
             showTemporary,
             setShowTemporary,
-            "From your welcome email"
+            "From your welcome email",
           )}
           {renderPasswordField(
             "New password",
@@ -812,7 +826,7 @@ const ResetPassword = ({ userEmail, userName, onComplete, onLogout }) => {
             setNewPassword,
             showNew,
             setShowNew,
-            "At least 8 characters"
+            "At least 8 characters",
           )}
           {renderPasswordField(
             "Confirm new password",
@@ -820,7 +834,7 @@ const ResetPassword = ({ userEmail, userName, onComplete, onLogout }) => {
             setConfirmPassword,
             showConfirm,
             setShowConfirm,
-            "Re-enter new password"
+            "Re-enter new password",
           )}
 
           {error && (

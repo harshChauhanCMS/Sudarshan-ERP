@@ -18,7 +18,7 @@ const LeaveRequestSchema = new Schema(
     reason: { type: String, trim: true },
     status: {
       type: String,
-      enum: ["pending", "hod_approved", "approved", "rejected", "cancelled", "rolled_back"],
+      enum: ["pending", "hod_approved", "approved", "rejected", "cancelled", "rolled_back", "completed"],
       default: "pending",
       index: true,
     },

@@ -214,6 +214,39 @@ export default function LateEarlyReportPage() {
     void loadReport();
   }, [loadReport]);
 
+  const handleApplyFilters = () => {
+    setApplied({
+      dept,
+      shift,
+      company,
+      reportType,
+      minMinutes,
+      range: [...range] as [dayjs.Dayjs, dayjs.Dayjs],
+    });
+  };
+
+  const handleClearFilters = () => {
+    const defaultRange = [dayjs().startOf("month"), dayjs().endOf("month")] as [
+      dayjs.Dayjs,
+      dayjs.Dayjs,
+    ];
+    setSearch("");
+    setCompany("all");
+    setDept("all");
+    setShift("all");
+    setReportType("both");
+    setMinMinutes(5);
+    setRange(defaultRange);
+    setApplied({
+      dept: "all",
+      shift: "all",
+      company: "all",
+      reportType: "both",
+      minMinutes: 5,
+      range: defaultRange,
+    });
+  };
+
   const unitOptions = useMemo(() => {
     const fromData = [
       ...new Set(units.map((u) => u.unit).filter((u) => u !== "—")),
@@ -579,20 +612,12 @@ export default function LateEarlyReportPage() {
             </div>
             <div className="ap-filters-row-break" aria-hidden="true" />
             <div className="ap-filters-spacer" aria-hidden="true" />
-            <div className="arf-item ap-filters-actions">
+            <div className="arf-item ap-filters-actions ap-filters-actions--multi">
+              <Button onClick={handleClearFilters}>Clear filters</Button>
               <Button
                 type="primary"
                 icon={<FilterOutlined />}
-                onClick={() =>
-                  setApplied({
-                    dept,
-                    shift,
-                    company,
-                    reportType,
-                    minMinutes,
-                    range: [...range] as [dayjs.Dayjs, dayjs.Dayjs],
-                  })
-                }
+                onClick={handleApplyFilters}
               >
                 Apply filters
               </Button>

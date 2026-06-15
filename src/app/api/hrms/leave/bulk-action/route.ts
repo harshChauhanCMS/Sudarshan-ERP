@@ -46,7 +46,7 @@ export async function POST(request: Request) {
           leave.hrApprovedAt = now;
           leave.hrApprovedBy = by;
         } else {
-          if (["approved", "rejected", "cancelled", "rolled_back"].includes(leave.status)) {
+          if (["approved", "rejected", "cancelled", "rolled_back", "completed"].includes(leave.status)) {
             results.push({ id, status: "skipped", error: `Already ${leave.status}` });
             continue;
           }

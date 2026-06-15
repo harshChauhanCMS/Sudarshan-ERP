@@ -16,6 +16,7 @@ import {
   Avatar,
   Tag,
   Spin,
+  Popconfirm,
 } from "antd";
 import {
   SaveOutlined,
@@ -23,6 +24,7 @@ import {
   CalculatorOutlined,
   EditOutlined,
   CloseOutlined,
+  MailOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import PageHeader from "@/components/common/PageHeader";
@@ -37,11 +39,40 @@ import {
   departmentSkipsReportingManager,
   EMPLOYEE_EXPERIENCE_OPTIONS,
   EMPLOYEE_QUALIFICATION_OPTIONS,
+  hrAssignableRoleOptions,
 } from "@/lib/hrms-employee-options";
 import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
 import { useSessionUser } from "@/hooks/use-session-user";
 
 const { Panel } = Collapse;
+
+type CredentialStatus = {
+  hasAccount: boolean;
+  loginEmail?: string;
+  requiresPasswordReset: boolean;
+  expired: boolean;
+  canResend: boolean;
+  passwordResetDeadline?: string | null;
+  reason?: string;
+};
+
+function canResendCredentials(role?: string): boolean {
+  const r = role?.toLowerCase();
+  return r === "owner" || r === "admin" || r === "hr" || r === "master";
+}
+
+function parseEmployeeDate(value: unknown) {
+  if (value == null || value === "") return null;
+  if (dayjs.isDayjs(value)) return value;
+  const parsed = dayjs(String(value), ["DD/MM/YYYY", "YYYY-MM-DD"], true);
+  return parsed.isValid() ? parsed : null;
+}
+
+function formatFormDate(value: unknown): string | undefined {
+  if (value == null || value === "") return undefined;
+  if (dayjs.isDayjs(value)) return value.format("DD/MM/YYYY");
+  return String(value);
+}
 
 export default function EmployeeDetailsPage({
   params,
@@ -49,7 +80,8 @@ export default function EmployeeDetailsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { isManager } = useSessionUser();
+  const { user, isManager } = useSessionUser();
+  const canManageCredentials = canResendCredentials(user?.role);
   const [form] = Form.useForm();
   const department = Form.useWatch("department", form);
   const showReportingManager = !departmentSkipsReportingManager(department);
@@ -77,17 +109,24 @@ export default function EmployeeDetailsPage({
   const [profileStatus, setProfileStatus] = useState("Active");
   const [avatarInitials, setAvatarInitials] = useState("");
   const [avatarColors, setAvatarColors] = useState({ bg: "#dbeafe", fg: "#1d4ed8" });
-  const [departmentOptions, setDepartmentOptions] = useState<{ value: string; label: string }[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<
+    { value: string; label: string; disabled?: boolean }[]
+  >([]);
+  const [allRoleOptions, setAllRoleOptions] = useState<
+    { roleKey: string; label: string }[]
+  >([]);
   const [reportingManagerOptions, setReportingManagerOptions] = useState<
     { value: string; label: string }[]
   >([]);
+  const [credentialStatus, setCredentialStatus] = useState<CredentialStatus | null>(null);
+  const [resendingCredentials, setResendingCredentials] = useState(false);
 
   useEffect(() => {
     fetch("/api/system/roles")
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) {
-          setDepartmentOptions(d.data.map((role: any) => ({ value: role.roleKey, label: role.label })));
+        if (d.success && Array.isArray(d.data)) {
+          setAllRoleOptions(d.data);
         }
       })
       .catch(() => {});
@@ -106,6 +145,13 @@ export default function EmployeeDetailsPage({
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!allRoleOptions.length) return;
+    setDepartmentOptions(
+      hrAssignableRoleOptions(allRoleOptions, originalData?.department),
+    );
+  }, [allRoleOptions, originalData?.department]);
 
   useEffect(() => {
     async function loadEmployee() {
@@ -128,9 +174,9 @@ export default function EmployeeDetailsPage({
           // Format dates for DatePicker
           const formatted = {
             ...emp,
-            dob: emp.dob ? dayjs(emp.dob, "DD/MM/YYYY") : null,
-            dateJoining: emp.dateJoining ? dayjs(emp.dateJoining, "DD/MM/YYYY") : null,
-            dateConfirmation: emp.dateConfirmation ? dayjs(emp.dateConfirmation, "DD/MM/YYYY") : null,
+            dob: parseEmployeeDate(emp.dob),
+            dateJoining: parseEmployeeDate(emp.dateJoining),
+            dateConfirmation: parseEmployeeDate(emp.dateConfirmation),
           };
 
           form.setFieldsValue(formatted);
@@ -167,6 +213,57 @@ export default function EmployeeDetailsPage({
     loadEmployee();
   }, [id, form, messageApi]);
 
+  useEffect(() => {
+    if (!canManageCredentials) return;
+
+    let cancelled = false;
+    void fetch(`/api/hrms/employees/${id}/credentials`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!cancelled && json.success && json.data) {
+          setCredentialStatus(json.data as CredentialStatus);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCredentialStatus(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, canManageCredentials]);
+
+  const handleResendCredentials = async () => {
+    setResendingCredentials(true);
+    try {
+      const response = await fetch(`/api/hrms/employees/${id}/credentials`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to resend credentials");
+      }
+
+      messageApi.success(
+        data.data?.loginEmail
+          ? `New temporary password emailed to ${data.data.loginEmail}. Valid for 1 hour.`
+          : "New temporary password emailed successfully.",
+      );
+
+      const statusRes = await fetch(`/api/hrms/employees/${id}/credentials`);
+      const statusJson = await statusRes.json();
+      if (statusRes.ok && statusJson.success && statusJson.data) {
+        setCredentialStatus(statusJson.data as CredentialStatus);
+      }
+    } catch (err: unknown) {
+      messageApi.error(
+        err instanceof Error ? err.message : "Failed to resend credentials",
+      );
+    } finally {
+      setResendingCredentials(false);
+    }
+  };
+
   const handleAnnualCtcChange = (value: number | null) => {
     if (value) {
       form.setFieldsValue({
@@ -187,17 +284,23 @@ export default function EmployeeDetailsPage({
     }
   };
 
-  const onFinish = async (values: any) => {
+  const saveEmployee = async () => {
     setSaving(true);
 
+    const values = form.getFieldsValue(true);
+    const { employeeId: _omit, ...rest } = values;
     const formattedValues = {
-      ...values,
+      ...rest,
       reportingManager: departmentSkipsReportingManager(values.department)
         ? ""
         : values.reportingManager,
-      dob: values.dob ? values.dob.format("DD/MM/YYYY") : undefined,
-      dateJoining: values.dateJoining ? values.dateJoining.format("DD/MM/YYYY") : undefined,
-      dateConfirmation: values.dateConfirmation ? values.dateConfirmation.format("DD/MM/YYYY") : undefined,
+      fullName:
+        typeof values.fullName === "string"
+          ? values.fullName.trim()
+          : values.fullName,
+      dob: formatFormDate(values.dob),
+      dateJoining: formatFormDate(values.dateJoining),
+      dateConfirmation: formatFormDate(values.dateConfirmation),
       overtimeApplicable: !!values.overtimeApplicable,
     };
 
@@ -221,14 +324,18 @@ export default function EmployeeDetailsPage({
         duration: 2,
       });
 
+      const savedFormValues = {
+        ...values,
+        fullName: formattedValues.fullName,
+      };
+
       // Update static view banner states
       setProfileName(formattedValues.fullName || "");
       setProfileRole(formattedValues.designation || "");
       setProfileDept(formattedValues.department || "");
       setProfileStatus(formattedValues.employmentType === "Apprentice" ? "Onboarding" : "Active");
 
-      // Save new dataset as clean original copy
-      setOriginalData(values);
+      setOriginalData(savedFormValues);
       setIsEditing(false);
     } catch (err: any) {
       messageApi.error({
@@ -238,6 +345,27 @@ export default function EmployeeDetailsPage({
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSave = async () => {
+    try {
+      await form.validateFields();
+      await saveEmployee();
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "errorFields" in err) {
+        const errorFields = (err as { errorFields?: { name: (string | number)[] }[] })
+          .errorFields;
+        messageApi.error("Please complete all required fields before saving.");
+        const first = errorFields?.[0]?.name;
+        if (first) {
+          form.scrollToField(first, { behavior: "smooth", block: "center" });
+        }
+      }
+    }
+  };
+
+  const onFinishFailed = () => {
+    messageApi.error("Please fix the highlighted fields before saving.");
   };
 
   const handleCancel = () => {
@@ -288,6 +416,23 @@ export default function EmployeeDetailsPage({
           }
           actions={
             <Space>
+              {canManageCredentials && credentialStatus?.canResend ? (
+                <Popconfirm
+                  title="Resend temporary password?"
+                  description={`A new temporary password will be emailed to ${credentialStatus.loginEmail ?? "the employee"}. They must log in and reset it within 1 hour.`}
+                  okText="Send email"
+                  cancelText="Cancel"
+                  onConfirm={() => void handleResendCredentials()}
+                >
+                  <Button
+                    icon={<MailOutlined />}
+                    loading={resendingCredentials}
+                    style={{ height: 38, borderRadius: 6, fontWeight: 600 }}
+                  >
+                    Resend temporary password
+                  </Button>
+                </Popconfirm>
+              ) : null}
               {!isManager && !isEditing ? (
                 <Button
                   type="primary"
@@ -318,7 +463,7 @@ export default function EmployeeDetailsPage({
                   <Button
                     type="primary"
                     icon={<SaveOutlined />}
-                    onClick={() => form.submit()}
+                    onClick={() => void handleSave()}
                     loading={saving}
                     style={{
                       height: 38,
@@ -341,7 +486,8 @@ export default function EmployeeDetailsPage({
         <Form
           form={form}
           layout="vertical"
-          onFinish={onFinish}
+          onFinish={() => void saveEmployee()}
+          onFinishFailed={onFinishFailed}
           requiredMark="optional"
           style={{ width: "100%" }}
         >
@@ -622,7 +768,7 @@ export default function EmployeeDetailsPage({
                 <Form.Item name="designation" label="Designation" rules={[{ required: true, message: "Required" }]}>
                   <Input disabled={!isEditing} />
                 </Form.Item>
-                <Form.Item name="locationUnit" label="Location / Unit" rules={[{ required: true, message: "Required" }]}>
+                <Form.Item name="locationUnit" label="Location / Unit">
                   <Select
                     disabled={!isEditing}
                     options={[

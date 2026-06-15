@@ -34,10 +34,20 @@ import {
   departmentSkipsReportingManager,
   EMPLOYEE_EXPERIENCE_OPTIONS,
   EMPLOYEE_QUALIFICATION_OPTIONS,
+  filterHrAssignableRoles,
 } from "@/lib/hrms-employee-options";
 import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
 
-const DRAFT_KEY = "hrms_employee_draft";
+const LEGACY_DRAFT_KEY = "hrms_employee_draft";
+
+function draftHasContent(formData: Record<string, unknown>): boolean {
+  return Object.entries(formData).some(([key, value]) => {
+    if (key === "employeeId") return false;
+    if (value == null || value === "") return false;
+    if (Array.isArray(value) && value.length === 0) return false;
+    return true;
+  });
+}
 
 const EMPLOYEE_COMPANY_OPTIONS = [
   { value: "smi", label: "Sudarshan Minerals & Industries (SMI)" },
@@ -91,6 +101,70 @@ export default function AddEmployeePage() {
     { value: string; label: string }[]
   >([]);
   const [nextEmployeeId, setNextEmployeeId] = useState<string | null>(null);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [draftClearing, setDraftClearing] = useState(false);
+  const [draftActive, setDraftActive] = useState(false);
+
+  const applyDraftToForm = (
+    raw: Record<string, unknown>,
+    step = 0,
+  ) => {
+    const parsedDraft = { ...raw };
+    delete parsedDraft.employeeId;
+    if (parsedDraft.dob) parsedDraft.dob = dayjs(String(parsedDraft.dob));
+    if (parsedDraft.dateJoining) {
+      parsedDraft.dateJoining = dayjs(String(parsedDraft.dateJoining));
+    }
+    if (parsedDraft.dateConfirmation) {
+      parsedDraft.dateConfirmation = dayjs(String(parsedDraft.dateConfirmation));
+    }
+    form.setFieldsValue(parsedDraft);
+    if (step > 0) setCurrentStep(step);
+  };
+
+  const resetFormToEmpty = () => {
+    form.resetFields();
+    form.setFieldsValue({
+      overtimeApplicable: false,
+      compensationType: "Monthly CTC",
+    });
+    setCurrentStep(0);
+  };
+
+  const handleClearDraft = async () => {
+    setDraftClearing(true);
+    try {
+      await fetch("/api/hrms/employees/draft", { method: "DELETE" });
+      localStorage.removeItem(LEGACY_DRAFT_KEY);
+      resetFormToEmpty();
+      setDraftActive(false);
+      messageApi.success("Draft cleared.");
+    } catch (err: unknown) {
+      messageApi.error(
+        err instanceof Error ? err.message : "Failed to clear draft",
+      );
+    } finally {
+      setDraftClearing(false);
+    }
+  };
+  const serializeDraftValues = (values: Record<string, unknown>) => {
+    const { employeeId: _omit, ...rest } = values;
+    return {
+      ...rest,
+      dob:
+        values.dob && dayjs.isDayjs(values.dob)
+          ? values.dob.toISOString()
+          : values.dob,
+      dateJoining:
+        values.dateJoining && dayjs.isDayjs(values.dateJoining)
+          ? values.dateJoining.toISOString()
+          : values.dateJoining,
+      dateConfirmation:
+        values.dateConfirmation && dayjs.isDayjs(values.dateConfirmation)
+          ? values.dateConfirmation.toISOString()
+          : values.dateConfirmation,
+    };
+  };
 
   useEffect(() => {
     if (!showReportingManager) {
@@ -111,10 +185,12 @@ export default function AddEmployeePage() {
       .then((d) => {
         if (d.success) {
           setDepartmentOptions(
-            d.data.map((role: any) => ({
-              value: role.roleKey,
-              label: role.label,
-            })),
+            filterHrAssignableRoles(
+              d.data.map((role: { roleKey: string; label: string }) => ({
+                value: role.roleKey,
+                label: role.label,
+              })),
+            ),
           );
         }
       })
@@ -128,31 +204,47 @@ export default function AddEmployeePage() {
             d.data.map((emp: { employeeId: string; fullName: string }) => ({
               value: formatReportingManagerLabel(emp.employeeId, emp.fullName),
               label: formatReportingManagerLabel(emp.employeeId, emp.fullName),
-            }))
+            })),
           );
         }
       })
       .catch(() => {});
 
-    // Load draft if it exists
-    const draft = localStorage.getItem(DRAFT_KEY);
-    if (draft) {
+    void (async () => {
       try {
-        const parsedDraft = JSON.parse(draft);
-        delete parsedDraft.employeeId;
-        if (parsedDraft.dob) parsedDraft.dob = dayjs(parsedDraft.dob);
-        if (parsedDraft.dateJoining)
-          parsedDraft.dateJoining = dayjs(parsedDraft.dateJoining);
-        if (parsedDraft.dateConfirmation)
-          parsedDraft.dateConfirmation = dayjs(parsedDraft.dateConfirmation);
+        const res = await fetch("/api/hrms/employees/draft");
+        const json = await res.json();
+        if (res.ok && json.success && json.data?.formData) {
+          const formData = json.data.formData as Record<string, unknown>;
+          if (draftHasContent(formData)) {
+            applyDraftToForm(formData, json.data.currentStep ?? 0);
+            setDraftActive(true);
+            return;
+          }
+        }
 
-        form.setFieldsValue(parsedDraft);
-        messageApi.info("Draft loaded successfully.");
+        const legacy = localStorage.getItem(LEGACY_DRAFT_KEY);
+        if (!legacy) return;
+
+        const parsedLegacy = JSON.parse(legacy) as Record<string, unknown>;
+        const formData = serializeDraftValues(parsedLegacy);
+        if (!draftHasContent(formData)) return;
+
+        const migrateRes = await fetch("/api/hrms/employees/draft", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ formData, currentStep: 0 }),
+        });
+        if (migrateRes.ok) {
+          localStorage.removeItem(LEGACY_DRAFT_KEY);
+          applyDraftToForm(formData, 0);
+          setDraftActive(true);
+        }
       } catch (e) {
-        console.error("Failed to parse draft", e);
+        console.error("Failed to load employee draft", e);
       }
-    }
-  }, []);
+    })();
+  }, [form, messageApi]);
 
   const handleAnnualCtcChange = (value: number | null) => {
     if (value) {
@@ -226,7 +318,9 @@ export default function AddEmployeePage() {
         duration: emailNote ? 3 : 1.5,
       });
 
-      localStorage.removeItem(DRAFT_KEY);
+      localStorage.removeItem(LEGACY_DRAFT_KEY);
+      await fetch("/api/hrms/employees/draft", { method: "DELETE" }).catch(() => {});
+      setDraftActive(false);
 
       setTimeout(() => {
         router.push("/hrms/employees");
@@ -243,8 +337,7 @@ export default function AddEmployeePage() {
 
   const employmentFields = (fields: string[]) =>
     fields.filter(
-      (field) =>
-        field !== "reportingManager" || showReportingManager
+      (field) => field !== "reportingManager" || showReportingManager,
     );
 
   const handleNext = async () => {
@@ -271,21 +364,29 @@ export default function AddEmployeePage() {
     }
   };
 
-  const handleSaveDraft = () => {
-    const values = form.getFieldsValue(true);
-    const { employeeId: _omit, ...rest } = values;
-    const draftValues = {
-      ...rest,
-      dob: values.dob ? values.dob.toISOString() : undefined,
-      dateJoining: values.dateJoining
-        ? values.dateJoining.toISOString()
-        : undefined,
-      dateConfirmation: values.dateConfirmation
-        ? values.dateConfirmation.toISOString()
-        : undefined,
-    };
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(draftValues));
-    messageApi.success("Draft saved successfully.");
+  const handleSaveDraft = async () => {
+    setDraftSaving(true);
+    try {
+      const values = form.getFieldsValue(true);
+      const formData = serializeDraftValues(values);
+      const res = await fetch("/api/hrms/employees/draft", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ formData, currentStep }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to save draft");
+      localStorage.removeItem(LEGACY_DRAFT_KEY);
+      setDraftActive(true);
+      messageApi.success("Draft saved to your account.");
+    } catch (err: unknown) {
+      messageApi.error({
+        content: err instanceof Error ? err.message : "Failed to save draft",
+        duration: 4,
+      });
+    } finally {
+      setDraftSaving(false);
+    }
   };
 
   const steps = [
@@ -460,7 +561,7 @@ export default function AddEmployeePage() {
               >
                 <Input.TextArea rows={2} />
               </Form.Item>
-              <Form.Item
+              {/* <Form.Item
                 className="emp-form-address-pin emp-form-no-optional"
                 name="permanentStatePin"
                 label="State / PIN Code"
@@ -469,7 +570,7 @@ export default function AddEmployeePage() {
                 ]}
               >
                 <NumericInput maxDigits={6} />
-              </Form.Item>
+              </Form.Item> */}
             </div>
           </div>
         </>
@@ -1022,7 +1123,18 @@ export default function AddEmployeePage() {
                 <Link href="/hrms/employees">
                   <Button>Cancel</Button>
                 </Link>
-                <Button onClick={handleSaveDraft}>Save as Draft</Button>
+                <Button loading={draftSaving} onClick={() => void handleSaveDraft()}>
+                  Save as Draft
+                </Button>
+                {draftActive ? (
+                  <Button
+                    danger
+                    loading={draftClearing}
+                    onClick={() => void handleClearDraft()}
+                  >
+                    Clear draft data
+                  </Button>
+                ) : null}
                 {currentStep > 0 && (
                   <Button onClick={handlePrev}>Previous</Button>
                 )}

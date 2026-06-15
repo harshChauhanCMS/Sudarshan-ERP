@@ -20,6 +20,7 @@ import PageHeader from "@/components/common/PageHeader";
 import StatCard from "@/components/common/StatCard";
 import ReportSection from "@/components/hrms/ReportSection";
 import EmployeeFilterPanel, {
+  DEFAULT_EMPLOYEE_FILTERS,
   type EmployeeFilterValues,
 } from "@/components/hrms/EmployeeFilterPanel";
 import { HRMS_BACK } from "@/lib/hrms-nav";
@@ -44,16 +45,6 @@ interface Employee {
   employmentStatus: EmploymentStatus;
   primaryShiftRaw: string;
 }
-
-const DEFAULT_FILTERS: EmployeeFilterValues = {
-  search: "",
-  department: "all",
-  role: "all",
-  shift: "all",
-  location: "all",
-  empType: "all",
-  status: "all",
-};
 
 const ATTENDANCE_TAG_COLORS: Record<AttendanceStatus, string> = {
   Present: "success",
@@ -89,13 +80,12 @@ function isLatePunch(punchedAt: Date, primaryShift: string): boolean {
 }
 
 function getFirstInTime(
-  punchLog?: { type: string; isoTime: string }[]
+  punchLog?: { type: string; isoTime: string }[],
 ): Date | null {
-  const ins =
-    punchLog?.filter((p) => p.type === "in" && p.isoTime) ?? [];
+  const ins = punchLog?.filter((p) => p.type === "in" && p.isoTime) ?? [];
   if (!ins.length) return null;
   const sorted = [...ins].sort(
-    (a, b) => new Date(a.isoTime).getTime() - new Date(b.isoTime).getTime()
+    (a, b) => new Date(a.isoTime).getTime() - new Date(b.isoTime).getTime(),
   );
   return new Date(sorted[0].isoTime);
 }
@@ -109,9 +99,11 @@ export default function EmployeesPage() {
   const { isManager } = useSessionUser();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<EmployeeFilterValues>(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState<EmployeeFilterValues>(
+    DEFAULT_EMPLOYEE_FILTERS,
+  );
   const [appliedFilters, setAppliedFilters] =
-    useState<EmployeeFilterValues>(DEFAULT_FILTERS);
+    useState<EmployeeFilterValues>(DEFAULT_EMPLOYEE_FILTERS);
   const [stats, setStats] = useState({
     presentToday: 0,
     onLeave: 0,
@@ -229,7 +221,7 @@ export default function EmployeesPage() {
             employmentStatus,
             primaryShiftRaw,
           };
-        }
+        },
       );
 
       setStats({
@@ -260,7 +252,7 @@ export default function EmployeesPage() {
       departments: uniq(employees.map((e) => e.department)),
       roles: uniq(employees.map((e) => e.role)),
       shifts: uniq(employees.map((e) => e.shift).filter((s) => s !== "—")),
-      locations: uniq(employees.map((e) => e.locationUnit)),
+      locations: [], // uniq(employees.map((e) => e.locationUnit)),
       empTypes: uniq(employees.map((e) => e.empType)),
       statuses: [
         { value: "Active", label: "Active" },
@@ -280,7 +272,7 @@ export default function EmployeesPage() {
           emp.phone,
           emp.department,
           emp.role,
-          emp.locationUnit,
+          // emp.locationUnit,
           emp.empType,
         ]
           .filter(Boolean)
@@ -307,12 +299,12 @@ export default function EmployeesPage() {
       ) {
         return false;
       }
-      if (
-        appliedFilters.location !== "all" &&
-        emp.locationUnit !== appliedFilters.location
-      ) {
-        return false;
-      }
+      // if (
+      //   appliedFilters.location !== "all" &&
+      //   emp.locationUnit !== appliedFilters.location
+      // ) {
+      //   return false;
+      // }
       if (
         appliedFilters.empType !== "all" &&
         emp.empType !== appliedFilters.empType
@@ -336,7 +328,7 @@ export default function EmployeesPage() {
       "Department",
       "Role",
       "Shift",
-      "Location / Unit",
+      // "Location / Unit",
       "Emp. Type",
       "Phone",
       "Attendance Status",
@@ -349,14 +341,14 @@ export default function EmployeesPage() {
         e.department,
         e.role,
         e.shift,
-        e.locationUnit,
+        // e.locationUnit,
         e.empType,
         e.phone,
         e.attendanceStatus,
         e.employmentStatus,
       ]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-        .join(",")
+        .join(","),
     );
     const csv = [headers.join(","), ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -524,6 +516,10 @@ export default function EmployeesPage() {
         options={filterOptions}
         loading={loading}
         onApply={() => setAppliedFilters({ ...filters })}
+        onClear={() => {
+          setFilters(DEFAULT_EMPLOYEE_FILTERS);
+          setAppliedFilters(DEFAULT_EMPLOYEE_FILTERS);
+        }}
       />
 
       <ReportSection
