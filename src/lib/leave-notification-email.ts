@@ -5,7 +5,7 @@ import { User } from "@/models/User";
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   casual: "Casual Leave (CL)",
   sick: "Sick Leave (SL)",
-  earned: "Earned Leave (EL)",
+  privilege: "Privilege Leave (PL)",
   unpaid: "Leave Without Pay (LWP)",
 };
 
@@ -150,6 +150,112 @@ function buildLeaveDecisionEmail({
   `;
 
   return { subject, text, html };
+}
+
+function buildLeaveRollbackEmail({
+  name,
+  leave,
+  rollbackReason,
+  actedBy,
+}: {
+  name: string;
+  leave: LeaveEmailPayload;
+  rollbackReason: string;
+  actedBy?: string;
+}) {
+  const typeLabel = leaveTypeLabel(leave.leaveType);
+  const from = formatLeaveDate(leave.fromDate);
+  const to = formatLeaveDate(leave.toDate);
+  const employeeName = leave.employeeName?.trim() || name;
+  const reason = rollbackReason.trim() || "Not specified";
+
+  const subject = `Leave approval rolled back — ${from} to ${to}`;
+
+  const text = [
+    `Hello ${employeeName},`,
+    "",
+    "Your approved leave request has been rolled back and is pending review again.",
+    "",
+    `Employee ID: ${leave.employeeId}`,
+    `Leave type: ${typeLabel}`,
+    `Dates: ${from} to ${to}`,
+    `Days: ${leave.days}`,
+    leave.reason?.trim() ? `Your reason: ${leave.reason.trim()}` : "",
+    `Rollback reason: ${reason}`,
+    actedBy ? `Action by: ${actedBy}` : "",
+    "",
+    "Please contact HR if you have questions.",
+    "",
+    "Sudarshan Group HR",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = `
+    <p>Hello <strong>${employeeName}</strong>,</p>
+    <p style="color:#d97706;font-weight:700;">
+      Your approved leave request has been rolled back and is pending review again.
+    </p>
+    <table cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse;">
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;">Employee ID</td><td style="padding:4px 0;">${leave.employeeId}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;">Leave type</td><td style="padding:4px 0;">${typeLabel}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;">Dates</td><td style="padding:4px 0;">${from} → ${to}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;">Days</td><td style="padding:4px 0;">${leave.days}</td></tr>
+      ${leave.reason?.trim() ? `<tr><td style="padding:4px 12px 4px 0;color:#64748b;">Your reason</td><td style="padding:4px 0;">${leave.reason.trim()}</td></tr>` : ""}
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;">Rollback reason</td><td style="padding:4px 0;">${reason}</td></tr>
+      ${actedBy ? `<tr><td style="padding:4px 12px 4px 0;color:#64748b;">Action by</td><td style="padding:4px 0;">${actedBy}</td></tr>` : ""}
+    </table>
+    <p style="color:#64748b;font-size:13px;">Please contact HR if you have questions.</p>
+    <p>Sudarshan Group HR</p>
+  `;
+
+  return { subject, text, html };
+}
+
+export async function sendLeaveRollbackEmail(
+  leave: LeaveEmailPayload,
+  options: { rollbackReason: string; actedBy?: string },
+): Promise<{ sent: boolean; reason?: string }> {
+  const recipient = await resolveEmployeeEmail(String(leave.employeeId));
+  if (!recipient) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        `[dev] Leave rollback email skipped — no email for ${leave.employeeId}`,
+      );
+    }
+    return { sent: false, reason: "no_email" };
+  }
+
+  const transporter = getMailTransporter();
+  const { subject, text, html } = buildLeaveRollbackEmail({
+    name: recipient.name,
+    leave,
+    rollbackReason: options.rollbackReason,
+    actedBy: options.actedBy,
+  });
+
+  if (!transporter) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        `[dev] Leave rollback email for ${recipient.email}:\n${text}`,
+      );
+    }
+    return { sent: false, reason: "email_not_configured" };
+  }
+
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_ID,
+      to: recipient.email,
+      subject,
+      text,
+      html,
+    });
+    return { sent: true };
+  } catch (err) {
+    console.error("Failed to send leave rollback email:", err);
+    return { sent: false, reason: "send_failed" };
+  }
 }
 
 export async function sendLeaveDecisionEmail(

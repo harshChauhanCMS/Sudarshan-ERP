@@ -620,6 +620,13 @@ const breadcrumbsFor = (route) => {
   ) {
     return ["People", "Reports", "Employee Report", "Detail"];
   }
+  if (
+    route?.startsWith("/hrms/employees/") &&
+    route !== "/hrms/employees" &&
+    route !== "/hrms/employees/add"
+  ) {
+    return ["People", "HR Management", "Employees", "Employee Profile"];
+  }
   return map[route] || [route];
 };
 

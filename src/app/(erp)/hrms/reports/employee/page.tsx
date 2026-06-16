@@ -128,16 +128,17 @@ export default function EmployeeReportPage() {
 
   const empColumns: CommonTableColumn<AttendanceSummaryRow>[] = [
     {
+      title: "Employee ID",
+      dataIndex: "employeeId",
+      key: "empId",
+      render: (v: string) => <span className="font-medium text-zinc-800">{v}</span>,
+    },
+    {
       title: "Employee",
       key: "emp",
       render: (_: unknown, row: AttendanceSummaryRow) => (
-        <span>
-          <span className="font-semibold text-zinc-900">
-            {row.employeeName}
-          </span>
-          <span className="ml-2 text-[12px] text-zinc-500">
-            {row.employeeId}
-          </span>
+        <span className="font-semibold text-zinc-900">
+          {row.employeeName}
         </span>
       ),
     },
@@ -247,6 +248,7 @@ export default function EmployeeReportPage() {
         units={r.units}
         loading={r.loading}
         onApply={r.handleApply}
+        onClear={r.handleClearFilters}
         search={r.search}
         setSearch={r.setSearch}
         splitApplyRow

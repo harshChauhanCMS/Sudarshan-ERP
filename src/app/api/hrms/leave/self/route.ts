@@ -4,6 +4,10 @@ import LeaveRequest from "@/lib/models/LeaveRequest";
 import LeavePolicy, { DEFAULT_LEAVE_POLICIES } from "@/lib/models/LeavePolicy";
 import { resolveSessionEmployee } from "@/lib/resolve-session-employee";
 import { getUserFromRequest } from "@/lib/api-request-auth";
+import {
+  LEAVE_BALANCE_USAGE_STATUSES,
+  syncCompletedLeaveStatuses,
+} from "@/lib/leave-status-sync";
 
 export async function GET(request: Request) {
   const user = await getUserFromRequest(request);
@@ -13,6 +17,7 @@ export async function GET(request: Request) {
 
   try {
     await connectDB();
+    await syncCompletedLeaveStatuses();
     const employee = await resolveSessionEmployee(user);
     if (!employee) {
       return fail(
@@ -35,7 +40,7 @@ export async function GET(request: Request) {
 
     const usedLeaves = await LeaveRequest.find({
       employeeId,
-      status: { $in: ["approved", "hod_approved", "pending"] },
+      status: { $in: [...LEAVE_BALANCE_USAGE_STATUSES] },
       fromDate: { $gte: start, $lte: end },
     })
       .select({ leaveType: 1, days: 1 })

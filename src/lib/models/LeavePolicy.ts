@@ -4,7 +4,7 @@ const LeavePolicySchema = new Schema(
   {
     leaveType: {
       type: String,
-      enum: ["casual", "sick", "earned", "unpaid"],
+      enum: ["casual", "sick", "privilege", "unpaid"],
       required: true,
       unique: true,
     },
@@ -26,7 +26,7 @@ const LeavePolicySchema = new Schema(
 export const DEFAULT_LEAVE_POLICIES = [
   { leaveType: "casual", label: "Casual Leave", annualQuota: 12, carryForwardAllowed: false, carryForwardMax: 0, applicableTo: "all" },
   { leaveType: "sick", label: "Sick Leave", annualQuota: 12, carryForwardAllowed: false, carryForwardMax: 0, applicableTo: "all" },
-  { leaveType: "earned", label: "Earned Leave", annualQuota: 15, carryForwardAllowed: true, carryForwardMax: 30, applicableTo: "permanent" },
+  { leaveType: "privilege", label: "Privilege Leave", annualQuota: 15, carryForwardAllowed: true, carryForwardMax: 30, applicableTo: "permanent" },
   { leaveType: "unpaid", label: "Unpaid Leave", annualQuota: 0, carryForwardAllowed: false, carryForwardMax: 0, applicableTo: "all" },
 ];
 

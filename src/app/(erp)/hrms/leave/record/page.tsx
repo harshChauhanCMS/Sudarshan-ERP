@@ -24,7 +24,7 @@ type LeaveHistoryRow = {
   reason: string;
   approver: string;
   appliedOn: string;
-  status: "Approved" | "Pending" | "Cancelled";
+  status: "Approved" | "Pending" | "Cancelled" | "Completed";
 };
 
 const TYPE_META: Record<string, { idle: string; idleBg: string; active: string }> = {
@@ -39,7 +39,7 @@ const TYPE_META: Record<string, { idle: string; idleBg: string; active: string }
 const LEAVE_TYPE_LABEL: Record<string, string> = {
   casual: "CL",
   sick: "SL",
-  earned: "PL",
+  privilege: "PL",
   unpaid: "Unpaid",
 };
 
@@ -47,6 +47,7 @@ const STATUS_COLOR = {
   Approved: "success",
   Pending: "processing",
   Cancelled: "error",
+  Completed: "cyan",
 } as const;
 
 function LeaveTypeFilter({
@@ -99,6 +100,7 @@ function LeaveTypeFilter({
 }
 
 function mapLeaveStatus(status: string): LeaveHistoryRow["status"] {
+  if (status === "completed") return "Completed";
   if (status === "approved") return "Approved";
   if (status === "pending" || status === "rolled_back") return "Pending";
   return "Cancelled";
@@ -125,11 +127,7 @@ export default function LeaveRecordPage() {
       .then(([leaveJson, empJson]) => {
         if (cancelled) return;
         setLeaves(Array.isArray(leaveJson?.data) ? leaveJson.data : []);
-        const emps = Array.isArray(empJson?.data) ? empJson.data : [];
-        setEmployees(emps);
-        if (!employee && emps[0]?.employeeId) {
-          setEmployee(String(emps[0].employeeId));
-        }
+        setEmployees(Array.isArray(empJson?.data) ? empJson.data : []);
       })
       .catch(() => {
         if (!cancelled) {
@@ -143,7 +141,6 @@ export default function LeaveRecordPage() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const selectedEmployee = employees.find((e) => e.employeeId === employee);
@@ -211,6 +208,13 @@ export default function LeaveRecordPage() {
       .map((y) => ({ value: String(y), label: String(y) }));
   }, [leaves]);
 
+  const handleClearFilters = () => {
+    setSearch("");
+    setEmployee(undefined);
+    setYear(String(dayjs().year()));
+    setTypeFilter("All");
+  };
+
   const tp = {
     bordered: true as const,
     size: "middle" as const,
@@ -273,6 +277,11 @@ export default function LeaveRecordPage() {
                 onChange={setYear}
                 options={yearOptions}
               />
+            </div>
+            <div className="ap-filters-row-break" aria-hidden="true" />
+            <div className="ap-filters-spacer" aria-hidden="true" />
+            <div className="arf-item ap-filters-actions ap-filters-actions--multi">
+              <Button onClick={handleClearFilters}>Clear filters</Button>
             </div>
           </div>
         </div>

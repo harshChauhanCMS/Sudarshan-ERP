@@ -7,6 +7,8 @@ import SalarySheet from "@/lib/models/SalarySheet";
 import { calcSalary } from "@/lib/salary-calc";
 import { getSession } from "@/lib/session";
 import { canManagePayroll } from "@/lib/hrms-access";
+import { User } from "@/models/User";
+import Notification from "@/lib/models/Notification";
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function endOfDay(d: Date)   { const x = new Date(d); x.setHours(23,59,59,999); return x; }
@@ -173,6 +175,27 @@ export async function POST(request: Request) {
       } else {
         await SalarySheet.create(sheet);
         results.push({ employeeId: eid, action: "created" });
+      }
+    }
+
+    if (results.length > 0) {
+      try {
+        const targetRoles = ["admin", "owner", "master", "hr"];
+        const admins = await User.find({ role: { $in: targetRoles } }).select("email").lean();
+        
+        if (admins.length > 0) {
+          const notifications = admins.map((admin: any) => ({
+            recipientEmail: admin.email,
+            category: "system",
+            type: "info",
+            message: `Monthly salary generated for ${cycle} (${results.length} employees).`,
+            target: "/hrms/salary/monthly",
+            read: false,
+          }));
+          await Notification.insertMany(notifications);
+        }
+      } catch (err) {
+        console.error("Failed to send salary generation notifications:", err);
       }
     }
 

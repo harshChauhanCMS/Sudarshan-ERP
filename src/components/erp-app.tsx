@@ -180,10 +180,12 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   }, [route, data.COMPANIES.length]);
 
   const handleLogin = async (email: string, password: string) => {
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: trimmedEmail, password: trimmedPassword }),
     });
     const json = await res.json();
     if (json.error) throw new Error(json.error);
@@ -242,6 +244,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
         companies={data.COMPANIES}
         dataWarning={meta?.warning}
         userEmail={sessionUser?.email}
+        userRole={sessionUser?.role}
         onSelect={(c) => {
           setCompany(c);
           navigate(

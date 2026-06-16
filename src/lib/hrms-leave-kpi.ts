@@ -14,9 +14,9 @@ export type LeaveApprovalKpi = {
 const LEAVE_TYPE_SHORT: Record<string, string> = {
   casual: "CL",
   sick: "SL",
-  earned: "PL",
+  privilege: "PL",
   unpaid: "Unpaid",
-  earned_leave: "PL",
+  privilege_leave: "PL",
 };
 
 export function computeLeaveApprovalKpi(

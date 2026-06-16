@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Tag, message, Tooltip, DatePicker, Select } from "antd";
 import {
   DownloadOutlined,
@@ -13,8 +13,11 @@ import {
   CheckCircleOutlined,
   DollarOutlined,
   WalletOutlined,
+  EyeOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 import RepHeader from "@/components/hrms/RepHeader";
 import { HRMS_BACK } from "@/lib/hrms-nav";
@@ -23,6 +26,7 @@ import StatCard from "@/components/common/StatCard";
 import ReportSection from "@/components/hrms/ReportSection";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 import FilterSearchField from "@/components/hrms/FilterSearchField";
+import PayslipModal from "@/components/hrms/PayslipModal";
 
 type SalaryRow = {
   _id: string;
@@ -41,6 +45,7 @@ type SalaryRow = {
   pfEmployer: number;
   esi: number;
   tds: number;
+  otherDeductions?: number;
   overtimeHours: number;
   overtimeAmount: number;
 };
@@ -57,7 +62,7 @@ const STATUS_OPTIONS = [
   { value: "paid", label: "Paid (disbursed)" },
   { value: "approved", label: "Approved" },
   { value: "draft", label: "Draft" },
-  { value: "pending", label: "Not generated" },
+  { value: "pending", label: "Pending" },
 ];
 
 const fmt = (n: number) =>
@@ -71,6 +76,7 @@ function parseCycleParam(value: string | null): dayjs.Dayjs {
 }
 
 function MonthlySalaryContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [sheets, setSheets] = useState<SalaryRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -79,6 +85,7 @@ function MonthlySalaryContent() {
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [payslipRow, setPayslipRow] = useState<SalaryRow | null>(null);
   const [month, setMonth] = useState(() =>
     parseCycleParam(searchParams.get("cycle"))
   );
@@ -117,6 +124,12 @@ function MonthlySalaryContent() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cycleKey, statusFilter]);
+
+  const handleClearFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setMonth(dayjs());
+  };
 
   const generate = async () => {
     setGenerating(true);
@@ -159,11 +172,41 @@ function MonthlySalaryContent() {
       message.success(`Approved ${json.data.approved} salary sheets`);
       setSelectedRowKeys([]);
       void load();
+      router.push(`/hrms/salary/bulk?cycle=${cycleKey}`);
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Approve failed");
     } finally {
       setApproving(false);
     }
+  };
+
+  const exportPdf = () => {
+    const doc = new jsPDF("landscape");
+    doc.setFontSize(16);
+    doc.text(`Monthly Salary - ${cycleLabel}`, 14, 20);
+    
+    autoTable(doc, {
+      startY: 30,
+      head: [["Emp ID", "Name", "Department", "Gross", "Present/Total", "Deduction", "Net Payable", "Status"]],
+      body: filteredSheets.map(r => [
+        r.employeeId,
+        r.employeeName,
+        r.department,
+        fmt(r.grossSalary),
+        `${r.daysPresent} / ${r.workingDays}`,
+        fmt(
+          (r.pfEmployee || 0) +
+          (r.esi || 0) +
+          (r.tds || 0) +
+          (r.leaveDeduction || 0) +
+          (r.otherDeductions || 0)
+        ),
+        fmt(r.netPayable),
+        r.status
+      ]),
+    });
+    
+    doc.save(`Monthly_Salary_${cycleKey}.pdf`);
   };
 
   const filteredSheets = useMemo(() => {
@@ -206,6 +249,7 @@ function MonthlySalaryContent() {
       title: "Name",
       dataIndex: "employeeName",
       key: "name",
+      width: 160,
       render: (v: string) => <span className="font-semibold">{v}</span>,
     },
     { title: "Department", dataIndex: "department", key: "dept", width: 130 },
@@ -319,8 +363,25 @@ function MonthlySalaryContent() {
             textTransform: "capitalize",
           }}
         >
-          {v === "disbursed" ? "Paid" : v === "pending" ? "Not generated" : v}
+          {v === "disbursed" ? "Paid" : v === "pending" ? "Pending" : v}
         </Tag>
+      ),
+    },
+    {
+      title: "Action",
+      key: "action",
+      width: 70,
+      fixed: "right" as const,
+      render: (_: unknown, row: SalaryRow) => (
+        row.status !== "pending" ? (
+          <Tooltip title="View Payslip">
+            <Button
+              type="text"
+              icon={<EyeOutlined />}
+              onClick={() => setPayslipRow(row)}
+            />
+          </Tooltip>
+        ) : null
       ),
     },
   ];
@@ -409,6 +470,7 @@ function MonthlySalaryContent() {
               >
                 Apply filters
               </Button>
+              <Button onClick={handleClearFilters}>Clear filters</Button>
               <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
                 Refresh
               </Button>
@@ -440,14 +502,9 @@ function MonthlySalaryContent() {
               </Button>
               <Button
                 icon={<DownloadOutlined />}
-                onClick={() =>
-                  window.open(
-                    `/api/hrms/salary/export.csv?cycle=${cycleKey}`,
-                    "_blank"
-                  )
-                }
+                onClick={exportPdf}
               >
-                Export CSV
+                Export PDF
               </Button>
             </div>
           </div>
@@ -485,7 +542,7 @@ function MonthlySalaryContent() {
             showSizeChanger: true,
             showTotal: (n) => `${n} employees`,
           }}
-          scroll={{ x: 1100 }}
+          scroll={{ x: 1250 }}
           locale={{
             emptyText: (
               <div className="py-12 text-center">
@@ -504,6 +561,11 @@ function MonthlySalaryContent() {
           }}
         />
       </ReportSection>
+      <PayslipModal
+        open={!!payslipRow}
+        onClose={() => setPayslipRow(null)}
+        salarySheet={payslipRow}
+      />
     </div>
   );
 }

@@ -1,12 +1,10 @@
 import { fail } from "@/lib/api-response";
 import { canPerform } from "@/lib/permission-types";
 import type { ModuleKey, ModulePermission } from "@/lib/permission-types";
+import { isAdminOrOwner } from "@/lib/role-utils";
 import { getSession, type SessionUser } from "@/lib/session";
 
-export function isAdminOrOwner(role?: string): boolean {
-  const r = role?.toLowerCase();
-  return r === "admin" || r === "owner";
-}
+export { isAdminOrOwner } from "@/lib/role-utils";
 
 export async function requireSession() {
   const session = await getSession();

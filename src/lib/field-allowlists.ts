@@ -57,6 +57,9 @@ export const EMPLOYEE_WRITABLE_FIELDS = [
 ] as const;
 
 export const SALARY_PATCH_FIELDS = [
+  "employeeName",
+  "department",
+  "designation",
   "basicSalary",
   "da",
   "hra",

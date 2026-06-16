@@ -13,6 +13,7 @@ import {
 import dayjs from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useRouter } from "next/navigation";
 import RepHeader from "@/components/hrms/RepHeader";
 import CommonTable from "@/components/common/CommonTable";
 import { TableActionIcon } from "@/components/common/TableActionIcons";
@@ -36,6 +37,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export default function PayrollBulkPage() {
+  const router = useRouter();
   const [month, setMonth] = useState(dayjs());
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -81,6 +83,12 @@ export default function PayrollBulkPage() {
   }, [rows, search]);
 
   const kpi = getPayrollSheetKpi(filtered);
+
+  const handleClearFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setMonth(dayjs());
+  };
 
   const money = (v: number) => (
     <span className="font-semibold whitespace-nowrap">{formatPayrollInr(v)}</span>
@@ -244,7 +252,16 @@ export default function PayrollBulkPage() {
       key: "actions",
       width: 100,
       fixed: "right" as const,
-      render: () => <TableActionIcon label="Edit" onClick={() => {}} />,
+      render: (_: unknown, record: PayrollSheetRow) => (
+        <TableActionIcon
+          label="Edit salary"
+          onClick={() => {
+            router.push(
+              `/hrms/salary/bulk/${encodeURIComponent(record.id)}?cycle=${encodeURIComponent(cycleKey)}`,
+            );
+          }}
+        />
+      ),
     },
   ];
 
@@ -326,17 +343,20 @@ export default function PayrollBulkPage() {
                 onChange={setStatusFilter}
                 options={[
                   { value: "all", label: "All statuses" },
-                  { value: "pending", label: "Not generated" },
+                  { value: "pending", label: "Pending" },
                   { value: "draft", label: "Draft" },
                   { value: "approved", label: "Approved" },
                   { value: "disbursed", label: "Disbursed" },
                 ]}
               />
             </div>
+            <div className="ap-filters-row-break" aria-hidden="true" />
+            <div className="ap-filters-spacer" aria-hidden="true" />
             <div className="arf-item ap-filters-actions ap-filters-actions--multi">
               <Button type="primary" icon={<FilterOutlined />} onClick={() => void load()}>
                 Apply filters
               </Button>
+              <Button onClick={handleClearFilters}>Clear filters</Button>
               <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
                 Refresh
               </Button>

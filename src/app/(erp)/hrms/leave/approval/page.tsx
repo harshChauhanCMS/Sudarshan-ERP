@@ -32,7 +32,9 @@ import StatCard from "@/components/common/StatCard";
 import EmployeeSelect from "@/components/erp/EmployeeSelect";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 import { leaveTypeColor } from "@/lib/leave-apply";
+import { hrCannotActionOwnLeave, filterLeavesForHrApproval } from "@/lib/leave-approval-rules";
 import { computeLeaveApprovalKpi } from "@/lib/hrms-leave-kpi";
+import type { PermissionsMap } from "@/lib/permission-types";
 import FilterSearchField from "@/components/hrms/FilterSearchField";
 import { filterBySearch } from "@/lib/filter-search";
 
@@ -42,6 +44,7 @@ const STATUS_COLOR: Record<string, string> = {
   rejected: "red",
   cancelled: "default",
   rolled_back: "purple",
+  completed: "cyan",
 };
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
@@ -49,11 +52,12 @@ const STATUS_LABEL: Record<string, string> = {
   rejected: "Rejected",
   cancelled: "Cancelled",
   rolled_back: "Rolled Back",
+  completed: "Completed",
 };
 const LEAVE_TYPE_LABEL: Record<string, string> = {
   casual: "Casual",
   sick: "Sick",
-  earned: "Earned",
+  privilege: "Privilege",
   unpaid: "Unpaid",
 };
 
@@ -81,6 +85,14 @@ export default function LeaveApprovalPage() {
   const [search, setSearch] = useState("");
   const [viewOpen, setViewOpen] = useState(false);
   const [viewRow, setViewRow] = useState<Record<string, unknown> | null>(null);
+  const [viewer, setViewer] = useState<{
+    employeeId?: string;
+    role?: string;
+    permissions?: PermissionsMap;
+  } | null>(null);
+
+  const isOwnLeave = (row: Record<string, unknown>) =>
+    hrCannotActionOwnLeave(viewer ?? undefined, String(row.employeeId ?? ""));
 
   const openView = (row: Record<string, unknown>) => {
     setViewRow(row);
@@ -90,7 +102,7 @@ export default function LeaveApprovalPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/hrms/leave");
+      const res = await fetch("/api/hrms/leave?forApproval=1");
       // Guard against HTML responses (auth redirect, 404 page, etc.)
       if (!res.headers.get("content-type")?.includes("application/json")) {
         setLeaves([]);
@@ -111,13 +123,31 @@ export default function LeaveApprovalPage() {
     void load();
   }, []);
 
-  const kpi = useMemo(() => computeLeaveApprovalKpi(leaves), [leaves]);
+  useEffect(() => {
+    void fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json?.data?.user) setViewer(json.data.user);
+      })
+      .catch(() => {});
+  }, []);
+
+  const approvalLeaves = useMemo(
+    () =>
+      filterLeavesForHrApproval(
+        viewer ?? undefined,
+        leaves as Array<Record<string, unknown> & { employeeId: string }>,
+      ),
+    [leaves, viewer],
+  );
+
+  const kpi = useMemo(() => computeLeaveApprovalKpi(approvalLeaves), [approvalLeaves]);
 
   const tableData = useMemo(() => {
     const byTab =
       activeTab === "all"
-        ? leaves
-        : leaves.filter((row) => String(row.status) === activeTab);
+        ? approvalLeaves
+        : approvalLeaves.filter((row) => String(row.status) === activeTab);
     return filterBySearch(byTab, search, (row) => [
       String(row.employeeId ?? ""),
       String(row.employeeName ?? ""),
@@ -128,7 +158,7 @@ export default function LeaveApprovalPage() {
       String(row.fromDate ?? ""),
       String(row.toDate ?? ""),
     ]);
-  }, [leaves, activeTab, search]);
+  }, [approvalLeaves, activeTab, search]);
 
   const approve = async (id: string) => {
     try {
@@ -175,7 +205,10 @@ export default function LeaveApprovalPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed");
-      message.success("Rolled back");
+      const emailNote = json?.data?.email?.sent
+        ? " Employee notified by email."
+        : "";
+      message.success(`Rolled back.${emailNote}`);
       setRollbackOpen(false);
       rollbackForm.resetFields();
       void load();
@@ -286,7 +319,9 @@ export default function LeaveApprovalPage() {
       key: "actions",
       width: 110,
       fixed: "right" as const,
-      render: (_: unknown, row: Record<string, unknown>) => (
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const ownLeave = isOwnLeave(row);
+        return (
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <Tooltip title="View details">
             <Button
@@ -295,7 +330,7 @@ export default function LeaveApprovalPage() {
               onClick={() => openView(row)}
             />
           </Tooltip>
-          {row.status === "pending" && (
+          {row.status === "pending" && !ownLeave && (
             <Tooltip title="Approve">
               <Button
                 size="small"
@@ -309,7 +344,7 @@ export default function LeaveApprovalPage() {
               />
             </Tooltip>
           )}
-          {row.status === "pending" && (
+          {row.status === "pending" && !ownLeave && (
             <Tooltip title="Reject">
               <Button
                 size="small"
@@ -322,7 +357,12 @@ export default function LeaveApprovalPage() {
               />
             </Tooltip>
           )}
-          {row.status === "approved" && (
+          {row.status === "pending" && ownLeave && (
+            <Tooltip title="You cannot approve or reject your own leave">
+              <span className="text-[11px] text-zinc-400">Self</span>
+            </Tooltip>
+          )}
+          {row.status === "approved" && !ownLeave && (
             <Tooltip title="Rollback approval">
               <Button
                 size="small"
@@ -335,15 +375,17 @@ export default function LeaveApprovalPage() {
             </Tooltip>
           )}
         </div>
-      ),
+        );
+      },
     },
   ];
 
   const tabItems = [
-    { key: "all", label: "All" },
-    { key: "pending", label: `Pending (${kpi.pending})` },
-    { key: "approved", label: "Approved" },
-    { key: "rejected", label: "Rejected" },
+    { key: "all", label: `All (${approvalLeaves.length})` },
+    { key: "pending", label: `Pending (${approvalLeaves.filter((r) => r.status === "pending").length})` },
+    { key: "approved", label: `Approved (${approvalLeaves.filter((r) => r.status === "approved").length})` },
+    { key: "completed", label: `Completed (${approvalLeaves.filter((r) => r.status === "completed").length})` },
+    { key: "rejected", label: `Rejected (${approvalLeaves.filter((r) => r.status === "rejected").length})` },
   ];
 
   return (
@@ -421,12 +463,17 @@ export default function LeaveApprovalPage() {
           <span className="arf-head-title">Filters</span>
         </div>
         <div className="arf-body">
-          <div className="arf-controls ap-filters-controls">
+          <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
             <FilterSearchField
               value={search}
               onChange={setSearch}
               placeholder="Search employee name, ID, leave type, reason…"
             />
+            <div className="ap-filters-row-break" aria-hidden="true" />
+            <div className="ap-filters-spacer" aria-hidden="true" />
+            <div className="arf-item ap-filters-actions ap-filters-actions--multi">
+              <Button onClick={() => setSearch("")}>Clear filters</Button>
+            </div>
           </div>
         </div>
       </div>
@@ -457,6 +504,9 @@ export default function LeaveApprovalPage() {
                   rowSelection={{
                     selectedRowKeys,
                     onChange: (keys) => setSelectedRowKeys(keys as string[]),
+                    getCheckboxProps: (record) => ({
+                      disabled: isOwnLeave(record as Record<string, unknown>),
+                    }),
                   }}
                   pagination={{
                     pageSize: 15,
@@ -488,7 +538,7 @@ export default function LeaveApprovalPage() {
         }}
         width={520}
         footer={
-          viewRow?.status === "pending" ? (
+          viewRow?.status === "pending" && !isOwnLeave(viewRow) ? (
             <div className="leave-view-modal-footer">
               <Button onClick={() => setViewOpen(false)}>Close</Button>
               <Button
@@ -514,6 +564,13 @@ export default function LeaveApprovalPage() {
               >
                 Approve
               </Button>
+            </div>
+          ) : viewRow?.status === "pending" && isOwnLeave(viewRow) ? (
+            <div className="leave-view-modal-footer">
+              <span className="text-[13px] text-zinc-500">
+                You cannot approve or reject your own leave request.
+              </span>
+              <Button onClick={() => setViewOpen(false)}>Close</Button>
             </div>
           ) : (
             <Button

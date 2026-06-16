@@ -14,6 +14,16 @@ export interface EmployeeFilterValues {
   status: string;
 }
 
+export const DEFAULT_EMPLOYEE_FILTERS: EmployeeFilterValues = {
+  search: "",
+  department: "all",
+  role: "all",
+  shift: "all",
+  location: "all",
+  empType: "all",
+  status: "all",
+};
+
 interface FilterOptions {
   departments: { value: string; label: string }[];
   roles: { value: string; label: string }[];
@@ -29,6 +39,7 @@ interface Props {
   options: FilterOptions;
   loading?: boolean;
   onApply: () => void;
+  onClear?: () => void;
 }
 
 export default function EmployeeFilterPanel({
@@ -37,9 +48,19 @@ export default function EmployeeFilterPanel({
   options,
   loading = false,
   onApply,
+  onClear,
 }: Props) {
   const patch = (key: keyof EmployeeFilterValues, value: string) =>
     setFilters({ ...filters, [key]: value });
+
+  const handleClear = () => {
+    if (onClear) {
+      onClear();
+      return;
+    }
+    setFilters(DEFAULT_EMPLOYEE_FILTERS);
+    onApply();
+  };
 
   return (
     <div className="arf-panel ap-filters-panel">
@@ -95,7 +116,7 @@ export default function EmployeeFilterPanel({
             />
           </div>
 
-          <div className="arf-item">
+          {/* <div className="arf-item">
             <span className="arf-label">Location / unit</span>
             <Select
               className="w-full"
@@ -106,7 +127,7 @@ export default function EmployeeFilterPanel({
                 ...options.locations,
               ]}
             />
-          </div>
+          </div> */}
 
           <div className="ap-filters-row-break" aria-hidden="true" />
 
@@ -137,7 +158,7 @@ export default function EmployeeFilterPanel({
           </div>
 
           <div className="ap-filters-spacer" aria-hidden="true" />
-          <div className="arf-item ap-filters-actions">
+          <div className="arf-item ap-filters-actions ap-filters-actions--multi">
             <Button
               type="primary"
               icon={<FilterOutlined />}
@@ -146,6 +167,7 @@ export default function EmployeeFilterPanel({
             >
               Apply filters
             </Button>
+            <Button onClick={handleClear}>Clear filters</Button>
           </div>
         </div>
       </div>

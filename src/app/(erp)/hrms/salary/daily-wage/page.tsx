@@ -64,9 +64,8 @@ export default function DailyWagePayrollPage() {
   const [contractorOptions, setContractorOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [payPeriod, setPayPeriod] = useState(
-    () => dayjs().format("YYYY-MM")
-  );
+  const currentMonth = dayjs().format("YYYY-MM");
+  const [payPeriod, setPayPeriod] = useState(currentMonth);
   const [payFrequency, setPayFrequency] = useState("Monthly");
   const [unit, setUnit] = useState("All");
   const [skill, setSkill] = useState("All");
@@ -74,11 +73,12 @@ export default function DailyWagePayrollPage() {
   const [disbursement, setDisbursement] = useState("All");
   const [search, setSearch] = useState("");
 
-  const loadWorkers = useCallback(async () => {
+  const fetchWorkers = useCallback(async (period: string, signal?: AbortSignal) => {
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/hrms/salary/daily-wage?period=${encodeURIComponent(payPeriod)}`
+        `/api/hrms/salary/daily-wage?period=${encodeURIComponent(period)}`,
+        { signal },
       );
       const json = await res.json();
       if (!res.ok || json?.error) throw new Error(json?.error ?? "Failed");
@@ -86,20 +86,39 @@ export default function DailyWagePayrollPage() {
       setUnitOptions(json.data?.units ?? []);
       setContractorOptions(json.data?.contractors ?? []);
     } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       message.error(
-        e instanceof Error ? e.message : "Failed to load daily wage employees"
+        e instanceof Error ? e.message : "Failed to load daily wage employees",
       );
       setAllWorkers([]);
       setUnitOptions([]);
       setContractorOptions([]);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
-  }, [payPeriod]);
+  }, []);
 
   useEffect(() => {
-    void loadWorkers();
-  }, [loadWorkers]);
+    const controller = new AbortController();
+    void fetchWorkers(payPeriod, controller.signal);
+    return () => controller.abort();
+  }, [payPeriod, fetchWorkers]);
+
+  const handleApplyFilters = () => {
+    void fetchWorkers(payPeriod);
+  };
+
+  const handleClearFilters = () => {
+    const month = dayjs().format("YYYY-MM");
+    setPayPeriod(month);
+    setPayFrequency("Monthly");
+    setUnit("All");
+    setSkill("All");
+    setContractor("All");
+    setDisbursement("All");
+    setSearch("");
+    void fetchWorkers(month);
+  };
 
   const workers = useMemo(
     () => filterWorkers(allWorkers, { unit, skill, contractor, disbursement }),
@@ -116,8 +135,7 @@ export default function DailyWagePayrollPage() {
   const sample = useMemo(() => getSampleWorker(workers), [workers]);
   const samplePay = sample ? calcWorkerPay(sample) : null;
 
-  const periodLabel =
-    periodOptions.find((p) => p.value === payPeriod)?.label ?? payPeriod;
+  const periodLabel = dayjs(`${payPeriod}-01`).format("MMM YYYY");
 
   const searchedWorkers = useMemo(
     () =>
@@ -157,6 +175,13 @@ export default function DailyWagePayrollPage() {
     }
     return { days, wages, otHrs, otAmt, gross, ded, net };
   }, [tableData]);
+
+  const hasEmployeeData = !loading && searchedWorkers.length > 0;
+  const emptyTableMessage = loading
+    ? "Loading…"
+    : allWorkers.length === 0
+      ? "No daily wage employees found. Add employees with compensation type “Daily wage”."
+      : "No employees match the selected filters";
 
   const columns = [
     {
@@ -427,21 +452,23 @@ export default function DailyWagePayrollPage() {
               />
             </div>
             <div className="ap-filters-spacer" aria-hidden="true" />
-            <div className="arf-item ap-filters-actions">
+            <div className="arf-item ap-filters-actions ap-filters-actions--multi">
               <Button
                 type="primary"
                 icon={<FilterOutlined />}
                 loading={loading}
-                onClick={() => void loadWorkers()}
+                onClick={handleApplyFilters}
               >
                 Apply filters
               </Button>
+              <Button onClick={handleClearFilters}>Clear filters</Button>
             </div>
           </div>
         </div>
       </div>
 
       {/* KPI cards */}
+      {hasEmployeeData ? (
       <div className="daily-wage-kpi-grid">
         <StatCard
           icon={TeamOutlined}
@@ -471,9 +498,10 @@ export default function DailyWagePayrollPage() {
           hintTone="positive"
         />
       </div>
+      ) : null}
 
       {/* Sample calculation */}
-      {sample && samplePay && (
+      {hasEmployeeData && sample && samplePay && (
         <ReportSection
           title={`Sample calculation — ${sample.name}`}
           meta={`${sample.code} · ${sample.skill} · ${sample.trade}`}
@@ -555,7 +583,7 @@ export default function DailyWagePayrollPage() {
 
       {/* Main payroll table */}
       <ReportSection
-        title={`Wage labour payroll — ${periodLabel.split(" ")[0]} ${periodLabel.split(" ")[1] ?? ""}`}
+        title={`Wage labour payroll — ${periodLabel}`}
         meta={`${workers.length} labourers · ${formatLakhs(kpi.totalPayout)}`}
         flush
       >
@@ -568,9 +596,11 @@ export default function DailyWagePayrollPage() {
           size="small"
           scroll={{ x: 1400 }}
           locale={{
-            emptyText: loading
-              ? "Loading…"
-              : "No daily wage employees found. Add employees with compensation type “Daily wage”.",
+            emptyText: (
+              <div className="py-8 text-center text-zinc-400 font-medium">
+                {emptyTableMessage}
+              </div>
+            ),
           }}
           pagination={{
             pageSize: 10,
@@ -578,7 +608,9 @@ export default function DailyWagePayrollPage() {
             showTotal: (t, r) => `Showing ${r[0]}–${r[1]} of ${t}`,
           }}
           className="attendance-report-table"
-          summary={() => (
+          summary={
+            hasEmployeeData
+              ? () => (
             <Table.Summary fixed>
               <Table.Summary.Row
                 className="daily-wage-table-totals-row"
@@ -611,11 +643,14 @@ export default function DailyWagePayrollPage() {
                 <Table.Summary.Cell index={13} colSpan={2} />
               </Table.Summary.Row>
             </Table.Summary>
-          )}
+              )
+              : undefined
+          }
         />
       </ReportSection>
 
       {/* Trade + disbursement summary */}
+      {hasEmployeeData ? (
       <div className="daily-wage-bottom-grid">
         <ReportSection title="Trade-wise summary" flush>
           <CommonTable
@@ -706,6 +741,7 @@ export default function DailyWagePayrollPage() {
           </div>
         </ReportSection>
       </div>
+      ) : null}
     </div>
   );
 }

@@ -8,7 +8,7 @@ const LeaveRequestSchema = new Schema(
     reportingManager: { type: String, trim: true },
     leaveType: {
       type: String,
-      enum: ["casual", "sick", "earned", "unpaid"],
+      enum: ["casual", "sick", "privilege", "unpaid"],
       required: true,
       index: true,
     },
@@ -18,7 +18,7 @@ const LeaveRequestSchema = new Schema(
     reason: { type: String, trim: true },
     status: {
       type: String,
-      enum: ["pending", "hod_approved", "approved", "rejected", "cancelled", "rolled_back"],
+      enum: ["pending", "hod_approved", "approved", "rejected", "cancelled", "rolled_back", "completed"],
       default: "pending",
       index: true,
     },

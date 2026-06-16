@@ -29,6 +29,7 @@ interface Props {
   units: string[];
   loading: boolean;
   onApply: () => void;
+  onClear?: () => void;
   periodOptions?: PeriodOption[];
   showShift?: boolean;
   showEmployee?: boolean;
@@ -47,7 +48,7 @@ export default function AttendanceFilterPanel({
   unit, setUnit,
   period, setPeriod,
   departments, units,
-  loading, onApply,
+  loading, onApply, onClear,
   periodOptions = DEFAULT_PERIOD_OPTIONS,
   showShift = true,
   showEmployee = false,
@@ -58,6 +59,15 @@ export default function AttendanceFilterPanel({
   setSearch,
   searchPlaceholder,
 }: Props) {
+  const handleClear = () => {
+    if (onClear) {
+      onClear();
+      return;
+    }
+    if (setSearch) setSearch("");
+    onApply();
+  };
+
   const controlsClass = splitApplyRow
     ? "arf-controls ap-filters-controls ap-filters-controls--split-apply"
     : "arf-controls ap-filters-controls";
@@ -190,7 +200,7 @@ export default function AttendanceFilterPanel({
             </>
           )}
 
-          <div className="arf-item ap-filters-actions">
+          <div className="arf-item ap-filters-actions ap-filters-actions--multi">
             <Button
               type="primary"
               icon={<FilterOutlined />}
@@ -199,6 +209,7 @@ export default function AttendanceFilterPanel({
             >
               Apply filters
             </Button>
+            <Button onClick={handleClear}>Clear filters</Button>
           </div>
         </div>
       </div>

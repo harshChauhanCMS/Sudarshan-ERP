@@ -4,6 +4,10 @@ import {
   filterRowsForHrViewer,
 } from "@/lib/hr-staff-visibility";
 import {
+  hrCannotActionOwnLeave,
+  SELF_LEAVE_ACTION_BLOCKED,
+} from "@/lib/leave-approval-rules";
+import {
   isManagerRole,
   resolveManagerScope,
 } from "@/lib/manager-scope";
@@ -84,6 +88,11 @@ export async function assertCanApproveLeave(
   targetEmployeeId: string,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   if (!user) return { ok: false, message: "Unauthorized" };
+
+  if (hrCannotActionOwnLeave(user, targetEmployeeId)) {
+    return { ok: false, message: SELF_LEAVE_ACTION_BLOCKED };
+  }
+
   if (isAdminOrOwner(user.role)) return { ok: true };
   if (canPerform(user.permissions, "hr", "approve")) return { ok: true };
   if (isManagerRole(user.role)) {
@@ -103,6 +112,18 @@ export function canManageEmployees(user?: SessionUser): boolean {
   if (!user) return false;
   if (isAdminOrOwner(user.role)) return true;
   return canPerform(user.permissions, "hr", "add") || canPerform(user.permissions, "hr", "edit");
+}
+
+/** Owner, admin, HR, and master may resend expired temporary login credentials. */
+export function canResendEmployeeCredentials(user?: SessionUser): boolean {
+  if (!user?.role) return false;
+  const role = user.role.toLowerCase();
+  return (
+    role === "owner" ||
+    role === "admin" ||
+    role === "hr" ||
+    role === "master"
+  );
 }
 
 export function canManagePayroll(user?: SessionUser): boolean {
