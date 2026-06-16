@@ -45,6 +45,7 @@ type SalaryRow = {
   pfEmployer: number;
   esi: number;
   tds: number;
+  otherDeductions?: number;
   overtimeHours: number;
   overtimeAmount: number;
 };

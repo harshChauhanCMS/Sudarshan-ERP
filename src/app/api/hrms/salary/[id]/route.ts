@@ -142,8 +142,9 @@ export async function GET(
     const payload = await buildSheetPayload(id, cycle);
 
     if ("error" in payload) {
-      const status = payload.error.includes("cycle") ? 400 : 404;
-      return fail(payload.error, status);
+      const errMsg = String(payload.error);
+      const status = errMsg.includes("cycle") ? 400 : 404;
+      return fail(errMsg, status);
     }
 
     const access = await assertEmployeeVisibleToViewer(
