@@ -76,7 +76,7 @@ export async function GET(request: Request) {
   }
 }
 
-const VALID_LEAVE_TYPES = new Set(["casual", "sick", "earned", "unpaid"]);
+const VALID_LEAVE_TYPES = new Set(["casual", "sick", "privilege", "unpaid"]);
 
 async function getLeaveUsageForYear(employeeId: string, year: number) {
   const start = new Date(`${year}-01-01`);

@@ -4,21 +4,21 @@ export const APPLY_LEAVE_TYPES = ["PL", "CL", "SL", "LWP"] as const;
 export type ApplyLeaveUiType = (typeof APPLY_LEAVE_TYPES)[number];
 
 export const UI_LEAVE_TO_API: Record<ApplyLeaveUiType, string> = {
-  PL: "earned",
+  PL: "privilege",
   CL: "casual",
   SL: "sick",
   LWP: "unpaid",
 };
 
 export const API_LEAVE_TO_UI: Record<string, ApplyLeaveUiType> = {
-  earned: "PL",
+  privilege: "PL",
   casual: "CL",
   sick: "SL",
   unpaid: "LWP",
 };
 
 export const API_LEAVE_LABELS: Record<string, string> = {
-  earned: "Earned Leave (PL)",
+  privilege: "Privilege Leave (PL)",
   casual: "Casual Leave (CL)",
   sick: "Sick Leave (SL)",
   unpaid: "Leave Without Pay (LWP)",
@@ -53,7 +53,7 @@ export function uiTypeToApi(type: string): string | null {
 }
 
 const LEAVE_TYPE_TAG_COLORS: Record<string, string> = {
-  earned: "green",
+  privilege: "green",
   casual: "blue",
   sick: "red",
   unpaid: "default",

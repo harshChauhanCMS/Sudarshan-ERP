@@ -19,7 +19,7 @@ export interface SalaryInputs {
   overtimeApplicable: boolean;
 
   // Approved leaves
-  approvedLeaveDays: number;  // paid leaves (casual / sick / earned) — do NOT deduct
+  approvedLeaveDays: number;  // paid leaves (casual / sick / privilege) — do NOT deduct
   unpaidLeaveDays: number;    // explicitly unpaid approved leaves
 
   // Manual overrides (HR can set these)

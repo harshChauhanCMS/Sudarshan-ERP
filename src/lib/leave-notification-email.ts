@@ -5,7 +5,7 @@ import { User } from "@/models/User";
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   casual: "Casual Leave (CL)",
   sick: "Sick Leave (SL)",
-  earned: "Earned Leave (EL)",
+  privilege: "Privilege Leave (PL)",
   unpaid: "Leave Without Pay (LWP)",
 };
 

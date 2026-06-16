@@ -39,7 +39,7 @@ const TYPE_META: Record<string, { idle: string; idleBg: string; active: string }
 const LEAVE_TYPE_LABEL: Record<string, string> = {
   casual: "CL",
   sick: "SL",
-  earned: "PL",
+  privilege: "PL",
   unpaid: "Unpaid",
 };
 

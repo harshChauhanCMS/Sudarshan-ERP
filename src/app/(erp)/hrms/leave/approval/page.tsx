@@ -57,7 +57,7 @@ const STATUS_LABEL: Record<string, string> = {
 const LEAVE_TYPE_LABEL: Record<string, string> = {
   casual: "Casual",
   sick: "Sick",
-  earned: "Earned",
+  privilege: "Privilege",
   unpaid: "Unpaid",
 };
 

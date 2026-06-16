@@ -7,7 +7,7 @@ import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 
 const LEAVE_TYPE_LABEL: Record<string, string> = {
-  casual: "Casual", sick: "Sick", earned: "Earned", unpaid: "Unpaid",
+  casual: "Casual", sick: "Sick", privilege: "Privilege", unpaid: "Unpaid",
 };
 
 export function LeavePolicyEditor() {
