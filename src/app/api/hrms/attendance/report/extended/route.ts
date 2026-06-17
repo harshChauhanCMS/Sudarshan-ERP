@@ -18,7 +18,12 @@ function parseDateParam(v: string | null): Date | null {
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function endOfDay(d: Date)   { const x = new Date(d); x.setHours(23,59,59,999); return x; }
-function dayKey(d: Date)     { return d.toISOString().slice(0,10); }
+function dayKey(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 function msToHours(ms: number) { return Math.round((ms/36e5)*100)/100; }
 
 /** Parse "Shift A — 06:00 to 14:00" → hour in local terms */
@@ -97,13 +102,21 @@ export async function GET(request: Request) {
 
     const empIds = employees.map((e) => String(e.employeeId));
 
-    if (empIds.length === 0) {
+    // Fetch punches in range for scoped employees only
+    const punchQuery: Record<string, any> = {
+      punchedAt: { $gte: fromD, $lte: toD },
+      employeeId: { $in: empIds },
+    };
+
+    const punches = await AttendancePunch.find(punchQuery).sort({ punchedAt: 1 }).lean();
+
+    if (empIds.length === 0 || punches.length === 0) {
       const workingDays = allDaysBetween(fromD, toD).filter(
         (d) => new Date(d).getDay() !== 0
       ).length;
       return ok({
-        from: fromD.toISOString(),
-        to: toD.toISOString(),
+        from: `${fromD.getFullYear()}-${String(fromD.getMonth() + 1).padStart(2, "0")}-${String(fromD.getDate()).padStart(2, "0")}`,
+        to: `${toD.getFullYear()}-${String(toD.getMonth() + 1).padStart(2, "0")}-${String(toD.getDate()).padStart(2, "0")}`,
         workingDays,
         kpi: {
           totalEmployees: 0,
@@ -123,14 +136,6 @@ export async function GET(request: Request) {
         daily: [],
       });
     }
-
-    // Fetch punches in range for scoped employees only
-    const punchQuery: Record<string, any> = {
-      punchedAt: { $gte: fromD, $lte: toD },
-      employeeId: { $in: empIds },
-    };
-
-    const punches = await AttendancePunch.find(punchQuery).sort({ punchedAt: 1 }).lean();
 
     // (employeeId, day) -> { inAt, outAt }
     type DayEntry = { employeeId: string; day: string; inAt: Date|null; outAt: Date|null };
@@ -231,13 +236,18 @@ export async function GET(request: Request) {
       }
     }
 
-    // Round summary
-    const summary = Array.from(summaryMap.values()).map((s) => ({
+    // Round summary and filter out users with 0 attendance
+    let summary = Array.from(summaryMap.values()).map((s) => ({
       ...s,
       totalWorkedHours: round2(s.totalWorkedHours),
       totalShortfall:   round2(s.totalShortfall),
       totalOvertime:    round2(s.totalOvertime),
     }));
+
+    summary = summary.filter((s) => s.presentDays > 0);
+
+    const activeEmpIds = new Set(summary.map((s) => s.employeeId));
+    let activeDaily = daily.filter((d) => activeEmpIds.has(d.employeeId));
 
     // KPI totals
     const kpi = {
@@ -274,7 +284,7 @@ export async function GET(request: Request) {
       kpi,
       gpsSummary,
       summary,
-      daily: sortDailyRows(daily),
+      daily: sortDailyRows(activeDaily),
     });
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Report failed", 500);
