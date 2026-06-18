@@ -126,21 +126,72 @@ export default function EmployeeReportPage() {
     }
   }, [r.summary, reportType]);
 
-  const empColumns: CommonTableColumn<AttendanceSummaryRow>[] = [
+  const groupedData = useMemo(() => {
+    if (groupBy === "employee") return filtered;
+
+    const map = new Map<string, AttendanceSummaryRow & { children?: AttendanceSummaryRow[] }>();
+    filtered.forEach((row) => {
+      let key = "Unknown";
+      if (groupBy === "department") key = row.department || "Unknown";
+      else if (groupBy === "shift") key = row.primaryShift || "Unknown";
+      else if (groupBy === "unit") key = row.locationUnit || "Unknown";
+      else if (groupBy === "empType") key = "Regular";
+
+      if (!map.has(key)) {
+        map.set(key, {
+          employeeId: `group-${key}`,
+          employeeName: key,
+          department: groupBy === "department" ? key : "",
+          designation: "",
+          locationUnit: groupBy === "unit" ? key : "",
+          primaryShift: groupBy === "shift" ? key : "",
+          dateJoining: "",
+          totalDays: 0,
+          presentDays: 0,
+          absentDays: 0,
+          lateDays: 0,
+          totalWorkedHours: 0,
+          totalShortfall: 0,
+          totalOvertime: 0,
+          children: [],
+        });
+      }
+      const group = map.get(key)!;
+      group.totalDays = Math.max(group.totalDays, row.totalDays);
+      group.presentDays += row.presentDays;
+      group.absentDays += row.absentDays;
+      group.lateDays += row.lateDays;
+      group.totalWorkedHours += row.totalWorkedHours;
+      group.totalShortfall += row.totalShortfall;
+      group.totalOvertime += row.totalOvertime;
+      group.children!.push(row);
+    });
+    return Array.from(map.values());
+  }, [filtered, groupBy]);
+
+  const empColumns: CommonTableColumn<AttendanceSummaryRow & { children?: any }>[] = [
     {
       title: "Employee ID",
       dataIndex: "employeeId",
       key: "empId",
-      render: (v: string) => <span className="font-medium text-zinc-800">{v}</span>,
+      render: (v: string) => {
+        if (v.startsWith("group-")) return <span className="font-bold text-zinc-400 uppercase text-xs tracking-wider">GROUP</span>;
+        return <span className="font-medium text-zinc-800">{v}</span>;
+      },
     },
     {
       title: "Employee",
       key: "emp",
-      render: (_: unknown, row: AttendanceSummaryRow) => (
-        <span className="font-semibold text-zinc-900">
-          {row.employeeName}
-        </span>
-      ),
+      render: (_: unknown, row: AttendanceSummaryRow & { children?: any }) => {
+        if (row.children) {
+          return <span className="font-bold text-zinc-900">{row.employeeName} ({row.children.length})</span>;
+        }
+        return (
+          <span className="font-semibold text-zinc-900">
+            {row.employeeName}
+          </span>
+        );
+      },
     },
     { title: "Dept", dataIndex: "department", key: "dept" },
     {
@@ -197,13 +248,16 @@ export default function EmployeeReportPage() {
       key: "actions",
       width: 72,
       fixed: "right" as const,
-      render: (_: unknown, row: AttendanceSummaryRow) => (
-        <TableActionIcon
-          label="View report"
-          icon={<EyeOutlined />}
-          href={buildReportHref(row)}
-        />
-      ),
+      render: (_: unknown, row: AttendanceSummaryRow & { children?: any }) => {
+        if (row.children) return null;
+        return (
+          <TableActionIcon
+            label="View report"
+            icon={<EyeOutlined />}
+            href={buildReportHref(row)}
+          />
+        );
+      },
     },
   ];
 
@@ -285,7 +339,7 @@ export default function EmployeeReportPage() {
         <CommonTable
           {...tableProps}
           columns={empColumns}
-          dataSource={filtered}
+          dataSource={groupedData}
           rowKey="employeeId"
           loading={r.loading}
           pagination={{ pageSize: 15, showSizeChanger: true }}

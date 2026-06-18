@@ -222,6 +222,7 @@ export async function GET(request: Request) {
           employeeId: eid, employeeName: emp.fullName,
           department: emp.department, designation: emp.designation,
           locationUnit: emp.locationUnit, primaryShift: emp.primaryShift,
+          empType: emp.compensationType || "Regular",
           dateJoining: emp.dateJoining,
           totalDays: 0, presentDays: 0, absentDays: 0, lateDays: 0,
           totalWorkedHours: 0, totalShortfall: 0, totalOvertime: 0,
