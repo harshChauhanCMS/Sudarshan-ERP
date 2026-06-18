@@ -132,12 +132,11 @@ export default function AttendanceOverviewPage() {
         actions={
           <Button
             icon={<DownloadOutlined />}
-            onClick={() =>
-              window.open(
-                `/api/hrms/attendance/report.csv?${r.buildCsvUrl()}`,
-                "_blank",
-              )
-            }
+            onClick={() => {
+              import("@/lib/department-attendance-report-pdf").then((m) =>
+                m.downloadDepartmentAttendanceReportPdf(r.rangeLabel, r.deptCompliance, r.kpi)
+              );
+            }}
           >
             Export
           </Button>
