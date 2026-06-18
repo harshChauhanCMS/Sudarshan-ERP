@@ -256,7 +256,7 @@ export async function GET(request: Request) {
     }
 
     return ok({
-      date: start.toISOString().slice(0, 10),
+      date: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`,
       rows,
       ...(punchMeta ? { meta: punchMeta } : {}),
     });

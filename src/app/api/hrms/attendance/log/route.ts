@@ -27,7 +27,10 @@ function formatDateTime(d: Date): string {
 }
 
 function dayKey(d: Date) {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function msToHours(ms: number) {
@@ -256,7 +259,11 @@ export async function GET(request: Request) {
       })
       .sort((a, b) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name));
 
-    return ok({ from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10), rows });
+    return ok({
+      from: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`,
+      to: `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`,
+      rows,
+    });
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Failed to load attendance log", 500);
   }

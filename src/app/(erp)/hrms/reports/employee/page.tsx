@@ -129,7 +129,10 @@ export default function EmployeeReportPage() {
   const groupedData = useMemo(() => {
     if (groupBy === "employee") return filtered;
 
-    const map = new Map<string, AttendanceSummaryRow & { children?: AttendanceSummaryRow[] }>();
+    const map = new Map<
+      string,
+      AttendanceSummaryRow & { children?: AttendanceSummaryRow[] }
+    >();
     filtered.forEach((row) => {
       let key = "Unknown";
       if (groupBy === "department") key = row.department || "Unknown";
@@ -169,22 +172,35 @@ export default function EmployeeReportPage() {
     return Array.from(map.values());
   }, [filtered, groupBy]);
 
-  const empColumns: CommonTableColumn<AttendanceSummaryRow & { children?: any }>[] = [
+  const empColumns: CommonTableColumn<
+    AttendanceSummaryRow & { children?: any }
+  >[] = [
     {
       title: "Employee ID",
       dataIndex: "employeeId",
       key: "empId",
+      width: 120,
       render: (v: string) => {
-        if (v.startsWith("group-")) return <span className="font-bold text-zinc-400 uppercase text-xs tracking-wider">GROUP</span>;
+        if (v.startsWith("group-"))
+          return (
+            <span className="font-bold text-zinc-400 uppercase text-xs tracking-wider">
+              GROUP
+            </span>
+          );
         return <span className="font-medium text-zinc-800">{v}</span>;
       },
     },
     {
       title: "Employee",
+      width: 150,
       key: "emp",
       render: (_: unknown, row: AttendanceSummaryRow & { children?: any }) => {
         if (row.children) {
-          return <span className="font-bold text-zinc-900">{row.employeeName} ({row.children.length})</span>;
+          return (
+            <span className="font-bold text-zinc-900">
+              {row.employeeName} ({row.children.length})
+            </span>
+          );
         }
         return (
           <span className="font-semibold text-zinc-900">
@@ -193,18 +209,30 @@ export default function EmployeeReportPage() {
         );
       },
     },
-    { title: "Dept", dataIndex: "department", key: "dept" },
+    {
+      title: "Dept",
+      width: 150,
+      dataIndex: "department",
+      key: "dept",
+    },
     {
       title: "Joining date",
+      width: 170,
       dataIndex: "dateJoining",
       key: "joining",
       render: (v: string | undefined) => (
         <span className="text-zinc-600">{formatJoiningDate(v)}</span>
       ),
     },
-    { title: "Shift", dataIndex: "primaryShift", key: "shift" },
+    {
+      title: "Shift",
+      width: 200,
+      dataIndex: "primaryShift",
+      key: "shift",
+    },
     {
       title: "Present",
+      width: 120,
       dataIndex: "presentDays",
       key: "present",
       render: (v: number) => (
@@ -213,6 +241,7 @@ export default function EmployeeReportPage() {
     },
     {
       title: "Absent",
+      width: 120,
       dataIndex: "absentDays",
       key: "absent",
       render: (v: number) => (
@@ -221,6 +250,7 @@ export default function EmployeeReportPage() {
     },
     {
       title: "Late",
+      width: 120,
       dataIndex: "lateDays",
       key: "late",
       render: (v: number) => (
@@ -229,6 +259,7 @@ export default function EmployeeReportPage() {
     },
     {
       title: "Overtime (h)",
+      width: 120,
       dataIndex: "totalOvertime",
       key: "ot",
       render: (v: number) => (
@@ -237,6 +268,7 @@ export default function EmployeeReportPage() {
     },
     {
       title: "Short (h)",
+      width: 120,
       dataIndex: "totalShortfall",
       key: "short",
       render: (v: number) => (

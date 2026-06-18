@@ -4,10 +4,12 @@ import autoTable from "jspdf-autotable";
 
 const BRAND = { r: 55, g: 77, b: 149 };
 
+import type { AttendanceReportKpi } from "@/hooks/use-attendance-report";
+
 export function downloadDepartmentAttendanceReportPdf(
   rangeLabel: string,
   deptCompliance: { department: string; presentPct: number; absentPct: number; late: number; text: string }[],
-  kpi: any
+  kpi: AttendanceReportKpi | null
 ) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
