@@ -528,8 +528,7 @@ const Sidebar = ({
 /* ============================================================
    TOPBAR
    ============================================================ */
-const breadcrumbsFor = (route) => {
-  const map = {
+const BREADCRUMB_MAP = {
     "/dashboard/master": ["Dashboards", "Master"],
     "/dashboard/admin": ["Dashboards", "Admin"],
     "/dashboard/owner": ["Dashboards", "Owner"],
@@ -576,6 +575,7 @@ const breadcrumbsFor = (route) => {
     ],
     "/production": ["Operations", "Production"],
     "/dispatch": ["Operations", "Dispatch Planning"],
+    "/dispatch/new": ["Operations", "Dispatch Planning", "New dispatch plan"],
     "/hrms/employees": ["People", "HR Management", "Employees"],
     "/hrms/employees/add": [
       "People",
@@ -613,7 +613,28 @@ const breadcrumbsFor = (route) => {
     "/reports": ["System", "Reports"],
     "/users": ["System", "User Management"],
     "/design-system": ["System", "Design System"],
-  };
+};
+
+const BREADCRUMB_CATEGORY_HREFS = {
+  Dashboards: "/dashboard/master",
+  Inventory: "/inventory/raw-material",
+  Procurement: "/procurement/vendors",
+  Sales: "/customers",
+  Operations: "/production",
+  People: "/hrms/employees",
+  System: "/reports",
+  "Field sales and Beat tracking": "/field-sales/activity-dashboard",
+  "Leave & Policy": "/hrms/leave",
+};
+
+const breadcrumbsFor = (route) => {
+  if (
+    route?.startsWith("/dispatch/") &&
+    route !== "/dispatch" &&
+    route !== "/dispatch/new"
+  ) {
+    return ["Operations", "Dispatch Planning", "Dispatch detail"];
+  }
   if (
     route?.startsWith("/hrms/reports/employee/") &&
     route !== "/hrms/reports/employee"
@@ -627,11 +648,51 @@ const breadcrumbsFor = (route) => {
   ) {
     return ["People", "HR Management", "Employees", "Employee Profile"];
   }
-  return map[route] || [route];
+  if (
+    route?.startsWith("/hrms/salary/bulk/") &&
+    route !== "/hrms/salary/bulk"
+  ) {
+    return ["People", "HR Management", "Payroll bulk view", "Payroll detail"];
+  }
+  return BREADCRUMB_MAP[route] || [route];
+};
+
+function findRouteForCrumbPrefix(labels, index) {
+  const prefix = labels.slice(0, index + 1);
+  let best = null;
+  let bestLength = Infinity;
+
+  for (const [path, crumbs] of Object.entries(BREADCRUMB_MAP)) {
+    if (crumbs.length < prefix.length) continue;
+    if (!prefix.every((label, i) => crumbs[i] === label)) continue;
+    if (crumbs.length < bestLength) {
+      best = path;
+      bestLength = crumbs.length;
+    }
+  }
+
+  return best;
+}
+
+function breadcrumbTrailFor(route) {
+  const labels = breadcrumbsFor(route);
+
+  return labels.map((label, index) => {
+    const isLast = index === labels.length - 1;
+    if (isLast) return { label, href: null };
+
+    let href = findRouteForCrumbPrefix(labels, index);
+    if (!href && index === 0) {
+      href = BREADCRUMB_CATEGORY_HREFS[label] ?? null;
+    }
+
+    return { label, href };
+  });
 };
 
 const Topbar = ({
   route,
+  navigate,
   onNotifClick,
   onMobileClick,
   onLogout,
@@ -639,7 +700,12 @@ const Topbar = ({
   menuOpen,
   notifUnreadCount = 0,
 }) => {
-  const crumbs = breadcrumbsFor(route);
+  const crumbs = breadcrumbTrailFor(route);
+
+  const goHome = () => {
+    if (navigate) navigate("/dashboard/master");
+  };
+
   return (
     <header className="topbar">
       <button
@@ -654,17 +720,33 @@ const Topbar = ({
       </button>
 
       <div className="tb-bread">
-        <span className="crumb">
+        <button
+          type="button"
+          className="crumb crumb-btn"
+          onClick={goHome}
+          title="Home"
+          aria-label="Home"
+        >
           <Icon name="home" size={14} />
-        </span>
-        {crumbs.map((c, i) => (
-          <React.Fragment key={i}>
+        </button>
+        {crumbs.map((crumb, i) => (
+          <React.Fragment key={`${crumb.label}-${i}`}>
             <span className="sep">
               <Icon name="chevRight" size={12} />
             </span>
-            <span className={`crumb ${i === crumbs.length - 1 ? "last" : ""}`}>
-              {c}
-            </span>
+            {crumb.href && navigate ? (
+              <button
+                type="button"
+                className="crumb crumb-btn"
+                onClick={() => navigate(crumb.href)}
+              >
+                {crumb.label}
+              </button>
+            ) : (
+              <span className={`crumb ${i === crumbs.length - 1 ? "last" : ""}`}>
+                {crumb.label}
+              </span>
+            )}
           </React.Fragment>
         ))}
       </div>

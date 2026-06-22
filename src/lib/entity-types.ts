@@ -153,6 +153,16 @@ export type SparePart = {
   notes?: string;
 };
 
+export type DispatchLocation = {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  address?: string;
+  city?: string;
+  state?: string;
+  updatedAt: string;
+};
+
 export type Dispatch = {
   id: string;
   vehicle: string;
@@ -164,6 +174,22 @@ export type Dispatch = {
   progress: number;
   status: string;
   lastUpdate: string;
+  orderId?: string;
+  product?: string;
+  sourceLocation?: string;
+  deliveryLocation?: string;
+  vehicleType?: string;
+  waRef?: string;
+  remarks?: string;
+  planStatus?: string;
+  plannedAt?: string;
+  checkInToken?: string;
+  qrGeneratedAt?: string;
+  driverCheckedInAt?: string;
+  driverUserId?: string;
+  driverUserEmail?: string;
+  driverEmployeeId?: string;
+  lastLocation?: DispatchLocation;
 };
 
 export type Employee = {

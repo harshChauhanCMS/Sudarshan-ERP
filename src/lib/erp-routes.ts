@@ -28,6 +28,7 @@ export const ERP_ROUTES = [
   "/field-sales/beat-territory",
   "/production",
   "/dispatch",
+  "/dispatch/new",
   "/hrms/employees",
   "/hrms/notifications",
   "/hrms/reports",
