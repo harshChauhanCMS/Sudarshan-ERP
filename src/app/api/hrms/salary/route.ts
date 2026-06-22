@@ -2,6 +2,8 @@ import { connectDB } from "@/lib/db";
 import { ok, fail } from "@/lib/api-response";
 import Employee from "@/lib/models/Employee";
 import SalarySheet from "@/lib/models/SalarySheet";
+import AttendancePunch from "@/lib/models/AttendancePunch";
+import LeaveRequest from "@/lib/models/LeaveRequest";
 import { filterRowsForHrViewer } from "@/lib/hr-staff-visibility";
 import { getSession } from "@/lib/session";
 import { canManagePayroll } from "@/lib/hrms-access";
@@ -80,25 +82,55 @@ async function getMonthlyCycleRows(
   department: string | null,
   status: string | null
 ) {
-  const employees = await Employee.find({ compensationType: MONTHLY_CTC })
-    .sort({ fullName: 1 })
-    .lean();
+  const query: any = { compensationType: MONTHLY_CTC, status: "active" };
+  if (department) query.department = department;
 
-  const sheetQuery: Record<string, string> = { cycle };
+  const employees = await Employee.find(query).sort({ fullName: 1 }).lean();
+  const empMap = new Map(employees.map((e) => [String(e.employeeId), e]));
+
+  const sheetQuery: Record<string, any> = { cycle };
   if (department) sheetQuery.department = department;
 
   const sheets = await SalarySheet.find(sheetQuery).lean();
-  const sheetByEmployee = new Map(
+  const sheetByEmp = new Map(
     sheets.map((sheet) => [String(sheet.employeeId), sheet])
   );
 
-  let rows = employees.map((emp) => {
-    const sheet = sheetByEmployee.get(String(emp.employeeId));
-    if (sheet) {
-      return { ...sheet, _id: String(sheet._id) };
+  const [year, monthStr] = cycle.split("-");
+  const m = parseInt(monthStr, 10);
+  const y = parseInt(year, 10);
+  const fromD = new Date(y, m - 1, 1);
+  const toD = new Date(y, m, 1);
+
+  const [punches, leaves] = await Promise.all([
+    AttendancePunch.find({
+      inAt: { $gte: fromD, $lt: toD },
+    })
+      .select("employeeId")
+      .lean(),
+    LeaveRequest.find({
+      status: "approved",
+      startDate: { $lt: toD },
+      endDate: { $gte: fromD },
+    })
+      .select("employeeId")
+      .lean(),
+  ]);
+
+  const activeEmpIds = new Set([
+    ...punches.map((p: any) => String(p.employeeId)),
+    ...leaves.map((l: any) => String(l.employeeId)),
+  ]);
+
+  let rows = sheets.map((sheet) => ({ ...sheet, _id: String(sheet._id) }));
+
+  for (const emp of employees) {
+    if (!sheetByEmp.has(String(emp.employeeId)) && activeEmpIds.has(String(emp.employeeId))) {
+      rows.push(pendingRow(emp, cycle) as any);
     }
-    return pendingRow(emp, cycle);
-  });
+  }
+
+  rows = rows.filter((row) => row.status === "pending" || row.daysPresent > 0 || row.leaveDays > 0);
 
   if (status === "pending") {
     rows = rows.filter((row) => row.status === "pending");

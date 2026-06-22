@@ -106,8 +106,11 @@ export function calcSalary(inputs: SalaryInputs): SalaryResult {
     ? calcOvertimeAmount(basicSalary, workingDays, workingHoursPerDay, overtimeHours)
     : 0;
 
-  const pf = calcPF(basicSalary);
-  const esi = calcESI(grossSalary);
+  const earnedBasic = Math.max(0, basicSalary - calcLeaveDeduction(basicSalary, workingDays, totalDeductionDays));
+  const earnedGross = Math.max(0, grossSalary - leaveDeduction);
+
+  const pf = calcPF(earnedBasic);
+  const esi = calcESI(earnedGross);
 
   const totalDeductions = round2(pf.employee + esi + tds + otherDed + leaveDeduction);
 

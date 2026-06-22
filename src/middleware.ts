@@ -13,7 +13,7 @@ import {
   isManagerRole,
 } from "@/lib/manager-scope-shared";
 
-const PUBLIC_PATHS = ["/login", "/forgot", "/mobile"];
+const PUBLIC_PATHS = ["/login", "/forgot", "/mobile", "/dispatch/track"];
 const PUBLIC_API = [
   "/api/auth/login",
   "/api/auth/mobile/login",
@@ -21,6 +21,7 @@ const PUBLIC_API = [
   "/api/auth/forgot/verify",
   "/api/auth/reset-password",
   "/api/integrations/biometric",
+  "/api/dispatch/track",
 ];
 
 export async function middleware(request: NextRequest) {

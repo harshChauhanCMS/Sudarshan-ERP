@@ -20,9 +20,15 @@ export async function POST(request: Request) {
   try {
     await connectDB();
 
-    const formData = await request.formData();
-    const file = formData.get("file") as File | null;
-    const cycle = formData.get("cycle") as string | null;
+    type WebFormData = {
+      get(name: string): FormDataEntryValue | null;
+    };
+
+    const formData = (await request.formData()) as unknown as WebFormData;
+    const fileEntry = formData.get("file");
+    const file = fileEntry instanceof File ? fileEntry : null;
+    const cycleEntry = formData.get("cycle");
+    const cycle = typeof cycleEntry === "string" ? cycleEntry : null;
 
     if (!file) return fail("file is required", 400);
     if (file.size > MAX_UPLOAD_BYTES) {

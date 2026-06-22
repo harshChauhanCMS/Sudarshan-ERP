@@ -38,6 +38,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
       : pathname.startsWith("/hrms/") ||
           pathname.startsWith("/inventory/") ||
           pathname.startsWith("/procurement/") ||
+          pathname.startsWith("/dispatch/") ||
           (ERP_ROUTES as readonly string[]).includes(pathname)
         ? pathname
         : pathToRoute(
@@ -304,6 +305,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
       <div className="main">
         <Topbar
           route={route}
+          navigate={handleNavigate}
           onNotifClick={() => navigate("/hrms/notifications")}
           onMobileClick={() => window.open("/mobile", "_blank")}
           onLogout={handleLogout}

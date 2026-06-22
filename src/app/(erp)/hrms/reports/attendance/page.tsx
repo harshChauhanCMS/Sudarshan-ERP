@@ -132,70 +132,16 @@ export default function AttendanceOverviewPage() {
         actions={
           <Button
             icon={<DownloadOutlined />}
-            onClick={() =>
-              window.open(
-                `/api/hrms/attendance/report.csv?${r.buildCsvUrl()}`,
-                "_blank",
-              )
-            }
+            onClick={() => {
+              import("@/lib/department-attendance-report-pdf").then((m) =>
+                m.downloadDepartmentAttendanceReportPdf(r.rangeLabel, r.deptCompliance, r.kpi)
+              );
+            }}
           >
             Export
           </Button>
         }
       />
-
-      <div className="attendance-kpi-grid">
-        <StatCard
-          icon={CheckCircleOutlined}
-          label="Present days (avg)"
-          value={presentAvg}
-          hint={`${r.rangeLabel} · ${r.workingDays} working days`}
-          hintTone="positive"
-        />
-        <StatCard
-          icon={TeamOutlined}
-          label="Absent days (total)"
-          value={String(r.kpi?.absentDays ?? 0)}
-          hint={`Across ${r.kpi?.totalEmployees ?? 0} employees`}
-        />
-        <StatCard
-          icon={ClockCircleOutlined}
-          label="Late punches"
-          value={String(r.kpi?.lateDays ?? 0)}
-          hint="Across all shifts"
-          hintTone="warning"
-        />
-        <StatCard
-          icon={FilterOutlined}
-          label="Short hours (total)"
-          value={r.kpi?.totalShortfall.toFixed(1) ?? "0"}
-          hint="Below required hrs"
-        />
-        <StatCard
-          icon={ReloadOutlined}
-          label="Overtime hours"
-          value={r.kpi?.totalOvertime.toFixed(0) ?? "0"}
-          hint="Approved OT"
-          hintTone="positive"
-        />
-      </div>
-
-      <div className="attendance-summary-grid">
-        <StatCard
-          icon={BankOutlined}
-          label="In-office attendance"
-          value={`${r.officeStats.inOfficePct}%`}
-          hint={`${r.officeStats.totalEmployees - r.officeStats.fieldEmployees} employees · ${r.officeStats.inOfficeDays} present days`}
-          hintTone="positive"
-        />
-        <StatCard
-          icon={EnvironmentOutlined}
-          label="Field attendance"
-          value={`${r.officeStats.fieldPct}%`}
-          hint={`${r.officeStats.fieldEmployees} field employees · ${r.officeStats.fieldDays} field days`}
-          hintTone="positive"
-        />
-      </div>
 
       <AttendanceFilterPanel
         range={r.range}
@@ -218,51 +164,114 @@ export default function AttendanceOverviewPage() {
         splitApplyRow
       />
 
-      <ReportSection
-        title="Attendance summary by unit"
-        meta={`${r.rangeLabel} · company / unit breakdown`}
-        flush
-      >
-        <CommonTable
-          {...tableProps}
-          columns={unitColumns}
-          dataSource={r.unitTable}
-          rowKey="unit"
-          loading={r.loading}
-          pagination={false}
-        />
-      </ReportSection>
+      {!r.loading && r.kpi?.totalEmployees === 0 ? (
+        <div className="flex flex-col items-center justify-center p-12 text-center bg-white rounded-lg border border-gray-200 mt-6">
+          <TeamOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
+          <h3 className="text-lg font-semibold text-gray-900 m-0">No Attendance Data</h3>
+          <p className="text-gray-500 mt-2">There are no attendance records or users for the selected period.</p>
+        </div>
+      ) : (
+        <>
+          <div className="attendance-kpi-grid mt-6">
+            <StatCard
+              icon={CheckCircleOutlined}
+              label="Present days (avg)"
+              value={presentAvg}
+              hint={`${r.rangeLabel} · ${r.workingDays} working days`}
+              hintTone="positive"
+            />
+            <StatCard
+              icon={TeamOutlined}
+              label="Absent days (total)"
+              value={String(r.kpi?.absentDays ?? 0)}
+              hint={`Across ${r.kpi?.totalEmployees ?? 0} employees`}
+            />
+            <StatCard
+              icon={ClockCircleOutlined}
+              label="Late punches"
+              value={String(r.kpi?.lateDays ?? 0)}
+              hint="Across all shifts"
+              hintTone="warning"
+            />
+            <StatCard
+              icon={FilterOutlined}
+              label="Short hours (total)"
+              value={r.kpi?.totalShortfall.toFixed(1) ?? "0"}
+              hint="Below required hrs"
+            />
+            <StatCard
+              icon={ReloadOutlined}
+              label="Overtime hours"
+              value={r.kpi?.totalOvertime.toFixed(0) ?? "0"}
+              hint="Approved OT"
+              hintTone="positive"
+            />
+          </div>
 
-      <div className="attendance-charts-grid">
-        <ReportSection
-          title="Weekly trend"
-          meta={`${r.rangeLabel} · present vs absent by week`}
-        >
-          <AttendanceTrendChart data={r.weeklyTrend} />
-        </ReportSection>
-        <ReportSection
-          title="Department breakdown"
-          meta="Present % by department"
-        >
-          <DepartmentBreakdownChart data={r.deptBreakdown} />
-        </ReportSection>
-      </div>
+          <div className="attendance-summary-grid">
+            <StatCard
+              icon={BankOutlined}
+              label="In-office attendance"
+              value={`${r.officeStats.inOfficePct}%`}
+              hint={`${r.officeStats.totalEmployees - r.officeStats.fieldEmployees} employees · ${r.officeStats.inOfficeDays} present days`}
+              hintTone="positive"
+            />
+            <StatCard
+              icon={EnvironmentOutlined}
+              label="Field attendance"
+              value={`${r.officeStats.fieldPct}%`}
+              hint={`${r.officeStats.fieldEmployees} field employees · ${r.officeStats.fieldDays} field days`}
+              hintTone="positive"
+            />
+          </div>
 
-      <ReportSection
-        title="Department compliance"
-        meta={r.rangeLabel}
-        footer="Good = 95%+ present · Review = 85–95% · Poor = below 85%"
-        flush
-      >
-        <CommonTable
-          {...tableProps}
-          columns={deptColumns}
-          dataSource={r.deptCompliance}
-          rowKey="department"
-          loading={r.loading}
-          pagination={false}
-        />
-      </ReportSection>
+          <ReportSection
+            title="Attendance summary by unit"
+            meta={`${r.rangeLabel} · company / unit breakdown`}
+            flush
+          >
+            <CommonTable
+              {...tableProps}
+              columns={unitColumns}
+              dataSource={r.unitTable}
+              rowKey="unit"
+              loading={r.loading}
+              pagination={false}
+            />
+          </ReportSection>
+
+          <div className="attendance-charts-grid">
+            <ReportSection
+              title="Weekly trend"
+              meta={`${r.rangeLabel} · present vs absent by week`}
+            >
+              <AttendanceTrendChart data={r.weeklyTrend} />
+            </ReportSection>
+            <ReportSection
+              title="Department breakdown"
+              meta="Present % by department"
+            >
+              <DepartmentBreakdownChart data={r.deptBreakdown} />
+            </ReportSection>
+          </div>
+
+          <ReportSection
+            title="Department compliance"
+            meta={r.rangeLabel}
+            footer="Good = 95%+ present · Review = 85–95% · Poor = below 85%"
+            flush
+          >
+            <CommonTable
+              {...tableProps}
+              columns={deptColumns}
+              dataSource={r.deptCompliance}
+              rowKey="department"
+              loading={r.loading}
+              pagination={false}
+            />
+          </ReportSection>
+        </>
+      )}
     </div>
   );
 }

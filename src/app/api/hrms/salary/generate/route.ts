@@ -12,7 +12,12 @@ import Notification from "@/lib/models/Notification";
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function endOfDay(d: Date)   { const x = new Date(d); x.setHours(23,59,59,999); return x; }
-function dayKey(d: Date)     { return d.toISOString().slice(0, 10); }
+function dayKey(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 function countWorkingDays(from: Date, to: Date): number {
   let count = 0;

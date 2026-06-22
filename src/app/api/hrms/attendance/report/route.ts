@@ -30,7 +30,10 @@ function endOfDay(d: Date) {
 }
 
 function dayKey(d: Date) {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function msToHours(ms: number) {
@@ -68,6 +71,16 @@ export async function GET(request: Request) {
     }
 
     const punches = await AttendancePunch.find(query).sort({ punchedAt: 1 }).lean();
+
+    if (punches.length === 0) {
+      return ok({
+        from: `${fromD.getFullYear()}-${String(fromD.getMonth() + 1).padStart(2, "0")}-${String(fromD.getDate()).padStart(2, "0")}`,
+        to: `${toD.getFullYear()}-${String(toD.getMonth() + 1).padStart(2, "0")}-${String(toD.getDate()).padStart(2, "0")}`,
+        employeeId,
+        summary: [],
+        daily: [],
+      });
+    }
 
     // (employee, day) -> { in: Date|null, out: Date|null }
     const map = new Map<string, { employeeId: string; day: string; inAt: Date | null; outAt: Date | null }>();
@@ -123,7 +136,7 @@ export async function GET(request: Request) {
       summaryByEmp.set(d.employeeId, cur);
     }
 
-    const summary = Array.from(summaryByEmp.values()).map((s) => {
+    let summary = Array.from(summaryByEmp.values()).map((s) => {
       const emp = empById.get(s.employeeId);
       return {
         employeeId: s.employeeId,
@@ -135,6 +148,8 @@ export async function GET(request: Request) {
         totalWorkedHours: Math.round(s.totalWorkedHours * 100) / 100,
       };
     });
+
+    summary = summary.filter((s) => s.daysPresent > 0);
 
     const scopedDaily = filterRowsByHrScope(daily, dataScope);
     const scopedSummary = filterRowsByHrScope(summary, dataScope);

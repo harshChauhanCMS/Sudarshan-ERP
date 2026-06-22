@@ -32,7 +32,10 @@ function endOfDay(d: Date) {
 }
 
 function dayKey(d: Date) {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export async function GET(request: Request) {
@@ -114,6 +117,20 @@ export async function GET(request: Request) {
     }
     const workingDays = allDays.filter((d) => new Date(d).getDay() !== 0).length;
 
+    if (empIds.length === 0 || punches.length === 0) {
+      return ok({
+        from: `${fromD.getFullYear()}-${String(fromD.getMonth() + 1).padStart(2, "0")}-${String(fromD.getDate()).padStart(2, "0")}`,
+        to: `${toD.getFullYear()}-${String(toD.getMonth() + 1).padStart(2, "0")}-${String(toD.getDate()).padStart(2, "0")}`,
+        workingDays,
+        kpi: { totalEmployees: 0, lateDays: 0, earlyDays: 0, totalLateMinutes: 0, totalEarlyMinutes: 0 },
+        employees: [],
+        departments: [],
+        shifts: [],
+        units: [],
+        filterDepartments: [],
+      });
+    }
+
     const report = buildLateEarlyReport(
       employees.map((e) => ({
         employeeId: String(e.employeeId),
@@ -136,8 +153,8 @@ export async function GET(request: Request) {
     });
 
     return ok({
-      from: fromD.toISOString().slice(0, 10),
-      to: toD.toISOString().slice(0, 10),
+      from: `${fromD.getFullYear()}-${String(fromD.getMonth() + 1).padStart(2, "0")}-${String(fromD.getDate()).padStart(2, "0")}`,
+      to: `${toD.getFullYear()}-${String(toD.getMonth() + 1).padStart(2, "0")}-${String(toD.getDate()).padStart(2, "0")}`,
       workingDays,
       kpi: report.kpi,
       employees: filteredEmployees,
