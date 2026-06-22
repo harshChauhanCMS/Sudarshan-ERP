@@ -359,13 +359,15 @@ export async function getDispatchTrackByToken(token: string): Promise<DispatchTr
 export async function getActiveDispatchTracking(): Promise<DispatchTrackingView[]> {
   if (!isDbConfigured()) return [];
   const data = await loadErpDataFromDb();
-  return data.DISPATCHES.filter(
-    (d) =>
-      d.driverCheckedInAt &&
-      d.lastLocation &&
-      d.status !== "delivered" &&
-      d.status !== "cancelled"
-  )
+  const dispatches = data.DISPATCHES as Dispatch[];
+  return dispatches
+    .filter(
+      (d) =>
+        d.driverCheckedInAt &&
+        d.lastLocation &&
+        d.status !== "delivered" &&
+        d.status !== "cancelled"
+    )
     .map((d) => ({
       id: d.id,
       vehicle: d.vehicle,

@@ -3,7 +3,7 @@ import {
   loadErpDataFromDb,
   updateEntityItem,
 } from "@/lib/db-entities";
-import type { Dispatch, Order } from "@/lib/entity-types";
+import type { Customer, Dispatch, Order } from "@/lib/entity-types";
 import type {
   AwaitingOrderView,
   DispatchPlanningPayload,
@@ -27,6 +27,10 @@ async function loadErpSnapshot(): Promise<{
   }
   const data = await loadErpDataFromDb();
   return { data, source: "mongodb", dbConfigured: true };
+}
+
+function getDispatches(data: ErpData): Dispatch[] {
+  return data.DISPATCHES as Dispatch[];
 }
 
 function orderYear(orderId: string): number {
@@ -55,7 +59,8 @@ function isDueOverdue(due: string, orderId: string): boolean {
 }
 
 function findCustomer(data: ErpData, customerName: string) {
-  return data.CUSTOMERS.find(
+  const customers = data.CUSTOMERS as Customer[];
+  return customers.find(
     (c) =>
       c.name === customerName ||
       customerName.includes(c.name) ||
@@ -115,10 +120,12 @@ export function buildAwaitingOrders(data: ErpData): AwaitingOrderView[] {
   const sourceLocation = defaultSourceLocation(data);
   const packaging = packagingHealth(data);
 
-  return data.ORDERS.filter((order) => isAwaitingOrder(order, data.DISPATCHES))
+  const dispatches = getDispatches(data);
+
+  return data.ORDERS.filter((order) => isAwaitingOrder(order, dispatches))
     .map((order) => {
       const customer = findCustomer(data, order.customer);
-      const dispatchForOrder = data.DISPATCHES.find((d) => d.orderId === order.id);
+      const dispatchForOrder = dispatches.find((d) => d.orderId === order.id);
       const planStatus = derivePlanStatus(order, dispatchForOrder, packaging.ok);
       const customerFull = customer?.name ?? order.customer;
       const deliveryLocation = customer?.dispatchAddress
@@ -181,7 +188,7 @@ export function buildPlannedDispatches(dispatches: Dispatch[]): PlannedDispatchV
 export async function getDispatchPlanningOverview() {
   const { data, source, dbConfigured } = await loadErpSnapshot();
   const awaitingOrders = buildAwaitingOrders(data);
-  const plannedDispatches = buildPlannedDispatches(data.DISPATCHES);
+  const plannedDispatches = buildPlannedDispatches(getDispatches(data));
   const hasData = awaitingOrders.length > 0 || plannedDispatches.length > 0;
 
   return {
@@ -205,10 +212,11 @@ export async function createDispatchPlan(payload: DispatchPlanningPayload) {
   }
 
   const data = await loadErpDataFromDb();
+  const dispatches = getDispatches(data);
   const order = data.ORDERS.find((o) => o.id === payload.orderId);
   if (!order) throw new Error("Order not found");
 
-  const existing = data.DISPATCHES.find(
+  const existing = dispatches.find(
     (d) =>
       d.orderId === payload.orderId &&
       d.status !== "delivered" &&
@@ -266,7 +274,7 @@ export async function createDispatchPlan(payload: DispatchPlanningPayload) {
     return { dispatch, orderId: order.id };
   }
 
-  const dispatchId = nextDispatchId(data.DISPATCHES);
+  const dispatchId = nextDispatchId(dispatches);
 
   const dispatch: Dispatch = {
     id: dispatchId,

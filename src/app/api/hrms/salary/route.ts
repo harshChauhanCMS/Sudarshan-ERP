@@ -2,6 +2,8 @@ import { connectDB } from "@/lib/db";
 import { ok, fail } from "@/lib/api-response";
 import Employee from "@/lib/models/Employee";
 import SalarySheet from "@/lib/models/SalarySheet";
+import AttendancePunch from "@/lib/models/AttendancePunch";
+import LeaveRequest from "@/lib/models/LeaveRequest";
 import { filterRowsForHrViewer } from "@/lib/hr-staff-visibility";
 import { getSession } from "@/lib/session";
 import { canManagePayroll } from "@/lib/hrms-access";
@@ -101,12 +103,12 @@ async function getMonthlyCycleRows(
   const toD = new Date(y, m, 1);
 
   const [punches, leaves] = await Promise.all([
-    mongoose.models.AttendancePunch.find({
+    AttendancePunch.find({
       inAt: { $gte: fromD, $lt: toD },
     })
       .select("employeeId")
       .lean(),
-    mongoose.models.LeaveRequest.find({
+    LeaveRequest.find({
       status: "approved",
       startDate: { $lt: toD },
       endDate: { $gte: fromD },
