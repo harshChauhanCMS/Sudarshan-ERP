@@ -5,6 +5,7 @@ import { resolveSessionEmployee } from "@/lib/resolve-session-employee";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import { enrichLocation } from "@/lib/reverse-geocode";
 import { notifyAttendancePunch } from "@/lib/hrms-punch-notifications";
+import { notifyOnsitePunchLocation } from "@/lib/field-visit-notifications";
 import {
   isPunchInLateAbsent,
   PUNCH_IN_LATE_ABSENT_MESSAGE,
@@ -112,6 +113,29 @@ export async function POST(request: Request) {
       source,
       punchId: String(created._id),
     });
+
+    const workLocationType = employee?.workLocationType
+      ? String(employee.workLocationType)
+      : workSite === "field"
+        ? "Field"
+        : "Onsite";
+
+    if (
+      (workLocationType === "Onsite" || workLocationType === "Field") &&
+      location?.lat != null &&
+      location?.lng != null
+    ) {
+      void notifyOnsitePunchLocation({
+        employeeId: employee?.employeeId ? String(employee.employeeId) : undefined,
+        employeeName: employee?.fullName ? String(employee.fullName) : email,
+        punchedAt: now,
+        address: location.address,
+        city: location.city,
+        lat: location.lat,
+        lng: location.lng,
+        workLocationType,
+      });
+    }
 
     return ok({ punch: created }, 201);
   } catch (e) {

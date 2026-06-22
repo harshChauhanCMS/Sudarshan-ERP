@@ -17,6 +17,7 @@ const PUBLIC_PATHS = ["/login", "/forgot", "/mobile", "/dispatch/track"];
 const PUBLIC_API = [
   "/api/auth/login",
   "/api/auth/mobile/login",
+  "/api/auth/mobile/forgot-password",
   "/api/auth/forgot",
   "/api/auth/forgot/verify",
   "/api/auth/reset-password",

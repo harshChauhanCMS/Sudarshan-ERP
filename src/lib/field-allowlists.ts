@@ -26,6 +26,7 @@ export const EMPLOYEE_WRITABLE_FIELDS = [
   "department",
   "designation",
   "locationUnit",
+  "workLocationType",
   "companies",
   "reportingManager",
   "employmentType",

@@ -47,6 +47,7 @@ type SeedEmployee = {
   department: string;
   designation: string;
   locationUnit: string;
+  workLocationType?: string;
   reportingManager: string;
   employmentType: string;
   dateJoining: string;

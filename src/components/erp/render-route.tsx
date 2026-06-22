@@ -6,7 +6,9 @@
 import { useEffect } from "react";
 import { MasterDashboard, AdminDashboard, OwnerDashboard, ProductionDashboard, DispatchDashboard } from "./dashboards";
 import { RawMaterialInventory, Vendors, DispatchTracking } from "./modules";
-import { Customers, CustomerOrders, FieldSales, FieldVisitsBeatTracking, FieldVisitLog, FieldVisitHistory, FieldBeatTerritory, InvoiceVerify } from "./modules2";
+import { Customers, CustomerOrders, FieldVisitsBeatTracking, FieldVisitHistory, FieldBeatTerritory, InvoiceVerify } from "./modules2";
+import { FieldActivityDashboardPage } from "@/components/field-sales/field-activity-dashboard-page";
+import { FieldVisitLogPage } from "@/components/field-sales/field-visit-log-page";
 import { Employees, Attendance, Payroll, Reports, PackagingInventory } from "./modules3";
 import { SparePartsInventory } from "./modules4";
 import { UserManagement, DesignSystem, Placeholder } from "./admin";
@@ -49,13 +51,13 @@ export function renderErpRoute(route: string, navigate: Navigate) {
     case "/orders":
       return <CustomerOrders />;
     case "/field-sales/activity-dashboard":
-      return <FieldSales />;
+      return <FieldActivityDashboardPage />;
     case "/field-sales":
       return <FieldSalesRedirect navigate={navigate} />;
     case "/field-sales/visits-beat-tracking":
       return <FieldVisitsBeatTracking />;
     case "/field-sales/visit-log":
-      return <FieldVisitLog />;
+      return <FieldVisitLogPage />;
     case "/field-sales/visit-history":
       return <FieldVisitHistory />;
     case "/field-sales/beat-territory":

@@ -19,6 +19,8 @@ function credentialErrorMessage(reason?: string): string {
       return "Add an official or personal email before sending login credentials.";
     case "already_activated":
       return "This employee has already set their password.";
+    case "forgot_password":
+      return "Employee account is active.";
     case "not_expired":
       return "The temporary password is still valid. Resend is only available after it expires.";
     case "email_not_configured":

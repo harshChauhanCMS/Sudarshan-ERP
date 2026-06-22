@@ -33,7 +33,9 @@ import {
 import {
   departmentSkipsReportingManager,
   EMPLOYEE_EXPERIENCE_OPTIONS,
+  EMPLOYEE_LOCATION_UNIT_OPTIONS,
   EMPLOYEE_QUALIFICATION_OPTIONS,
+  EMPLOYEE_WORK_LOCATION_OPTIONS,
   filterHrAssignableRoles,
 } from "@/lib/hrms-employee-options";
 import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
@@ -642,6 +644,8 @@ export default function AddEmployeePage() {
         "companies",
         "department",
         "designation",
+        "locationUnit",
+        "workLocationType",
         "reportingManager",
         "employmentType",
         "dateJoining",
@@ -688,6 +692,27 @@ export default function AddEmployeePage() {
             rules={[{ required: true, message: "Required" }]}
           >
             <Input />
+          </Form.Item>
+          <Form.Item
+            name="locationUnit"
+            label="Location / Unit"
+            rules={[{ required: true, message: "Required" }]}
+          >
+            <Select
+              placeholder="Select plant or unit"
+              options={[...EMPLOYEE_LOCATION_UNIT_OPTIONS]}
+              showSearch
+            />
+          </Form.Item>
+          <Form.Item
+            name="workLocationType"
+            label="Work location type"
+            rules={[{ required: true, message: "Required" }]}
+          >
+            <Select
+              placeholder="Onsite, field, or remote"
+              options={[...EMPLOYEE_WORK_LOCATION_OPTIONS]}
+            />
           </Form.Item>
 
           {showReportingManager ? (
@@ -1077,6 +1102,7 @@ export default function AddEmployeePage() {
           initialValues={{
             overtimeApplicable: false,
             compensationType: "Monthly CTC",
+            workLocationType: "Onsite",
           }}
           style={{ width: "100%" }}
         >
