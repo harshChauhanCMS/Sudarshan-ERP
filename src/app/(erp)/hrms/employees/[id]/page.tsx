@@ -38,7 +38,9 @@ import {
 import {
   departmentSkipsReportingManager,
   EMPLOYEE_EXPERIENCE_OPTIONS,
+  EMPLOYEE_LOCATION_UNIT_OPTIONS,
   EMPLOYEE_QUALIFICATION_OPTIONS,
+  EMPLOYEE_WORK_LOCATION_OPTIONS,
   hrAssignableRoleOptions,
 } from "@/lib/hrms-employee-options";
 import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
@@ -174,6 +176,7 @@ export default function EmployeeDetailsPage({
           // Format dates for DatePicker
           const formatted = {
             ...emp,
+            workLocationType: emp.workLocationType || "Onsite",
             dob: parseEmployeeDate(emp.dob),
             dateJoining: parseEmployeeDate(emp.dateJoining),
             dateConfirmation: parseEmployeeDate(emp.dateConfirmation),
@@ -418,11 +421,19 @@ export default function EmployeeDetailsPage({
             <Space>
               {canManageCredentials && credentialStatus ? (
                 <Popconfirm
-                  title={credentialStatus.hasAccount ? "Resend temporary password?" : "Send temporary password email?"}
+                  title={
+                    credentialStatus.reason === "forgot_password"
+                      ? "Send temporary password for reset?"
+                      : credentialStatus.hasAccount
+                        ? "Resend temporary password?"
+                        : "Send temporary password email?"
+                  }
                   description={
-                    credentialStatus.hasAccount
-                      ? `A new temporary password will be emailed to ${credentialStatus.loginEmail ?? "the employee"}. They must log in and reset it within 1 hour.`
-                      : `A temporary password will be generated and emailed to ${credentialStatus.loginEmail ?? "the employee"} to set up their account.`
+                    credentialStatus.reason === "forgot_password"
+                      ? `A temporary password will be emailed to ${credentialStatus.loginEmail ?? "the employee"}. They can use Forgot password on mobile or web to set a new password within 1 hour.`
+                      : credentialStatus.hasAccount
+                        ? `A new temporary password will be emailed to ${credentialStatus.loginEmail ?? "the employee"}. They must log in and reset it within 1 hour.`
+                        : `A temporary password will be generated and emailed to ${credentialStatus.loginEmail ?? "the employee"} to set up their account.`
                   }
                   okText="Send email"
                   cancelText="Cancel"
@@ -439,14 +450,16 @@ export default function EmployeeDetailsPage({
                           ? "Employee has no email address. Please edit their details and add an email first."
                           : credentialStatus.reason === "not_expired" && credentialStatus.passwordResetDeadline
                             ? `Cannot resend yet. The previous temporary password is still valid until ${new Date(credentialStatus.passwordResetDeadline).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}.`
-                            : credentialStatus.reason === "already_activated"
-                              ? "Account already activated. The employee should use the 'Forgot Password' link on the login page."
-                              : "Cannot send temporary password."
+                            : "Cannot send temporary password."
                         : undefined
                     }
                     style={{ height: 38, borderRadius: 6, fontWeight: 600 }}
                   >
-                    {credentialStatus.hasAccount ? "Resend temporary password" : "Send temporary password"}
+                    {credentialStatus.reason === "forgot_password"
+                      ? "Send password reset email"
+                      : credentialStatus.hasAccount
+                        ? "Resend temporary password"
+                        : "Send temporary password"}
                   </Button>
                 </Popconfirm>
               ) : null}
@@ -563,6 +576,12 @@ export default function EmployeeDetailsPage({
                     <dt className="emp-id-card__label">Location</dt>
                     <dd className="emp-id-card__value" title={originalData?.locationUnit}>
                       {originalData?.locationUnit || "—"}
+                    </dd>
+                  </div>
+                  <div className="emp-id-card__row">
+                    <dt className="emp-id-card__label">Work type</dt>
+                    <dd className="emp-id-card__value" title={originalData?.workLocationType}>
+                      {originalData?.workLocationType || "Onsite"}
                     </dd>
                   </div>
                   <div className="emp-id-card__row emp-id-card__row--status">
@@ -788,11 +807,18 @@ export default function EmployeeDetailsPage({
                 <Form.Item name="locationUnit" label="Location / Unit">
                   <Select
                     disabled={!isEditing}
-                    options={[
-                      { value: "Sudarshan Minerals (Udaipur — Plant 1)", label: "Sudarshan Minerals (Udaipur — Plant 1)" },
-                      { value: "Sudarshan Minerals (Udaipur — Plant 2)", label: "Sudarshan Minerals (Udaipur — Plant 2)" },
-                      { value: "Sudarshan Microns (Udaipur)", label: "Sudarshan Microns (Udaipur)" },
-                    ]}
+                    options={[...EMPLOYEE_LOCATION_UNIT_OPTIONS]}
+                    showSearch
+                  />
+                </Form.Item>
+                <Form.Item
+                  name="workLocationType"
+                  label="Work location type"
+                  rules={[{ required: true, message: "Required" }]}
+                >
+                  <Select
+                    disabled={!isEditing}
+                    options={[...EMPLOYEE_WORK_LOCATION_OPTIONS]}
                   />
                 </Form.Item>
                 {showReportingManager ? (

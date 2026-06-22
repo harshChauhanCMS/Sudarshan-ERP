@@ -11,7 +11,7 @@ const NotificationSchema = new Schema(
     },
     category: {
       type: String,
-      enum: ["attendance", "leave", "system"],
+      enum: ["attendance", "leave", "system", "field_sales"],
       default: "attendance",
       index: true,
     },

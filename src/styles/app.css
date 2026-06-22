@@ -1486,6 +1486,11 @@ button.sb-section-label {
   color: #0369a1;
 }
 
+.field-activity-badge--onsite {
+  background: #ecfdf5;
+  color: #047857;
+}
+
 .field-activity-badge--done {
   background: #dcfce7;
   color: #15803d;

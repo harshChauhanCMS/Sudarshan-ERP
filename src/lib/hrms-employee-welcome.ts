@@ -106,6 +106,62 @@ function buildWelcomeEmail({
   return { text, html };
 }
 
+function buildForgotPasswordEmail({
+  fullName,
+  employeeId,
+  email,
+  tempPassword,
+  resetDeadline,
+}: {
+  fullName: string;
+  employeeId: string;
+  email: string;
+  tempPassword: string;
+  resetDeadline: Date;
+}) {
+  const deadlineText = formatDeadline(resetDeadline);
+  const loginUrl = getLoginUrl();
+
+  const text = [
+    `Hello ${fullName},`,
+    "",
+    "A temporary password has been issued for your Sudarshan Group employee account.",
+    "Use it on the mobile app or web login under Forgot password to set a new password.",
+    "",
+    `Employee ID: ${employeeId}`,
+    `Login email: ${email}`,
+    `Temporary password: ${tempPassword}`,
+    "",
+    "Please use the temporary password above and choose a new password within 1 hour.",
+    `You must change this temporary password before ${deadlineText} (IST).`,
+    "",
+    `Login here: ${loginUrl}`,
+    "",
+    "If you did not request this email, please contact HR immediately.",
+    "",
+    "Best Regards,",
+    "Sudarshan Group HR",
+  ].join("\n");
+
+  const html = `
+    <p>Hello <strong>${fullName}</strong>,</p>
+    <p>A temporary password has been issued for your Sudarshan Group employee account.</p>
+    <p>Use it on the mobile app or web login under <strong>Forgot password</strong> to set a new password.</p>
+    <table cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse;">
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;">Employee ID</td><td style="padding:4px 0;font-weight:700;">${employeeId}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;">Login email</td><td style="padding:4px 0;">${email}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#64748b;">Temporary password</td><td style="padding:4px 0;font-family:monospace;">${tempPassword}</td></tr>
+    </table>
+    <p><strong>Please use the temporary password above and choose a new password within 1 hour.</strong></p>
+    <p>You must change this temporary password before <strong>${deadlineText} (IST)</strong>.</p>
+    <p><a href="${loginUrl}">Log in to Sudarshan ERP</a></p>
+    <p style="color:#64748b;font-size:13px;">If you did not request this email, please contact HR immediately.</p>
+    <p>Best Regards,<br/>Sudarshan Group HR</p>
+  `;
+
+  return { text, html };
+}
+
 function buildResendEmail({
   fullName,
   employeeId,
@@ -201,8 +257,8 @@ export async function getEmployeeCredentialStatus(
       loginEmail: user.email,
       requiresPasswordReset: false,
       expired: false,
-      canResend: false,
-      reason: "already_activated",
+      canResend: !!loginEmail,
+      reason: loginEmail ? "forgot_password" : "no_email",
     };
   }
 
@@ -251,7 +307,54 @@ export async function resendExpiredEmployeeTemporaryPassword(
   }
 
   if (!user.requiresPasswordReset) {
-    return { sent: false, reason: "already_activated" };
+    const tempPassword = generatePassword();
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+    const passwordResetDeadline = new Date(Date.now() + PASSWORD_RESET_WINDOW_MS);
+
+    user.passwordHash = passwordHash;
+    user.requiresPasswordReset = true;
+    user.passwordResetDeadline = passwordResetDeadline;
+    if (!user.employeeId) {
+      user.employeeId = normalizedId;
+    }
+    await user.save();
+
+    if (!process.env.EMAIL_ID || !process.env.EMAIL_PASS) {
+      console.warn(
+        "Employee forgot-password email skipped: EMAIL_ID or EMAIL_PASS not configured",
+      );
+      return { sent: false, reason: "email_not_configured", loginEmail: user.email };
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_ID,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    const { text, html } = buildForgotPasswordEmail({
+      fullName: String(employee.fullName ?? "").trim() || normalizedId,
+      employeeId: normalizedId,
+      email: user.email,
+      tempPassword,
+      resetDeadline: passwordResetDeadline,
+    });
+
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_ID,
+        to: user.email,
+        subject: `Password reset — Employee ID ${normalizedId}`,
+        text,
+        html,
+      });
+      return { sent: true, loginEmail: user.email };
+    } catch (mailErr) {
+      console.error("Failed to send employee forgot-password email:", mailErr);
+      return { sent: false, reason: "send_failed", loginEmail: user.email };
+    }
   }
 
   const deadline = user.passwordResetDeadline

@@ -58,6 +58,12 @@ const EmployeeSchema = new Schema(
       trim: true,
     },
     locationUnit: { type: String, trim: true },
+    workLocationType: {
+      type: String,
+      trim: true,
+      enum: ["Onsite", "Field", "Remote"],
+      default: "Onsite",
+    },
     companies: {
       type: [String],
       default: [],
