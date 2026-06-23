@@ -1,5 +1,5 @@
 import { ok, fail } from "@/lib/api-response";
-import { requireSession } from "@/lib/api-auth";
+import { getUserFromRequest } from "@/lib/api-request-auth";
 import {
   acceptFieldVisit,
   cancelFieldVisit,
@@ -29,8 +29,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { user, error } = await requireSession();
-  if (error) return error;
+  const user = await getUserFromRequest(request);
+  if (!user) return fail("Unauthorized", 401);
 
   const { id } = await params;
   if (!id?.trim()) return fail("Visit id is required", 400);

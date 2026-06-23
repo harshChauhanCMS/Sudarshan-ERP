@@ -1,88 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { message } from "antd";
 import { Icon } from "@/components/erp/icons";
 import { Btn } from "@/components/erp/ui";
 import { DashHead } from "@/components/erp/dashboards";
+import { FieldVisitCreateForm } from "@/components/field-sales/field-visit-create-form";
+import { FieldVisitDetailModal } from "@/components/field-sales/field-visit-detail-modal";
 import { useFieldVisits } from "@/hooks/use-field-visits";
 import { useSessionUser } from "@/hooks/use-session-user";
-import { FIELD_VISIT_TYPES, type FieldVisitType } from "@/lib/field-visit-types";
-
-const COMPANY_OPTIONS = [
-  { value: "smi", label: "Sudarshan Minerals & Industries (Udaipur)" },
-  { value: "smic", label: "Sudarshan Microns" },
-];
-
-type EmployeeOption = { employeeId: string; fullName: string; workLocationType?: string };
-
-function statusLabel(status: string) {
-  return status.replace(/-/g, " ").toUpperCase();
-}
+import {
+  formatVisitDurationMinutes,
+  getVisitAcceptToCloseMinutes,
+  visitStatusBadgeClass,
+  visitStatusLabel,
+} from "@/lib/field-visit-display";
+import type { FieldVisitView } from "@/lib/field-visit-types";
 
 export function FieldVisitLogPage() {
   const { user } = useSessionUser();
   const { visits, canCreate, loading, error, saving, reload, updateVisit } = useFieldVisits();
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
-
-  const [form, setForm] = useState({
-    assignedEmployeeId: "",
-    company: "smi",
-    visitDate: new Date().toISOString().slice(0, 10),
-    visitType: "Customer" as FieldVisitType,
-    partyName: "",
-    locationText: "",
-    startTime: "09:00",
-    returnTime: "17:00",
-    purpose: "",
-    notes: "",
-  });
-
-  useEffect(() => {
-    if (!canCreate) return;
-    fetch("/api/hrms/employees")
-      .then((r) => r.json())
-      .then((json) => {
-        const rows = (json.data ?? []) as EmployeeOption[];
-        const list = Array.isArray(rows)
-          ? rows.filter((e) => e.employeeId && e.fullName)
-          : [];
-        setEmployees(list);
-        if (list[0] && !form.assignedEmployeeId) {
-          setForm((f) => ({ ...f, assignedEmployeeId: list[0].employeeId }));
-        }
-      })
-      .catch(() => {});
-  }, [canCreate, form.assignedEmployeeId]);
+  const [viewVisit, setViewVisit] = useState<FieldVisitView | null>(null);
 
   const myEmail = user?.email?.trim().toLowerCase();
   const myVisits = visits.filter(
     (v) => v.assignedEmployeeEmail === myEmail || v.assignedEmployeeId === user?.employeeId
   );
   const displayVisits = canCreate ? visits : myVisits;
-
-  const createVisit = async () => {
-    if (!form.assignedEmployeeId || !form.partyName.trim()) {
-      message.error("Assign an employee and enter party name.");
-      return;
-    }
-    try {
-      const res = await fetch("/api/field-sales/visits", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
-      message.success("Visit created and employee notified.");
-      setForm((f) => ({ ...f, partyName: "", purpose: "", notes: "", locationText: "" }));
-      await reload();
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : "Failed to create visit");
-    }
-  };
 
   const getLocation = (): Promise<{ lat: number; lng: number; accuracy?: number } | null> =>
     new Promise((resolve) => {
@@ -151,6 +97,8 @@ export function FieldVisitLogPage() {
         </Btn>
       </DashHead>
 
+      <FieldVisitDetailModal visit={viewVisit} onClose={() => setViewVisit(null)} />
+
       {loading ? <p style={{ color: "var(--fg-muted)", fontSize: 14 }}>Loading…</p> : null}
       {error ? <p style={{ color: "var(--danger)", fontSize: 13 }}>{error}</p> : null}
 
@@ -158,113 +106,9 @@ export function FieldVisitLogPage() {
         <div className="field-visit-log-layout">
           {canCreate ? (
             <div className="field-beat-card field-visit-log-form-card">
-              <div className="field-beat-card__head">New field visit (owner)</div>
+              <div className="field-beat-card__head">New field visit</div>
               <div className="field-visit-log-form-body">
-                <label className="field">
-                  <span className="field-label">Assign employee</span>
-                  <select
-                    className="input"
-                    value={form.assignedEmployeeId}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, assignedEmployeeId: e.target.value }))
-                    }
-                  >
-                    {employees.map((emp) => (
-                      <option key={emp.employeeId} value={emp.employeeId}>
-                        {emp.fullName} ({emp.employeeId})
-                        {emp.workLocationType ? ` · ${emp.workLocationType}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span className="field-label">Company</span>
-                  <select
-                    className="input"
-                    value={form.company}
-                    onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
-                  >
-                    {COMPANY_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span className="field-label">Visit date</span>
-                  <input
-                    className="input"
-                    type="date"
-                    value={form.visitDate}
-                    onChange={(e) => setForm((f) => ({ ...f, visitDate: e.target.value }))}
-                  />
-                </label>
-                <label className="field">
-                  <span className="field-label">Visit type</span>
-                  <select
-                    className="input"
-                    value={form.visitType}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, visitType: e.target.value as FieldVisitType }))
-                    }
-                  >
-                    {FIELD_VISIT_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field field-visit-log-full">
-                  <span className="field-label">Party name</span>
-                  <input
-                    className="input"
-                    value={form.partyName}
-                    onChange={(e) => setForm((f) => ({ ...f, partyName: e.target.value }))}
-                    placeholder="Customer / vendor / contact"
-                  />
-                </label>
-                <label className="field field-visit-log-full">
-                  <span className="field-label">Location</span>
-                  <input
-                    className="input"
-                    value={form.locationText}
-                    onChange={(e) => setForm((f) => ({ ...f, locationText: e.target.value }))}
-                    placeholder="Address or area"
-                  />
-                </label>
-                <label className="field">
-                  <span className="field-label">Start time</span>
-                  <input
-                    className="input"
-                    type="time"
-                    value={form.startTime}
-                    onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
-                  />
-                </label>
-                <label className="field">
-                  <span className="field-label">Expected return</span>
-                  <input
-                    className="input"
-                    type="time"
-                    value={form.returnTime}
-                    onChange={(e) => setForm((f) => ({ ...f, returnTime: e.target.value }))}
-                  />
-                </label>
-                <label className="field field-visit-log-full">
-                  <span className="field-label">Purpose</span>
-                  <input
-                    className="input"
-                    value={form.purpose}
-                    onChange={(e) => setForm((f) => ({ ...f, purpose: e.target.value }))}
-                  />
-                </label>
-                <div className="field-visit-log-actions">
-                  <Btn variant="primary" onClick={() => void createVisit()} disabled={saving}>
-                    Create visit & notify employee
-                  </Btn>
-                </div>
+                <FieldVisitCreateForm onSuccess={() => void reload()} />
               </div>
             </div>
           ) : null}
@@ -286,39 +130,42 @@ export function FieldVisitLogPage() {
                       <div className="field-visit-log-recent-item__top">
                         <span className="field-visit-log-recent-item__party">{visit.partyName}</span>
                         <span
-                          className={`field-visit-log-type field-visit-log-type--${visit.visitType.toLowerCase()}`}
+                          className={`field-activity-badge field-activity-badge--${visitStatusBadgeClass(visit.status)}`}
                         >
-                          {statusLabel(visit.status)}
+                          {visitStatusLabel(visit.status)}
                         </span>
                       </div>
                       <p className="field-visit-log-recent-item__meta">
                         {visit.assignedEmployeeName} · {visit.visitDate} · {visit.locationText || "—"}
                       </p>
-                      {visit.cancelReason ? (
-                        <p className="field-visit-log-recent-item__meta" style={{ color: "var(--danger)" }}>
-                          Cancelled: {visit.cancelReason}
+                      {getVisitAcceptToCloseMinutes(visit) != null ? (
+                        <p className="field-visit-log-recent-item__meta">
+                          Duration: {formatVisitDurationMinutes(getVisitAcceptToCloseMinutes(visit))}
                         </p>
                       ) : null}
-                      {isMine && visit.status === "pending" ? (
-                        <div className="dispatch-plan-row-actions" style={{ marginTop: 8 }}>
+                      <div className="dispatch-plan-row-actions" style={{ marginTop: 8 }}>
+                        <Btn
+                          size="sm"
+                          variant="secondary"
+                          icon="eye"
+                          onClick={() => setViewVisit(visit)}
+                        >
+                          View
+                        </Btn>
+                        {isMine && visit.status === "pending" ? (
                           <Btn size="sm" variant="primary" onClick={() => void handleAccept(visit.id)} disabled={saving}>
                             Accept
                           </Btn>
-                          <Btn
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => setCancelId(visit.id)}
-                            disabled={saving}
-                          >
-                            Cancel
-                          </Btn>
-                        </div>
-                      ) : null}
-                      {isMine && (visit.status === "accepted" || visit.status === "in-progress") ? (
-                        <div className="dispatch-plan-row-actions" style={{ marginTop: 8 }}>
+                        ) : null}
+                        {isMine && (visit.status === "accepted" || visit.status === "in-progress") ? (
                           <Btn size="sm" variant="primary" onClick={() => void handleComplete(visit.id)} disabled={saving}>
                             Mark complete
                           </Btn>
+                        ) : null}
+                        {isMine &&
+                        (visit.status === "pending" ||
+                          visit.status === "accepted" ||
+                          visit.status === "in-progress") ? (
                           <Btn
                             size="sm"
                             variant="secondary"
@@ -327,8 +174,8 @@ export function FieldVisitLogPage() {
                           >
                             Cancel
                           </Btn>
-                        </div>
-                      ) : null}
+                        ) : null}
+                      </div>
                     </div>
                   );
                 })

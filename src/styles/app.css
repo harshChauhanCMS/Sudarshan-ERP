@@ -1506,6 +1506,90 @@ button.sb-section-label {
   color: #c2410c;
 }
 
+.field-activity-badge--cancelled {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.field-visit-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field-visit-detail__status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.field-visit-detail__meta {
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.field-visit-detail__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+}
+
+.field-visit-detail-row__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--fg-subtle);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.field-visit-detail-row__value {
+  font-size: 14px;
+  color: var(--fg);
+  line-height: 1.45;
+}
+
+.field-visit-detail__timeline-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.field-visit-detail__remark-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--fg);
+  white-space: pre-wrap;
+}
+
+.field-visit-detail__no-remark {
+  margin: 0;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.field-visit-detail__maps-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.field-visit-detail__maps-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .field-visit-detail__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .field-activity-bottom-card {
   background: var(--bg-elev);
   border: 1px solid var(--border);
@@ -1817,6 +1901,12 @@ button.sb-section-label {
 
 .field-visit-log-form-body {
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field-visit-create-form {
   display: flex;
   flex-direction: column;
   gap: 14px;

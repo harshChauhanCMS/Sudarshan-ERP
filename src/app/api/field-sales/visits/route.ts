@@ -1,5 +1,6 @@
 import { ok, fail } from "@/lib/api-response";
-import { isAdminOrOwner, requireSession } from "@/lib/api-auth";
+import { isAdminOrOwner } from "@/lib/api-auth";
+import { getUserFromRequest } from "@/lib/api-request-auth";
 import {
   createFieldVisit,
   listFieldVisits,
@@ -12,8 +13,8 @@ export const dynamic = "force-dynamic";
 const VISIT_TYPES = new Set<FieldVisitType>(FIELD_VISIT_TYPES);
 
 export async function GET(request: Request) {
-  const { user, error } = await requireSession();
-  if (error) return error;
+  const user = await getUserFromRequest(request);
+  if (!user) return fail("Unauthorized", 401);
 
   const url = new URL(request.url);
   const status = url.searchParams.get("status")?.trim();
@@ -33,8 +34,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { user, error } = await requireSession();
-  if (error) return error;
+  const user = await getUserFromRequest(request);
+  if (!user) return fail("Unauthorized", 401);
   if (!isAdminOrOwner(user.role)) return fail("Only owner or admin can create visits", 403);
 
   const body = (await request.json().catch(() => null)) as CreateFieldVisitPayload | null;

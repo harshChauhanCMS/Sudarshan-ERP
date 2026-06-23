@@ -91,6 +91,7 @@ export type FieldActivityDashboard = {
     initials: string;
   }>;
   activeVisits: FieldVisitView[];
+  todayVisits: FieldVisitView[];
   timeline: Array<{
     time: string;
     title: string;

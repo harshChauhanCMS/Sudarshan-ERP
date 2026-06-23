@@ -393,6 +393,7 @@ export async function getFieldActivityDashboard(): Promise<FieldActivityDashboar
     liveEmployees,
     mapEmployees,
     activeVisits: visits.filter((v) => !["completed", "cancelled"].includes(v.status)),
+    todayVisits: visits,
     timeline,
     territorySummary: [...territoryMap.entries()]
       .map(([area, count]) => ({ area, visits: count }))
