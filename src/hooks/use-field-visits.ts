@@ -10,8 +10,8 @@ export function useFieldVisits() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  const reload = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/field-sales/visits", { cache: "no-store" });
@@ -22,12 +22,19 @@ export function useFieldVisits() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load visits");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void reload();
+  }, [reload]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void reload(true);
+    }, 15_000);
+    return () => clearInterval(timer);
   }, [reload]);
 
   const updateVisit = useCallback(

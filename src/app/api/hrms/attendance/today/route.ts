@@ -5,10 +5,6 @@ import { ok, fail } from "@/lib/api-response";
 import { getSession } from "@/lib/session";
 import { filterRowsByHrScope, resolveHrDataScope } from "@/lib/hrms-access";
 import { enrichLocation, shortAddressFromLocation, type GeoLocation } from "@/lib/reverse-geocode";
-import {
-  isPunchInLateAbsent,
-  PUNCH_IN_LATE_ABSENT_MESSAGE,
-} from "@/lib/hrms-shift-utils";
 
 function formatTime(d: Date): string {
   return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
@@ -247,10 +243,13 @@ export async function GET(request: Request) {
       const primaryShift = sessionEmployee?.primaryShift
         ? String(sessionEmployee.primaryShift)
         : null;
-      const punchInBlocked = isPunchInLateAbsent(now, primaryShift);
+      // 4-hour late punch-in validation disabled
+      // const punchInBlocked = isPunchInLateAbsent(now, primaryShift);
+      const punchInBlocked = false;
       punchMeta = {
         punchInBlocked,
-        punchInBlockReason: punchInBlocked ? PUNCH_IN_LATE_ABSENT_MESSAGE : null,
+        punchInBlockReason: null,
+        // punchInBlockReason: punchInBlocked ? PUNCH_IN_LATE_ABSENT_MESSAGE : null,
         primaryShift,
       };
     }

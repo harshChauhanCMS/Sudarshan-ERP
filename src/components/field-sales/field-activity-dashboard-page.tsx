@@ -1,36 +1,21 @@
 "use client";
 
+import { useState } from "react";
 import { Icon } from "@/components/erp/icons";
 import { Btn } from "@/components/erp/ui";
 import { DashHead } from "@/components/erp/dashboards";
+import { FieldEmployeeGoogleMap } from "@/components/field-sales/field-employee-google-map";
+import { FieldVisitCreateModal } from "@/components/field-sales/field-visit-create-modal";
+import { FieldVisitDetailModal } from "@/components/field-sales/field-visit-detail-modal";
 import { useFieldActivityDashboard } from "@/hooks/use-field-activity-dashboard";
-
-function latLngToPercent(lat: number, lng: number) {
-  const x = ((lng - 69) / 9) * 100;
-  const y = ((30 - lat) / 7) * 100;
-  return {
-    x: Math.min(92, Math.max(8, x)),
-    y: Math.min(88, Math.max(12, y)),
-  };
-}
-
-function formatDuration(mins: number | null) {
-  if (mins == null) return "—";
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-
-function statusLabel(status: string) {
-  const map: Record<string, string> = {
-    pending: "PENDING",
-    accepted: "ACCEPTED",
-    "in-progress": "IN PROGRESS",
-    completed: "COMPLETED",
-    cancelled: "CANCELLED",
-  };
-  return map[status] ?? status.toUpperCase();
-}
+import { useSessionUser } from "@/hooks/use-session-user";
+import {
+  formatVisitDurationMinutes,
+  getVisitAcceptToCloseMinutes,
+  visitStatusBadgeClass,
+  visitStatusLabel,
+} from "@/lib/field-visit-display";
+import type { FieldVisitView } from "@/lib/field-visit-types";
 
 function badgeClass(badge: string) {
   if (badge === "field" || badge === "onsite") return "field";
@@ -41,6 +26,10 @@ function badgeClass(badge: string) {
 
 export function FieldActivityDashboardPage() {
   const { data, loading, error, reload } = useFieldActivityDashboard();
+  const { user } = useSessionUser();
+  const [visitModalOpen, setVisitModalOpen] = useState(false);
+  const [viewVisit, setViewVisit] = useState<FieldVisitView | null>(null);
+  const canCreateVisit = user?.role === "owner" || user?.role === "admin";
   const today = new Date().toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
@@ -69,7 +58,7 @@ export function FieldActivityDashboardPage() {
         },
         {
           label: "Average visit duration",
-          value: formatDuration(data.kpis.avgVisitDurationMinutes),
+          value: formatVisitDurationMinutes(data.kpis.avgVisitDurationMinutes),
           hint: "Accepted → completed",
           tone: "teal",
         },
@@ -82,10 +71,23 @@ export function FieldActivityDashboardPage() {
         title="Field Activity Dashboard"
         sub="Live onsite & field employee locations, visits, and check-ins"
       >
+        {canCreateVisit ? (
+          <Btn variant="primary" size="sm" icon="plus" onClick={() => setVisitModalOpen(true)}>
+            Add visit
+          </Btn>
+        ) : null}
         <Btn variant="secondary" size="sm" icon="refresh" onClick={() => void reload(true)}>
           Refresh
         </Btn>
       </DashHead>
+
+      <FieldVisitCreateModal
+        open={visitModalOpen}
+        onClose={() => setVisitModalOpen(false)}
+        onCreated={() => void reload(true)}
+      />
+
+      <FieldVisitDetailModal visit={viewVisit} onClose={() => setViewVisit(null)} />
 
       {loading && !data ? (
         <p style={{ color: "var(--fg-muted)", fontSize: 14 }}>Loading live field data…</p>
@@ -116,76 +118,7 @@ export function FieldActivityDashboardPage() {
                   </div>
                 </div>
                 <div className="card-body" style={{ padding: 0 }}>
-                  <div
-                    style={{
-                      position: "relative",
-                      minHeight: 320,
-                      background:
-                        "linear-gradient(180deg, #e8f4f8 0%, #f0f7f4 40%, #faf6ee 100%)",
-                      borderRadius: "0 0 12px 12px",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {data.mapEmployees.length === 0 ? (
-                      <div className="dispatch-detail-map-empty">
-                        <Icon name="pin" size={28} />
-                        <p>No GPS locations yet</p>
-                        <span>Onsite/field employees appear here after punch-in with location.</span>
-                      </div>
-                    ) : (
-                      data.mapEmployees.map((rep) => {
-                        const pos = latLngToPercent(rep.lat, rep.lng);
-                        return (
-                          <div
-                            key={rep.employeeId}
-                            title={`${rep.label} · ${rep.city}`}
-                            style={{
-                              position: "absolute",
-                              left: `${pos.x}%`,
-                              top: `${pos.y}%`,
-                              transform: "translate(-50%, -50%)",
-                              zIndex: 5,
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: 34,
-                                height: 34,
-                                borderRadius: "50%",
-                                background: rep.color,
-                                color: "white",
-                                display: "grid",
-                                placeItems: "center",
-                                fontWeight: 700,
-                                fontSize: 11,
-                                border: "3px solid white",
-                                boxShadow: "0 4px 10px rgba(0,0,0,0.18)",
-                              }}
-                            >
-                              {rep.initials}
-                            </div>
-                            <div
-                              style={{
-                                position: "absolute",
-                                left: "50%",
-                                top: "calc(100% + 4px)",
-                                transform: "translateX(-50%)",
-                                fontSize: 9,
-                                fontWeight: 600,
-                                whiteSpace: "nowrap",
-                                background: "rgba(255,255,255,0.92)",
-                                padding: "2px 6px",
-                                borderRadius: 4,
-                                border: "1px solid var(--border)",
-                              }}
-                            >
-                              {rep.city}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
+                  <FieldEmployeeGoogleMap employees={data.mapEmployees} />
                 </div>
               </div>
             </div>
@@ -247,9 +180,9 @@ export function FieldActivityDashboardPage() {
               </div>
             </div>
             <div style={{ padding: "0 1rem 1rem" }}>
-              {data.activeVisits.length === 0 ? (
+              {(data.todayVisits ?? data.activeVisits).length === 0 ? (
                 <p style={{ fontSize: 13, color: "var(--fg-muted)", margin: "0.75rem 0 0" }}>
-                  No active visits scheduled for today.
+                  No visits scheduled for today.
                 </p>
               ) : (
                 <table className="dispatch-plan-table">
@@ -259,18 +192,33 @@ export function FieldActivityDashboardPage() {
                       <th>Party</th>
                       <th>Location</th>
                       <th>Status</th>
+                      <th>Duration</th>
+                      <th style={{ width: 72 }} />
                     </tr>
                   </thead>
                   <tbody>
-                    {data.activeVisits.map((v) => (
+                    {(data.todayVisits ?? data.activeVisits).map((v) => (
                       <tr key={v.id}>
                         <td>{v.assignedEmployeeName}</td>
                         <td>{v.partyName}</td>
                         <td>{v.locationText || "—"}</td>
                         <td>
-                          <span className={`field-activity-badge field-activity-badge--${v.status === "pending" ? "delayed" : "field"}`}>
-                            {statusLabel(v.status)}
+                          <span
+                            className={`field-activity-badge field-activity-badge--${visitStatusBadgeClass(v.status)}`}
+                          >
+                            {visitStatusLabel(v.status)}
                           </span>
+                        </td>
+                        <td style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+                          {formatVisitDurationMinutes(getVisitAcceptToCloseMinutes(v))}
+                        </td>
+                        <td>
+                          <Btn
+                            variant="secondary"
+                            size="sm"
+                            icon="eye"
+                            onClick={() => setViewVisit(v)}
+                          />
                         </td>
                       </tr>
                     ))}

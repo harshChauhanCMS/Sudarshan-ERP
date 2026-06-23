@@ -2,6 +2,23 @@ import { connectDB } from "@/lib/db";
 import Notification from "@/lib/models/Notification";
 import { User } from "@/models/User";
 import type { FieldVisitView } from "@/lib/field-visit-types";
+import { companyLabel, formatVisitTime12h } from "@/lib/field-visit-form";
+
+function buildVisitAssignedMessage(visit: FieldVisitView): string {
+  const lines = [
+    `New field visit assigned to you`,
+    `Party: ${visit.partyName}`,
+    `Date: ${visit.visitDate}`,
+    `Time: ${formatVisitTime12h(visit.startTime)} – ${formatVisitTime12h(visit.returnTime)}`,
+    `Type: ${visit.visitType}`,
+    `Location: ${visit.locationText || "TBD"}`,
+    `Company: ${companyLabel(visit.company)}`,
+  ];
+  if (visit.purpose?.trim()) lines.push(`Purpose: ${visit.purpose.trim()}`);
+  if (visit.notes?.trim()) lines.push(`Notes: ${visit.notes.trim()}`);
+  if (visit.createdByName) lines.push(`Assigned by: ${visit.createdByName}`);
+  return lines.join(" · ");
+}
 
 async function ownerEmails(): Promise<string[]> {
   const users = await User.find({ role: { $in: ["owner", "admin"] } })
@@ -24,7 +41,7 @@ export async function notifyFieldVisitAssigned(visit: FieldVisitView): Promise<v
       type: "info",
       employeeId: visit.assignedEmployeeId,
       employeeName: visit.assignedEmployeeName,
-      message: `New field visit assigned: ${visit.partyName} on ${visit.visitDate} · ${visit.locationText || "Location TBD"}`,
+      message: buildVisitAssignedMessage(visit),
       target: "/field-sales/visit-log",
       read: false,
     });
