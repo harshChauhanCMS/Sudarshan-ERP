@@ -1,38 +1,81 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { message } from "antd";
 import { Icon } from "@/components/erp/icons";
 import { Btn } from "@/components/erp/ui";
-import { useFormState } from "@/components/forms";
+import { useFormState, LocationAutocompleteInput } from "@/components/forms";
 import {
   buildInitialFromOrder,
   createDispatchPlan,
   findAwaitingOrder,
+  parseOrderQtyMt,
+  updateDispatchPlan,
+  validateDispatchOrderId,
   type AwaitingOrderView,
   type DispatchPlanFormValues,
 } from "@/lib/dispatch-planning-api";
+import type { Order } from "@/lib/entity-types";
+import { fetchDrivers, type DriverRecord } from "@/lib/driver-api";
+import { AddDriverModal } from "@/components/dispatch/add-driver-modal";
 import { DispatchPlanChip } from "./dispatch-plan-chip";
+import { useErpData } from "@/context/erp-data-provider";
+import { filterEligibleSalesOrders } from "@/lib/dispatch-order-filters";
+import type { Dispatch } from "@/lib/entity-types";
 
 type DispatchPlanFormProps = {
-  orders: AwaitingOrderView[];
+  orders?: AwaitingOrderView[];
+  allOrders?: Order[];
   companyLabel: string;
   initialOrderId?: string;
   initialStatus?: DispatchPlanFormValues["planStatus"];
+  mode?: "create" | "edit";
+  dispatchId?: string;
+  linkedOrderId?: string;
+  editValues?: DispatchPlanFormValues;
+  requireDriverAssignment?: boolean;
   onSuccess?: () => void;
 };
 
 export function DispatchPlanForm({
-  orders,
+  orders = [],
+  allOrders = [],
   companyLabel,
   initialOrderId,
   initialStatus,
+  mode = "create",
+  dispatchId,
+  linkedOrderId = "",
+  editValues,
+  requireDriverAssignment = false,
   onSuccess,
 }: DispatchPlanFormProps) {
+  const isEdit = mode === "edit";
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [drivers, setDrivers] = useState<DriverRecord[]>([]);
+  const [driversLoading, setDriversLoading] = useState(true);
+  const [selectedDriverId, setSelectedDriverId] = useState("");
+  const [addDriverOpen, setAddDriverOpen] = useState(false);
+
+  const loadDrivers = useCallback(async () => {
+    setDriversLoading(true);
+    try {
+      const rows = await fetchDrivers();
+      setDrivers(rows);
+    } catch {
+      setDrivers([]);
+    } finally {
+      setDriversLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDrivers();
+  }, [loadDrivers]);
 
   const initialValues = useMemo(() => {
+    if (isEdit && editValues) return editValues;
     const order = findAwaitingOrder(orders, initialOrderId);
     if (!order) {
       return {
@@ -53,9 +96,29 @@ export function DispatchPlanForm({
     const initial = buildInitialFromOrder(order);
     if (initialStatus) initial.planStatus = initialStatus;
     return initial;
-  }, [orders, initialOrderId, initialStatus]);
+  }, [orders, initialOrderId, initialStatus, isEdit, editValues]);
 
   const form = useFormState(initialValues);
+  const { data: erpData } = useErpData();
+
+  const eligibleSalesOrders = useMemo(() => {
+    if (!isEdit) return allOrders;
+    const ordersSource = allOrders.length > 0 ? allOrders : erpData.ORDERS;
+    const dispatches = erpData.DISPATCHES as Dispatch[];
+    const pinnedOrderId = form.values.orderId || linkedOrderId;
+    return filterEligibleSalesOrders(ordersSource, dispatches, {
+      includeOrderId: pinnedOrderId,
+      excludeDispatchId: dispatchId,
+    });
+  }, [
+    isEdit,
+    allOrders,
+    erpData.ORDERS,
+    erpData.DISPATCHES,
+    form.values.orderId,
+    linkedOrderId,
+    dispatchId,
+  ]);
 
   const selectedOrder = useMemo(
     () => findAwaitingOrder(orders, form.values.orderId),
@@ -83,10 +146,34 @@ export function DispatchPlanForm({
     form.setField("remarks", next.remarks);
   };
 
-  const planDispatch = async (assignVehicle = false) => {
+  const applyDriver = (driverId: string) => {
+    setSelectedDriverId(driverId);
+    if (!driverId) return;
+    const driver = drivers.find((d) => d._id === driverId);
+    if (!driver) return;
+    form.setField("vehicleReg", driver.vehicleNumber);
+    form.setField("driverName", driver.name);
+    form.setField("vehicleType", driver.vehicleCategory);
+  };
+
+  const loadSalesOrder = (order: Order) => {
+    form.setField("orderId", order.id);
+    form.setField("customer", order.customer);
+    form.setField("product", order.product);
+    form.setField("quantity", parseOrderQtyMt(order));
+  };
+
+  const planDispatch = async () => {
     setError(null);
-    if (!form.values.orderId) {
-      message.error("Select an order.");
+    const effectiveOrderId = (form.values.orderId || linkedOrderId || "").trim();
+    const orderIdError = validateDispatchOrderId(effectiveOrderId);
+    if (orderIdError) {
+      message.error(orderIdError);
+      setError(orderIdError);
+      return;
+    }
+    if (!effectiveOrderId) {
+      message.error("Select a sales order.");
       return;
     }
     if (!form.values.deliveryLocation.trim()) {
@@ -94,32 +181,40 @@ export function DispatchPlanForm({
       return;
     }
 
-    const planStatus = assignVehicle ? "vehicle" : form.values.planStatus;
-
-    if (assignVehicle && !form.values.vehicleReg.trim()) {
-      message.info("Enter vehicle registration to assign.");
-      form.setField("planStatus", "vehicle");
+    if (requireDriverAssignment && !form.values.driverName.trim()) {
+      message.error("Select or enter a driver to assign.");
+      return;
+    }
+    if (requireDriverAssignment && !form.values.vehicleReg.trim()) {
+      message.error("Enter vehicle registration to assign the driver.");
       return;
     }
 
+    const payload = {
+      orderId: effectiveOrderId,
+      sourceLocation: form.values.sourceLocation,
+      deliveryLocation: form.values.deliveryLocation,
+      dispatchDate: form.values.dispatchDate,
+      quantity: form.values.quantity,
+      vehicleReg: form.values.vehicleReg,
+      vehicleType: form.values.vehicleType,
+      driverName: form.values.driverName,
+      waRef: form.values.waRef,
+      planStatus: form.values.planStatus,
+      remarks: form.values.remarks,
+    };
+
     setSaving(true);
     try {
-      const result = await createDispatchPlan({
-        orderId: form.values.orderId,
-        sourceLocation: form.values.sourceLocation,
-        deliveryLocation: form.values.deliveryLocation,
-        dispatchDate: form.values.dispatchDate,
-        quantity: form.values.quantity,
-        vehicleReg: form.values.vehicleReg,
-        vehicleType: form.values.vehicleType,
-        driverName: form.values.driverName,
-        waRef: form.values.waRef,
-        planStatus,
-        remarks: form.values.remarks,
-      });
-      message.success(
-        `Dispatch ${result.dispatch.id} planned for ${selectedOrder?.customer ?? "customer"}.`
-      );
+      if (isEdit && dispatchId) {
+        await updateDispatchPlan(dispatchId, payload);
+        message.success(`Dispatch ${dispatchId} updated.`);
+      } else {
+        const result = await createDispatchPlan(payload);
+        message.success(
+          `Dispatch ${result.dispatch.id} planned for ${selectedOrder?.customer ?? "customer"}.`
+        );
+      }
       onSuccess?.();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to plan dispatch";
@@ -130,7 +225,7 @@ export function DispatchPlanForm({
     }
   };
 
-  if (!orders.length) {
+  if (!isEdit && !orders.length) {
     return (
       <div className="card dispatch-plan-form-card dispatch-plan-form-card--full">
         <div className="dispatch-plan-form-card__body">
@@ -146,14 +241,14 @@ export function DispatchPlanForm({
     <div className="card dispatch-plan-form-card dispatch-plan-form-card--full">
       <div className="dispatch-plan-form-card__head">
         <h2>
-          <Icon name="invoice" size={15} /> New dispatch plan
+          <Icon name="invoice" size={15} /> {isEdit ? `Edit dispatch ${dispatchId ?? ""}` : "New dispatch plan"}
         </h2>
       </div>
       <div className="dispatch-plan-form-card__body">
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            planDispatch(false).catch(() => {});
+            planDispatch().catch(() => {});
           }}
         >
           <div className="dispatch-plan-section-title">Current company</div>
@@ -165,26 +260,65 @@ export function DispatchPlanForm({
           </div>
 
           <div className="dispatch-plan-section-title">Order & customer</div>
+          {isEdit && dispatchId ? (
+            <div className="field">
+              <label className="field-label" htmlFor="dispatchId">
+                Dispatch #
+              </label>
+              <input
+                id="dispatchId"
+                className="input dispatch-plan-readonly mono"
+                value={dispatchId}
+                readOnly
+              />
+            </div>
+          ) : null}
           <div className="field">
             <label className="field-label" htmlFor="orderId">
-              Order
+              Sales order (SO #)
             </label>
-            <select
-              id="orderId"
-              className="input"
-              value={form.values.orderId}
-              onChange={(e) => {
-                const order = orders.find((o) => o.id === e.target.value);
-                if (order) loadOrder(order);
-              }}
-            >
-              <option value="">Select order</option>
-              {orders.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.id} — {o.customer}
-                </option>
-              ))}
-            </select>
+            {isEdit ? (
+              <select
+                id="orderId"
+                className="input"
+                value={form.values.orderId}
+                onChange={(e) => {
+                  const order = eligibleSalesOrders.find((o) => o.id === e.target.value);
+                  if (order) loadSalesOrder(order);
+                  else form.setField("orderId", e.target.value);
+                }}
+              >
+                <option value="">Select sales order</option>
+                {eligibleSalesOrders.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.id} — {o.customer}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <select
+                id="orderId"
+                className="input"
+                value={form.values.orderId}
+                onChange={(e) => {
+                  const order = orders.find((o) => o.id === e.target.value);
+                  if (order) loadOrder(order);
+                }}
+              >
+                <option value="">Select order</option>
+                {orders.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.id} — {o.customer}
+                  </option>
+                ))}
+              </select>
+            )}
+            {isEdit ? (
+              <p className="dispatch-plan-field-hint">
+                The order linked to this dispatch stays selected. Only other open orders
+                (scheduled / in production) can be chosen.
+              </p>
+            ) : null}
           </div>
           <div className="field">
             <label className="field-label" htmlFor="customer">
@@ -197,38 +331,53 @@ export function DispatchPlanForm({
               readOnly
             />
           </div>
+          {isEdit && form.values.product ? (
+            <div className="field">
+              <label className="field-label" htmlFor="product">
+                Product
+              </label>
+              <input
+                id="product"
+                className="input dispatch-plan-readonly"
+                value={form.values.product}
+                readOnly
+              />
+            </div>
+          ) : null}
 
-          <div className="dispatch-plan-section-title">Packaging readiness</div>
-          <div className={`dispatch-plan-pkg ${packagingOk ? "ok" : "pending"}`}>
-            <Icon name={packagingOk ? "check" : "alert"} size={14} />
-            <span>
-              <strong>{packagingOk ? "Ready" : "Pending"}</strong> — {packagingNote}
-            </span>
-          </div>
+          {!isEdit ? (
+            <>
+              <div className="dispatch-plan-section-title">Packaging readiness</div>
+              <div className={`dispatch-plan-pkg ${packagingOk ? "ok" : "pending"}`}>
+                <Icon name={packagingOk ? "check" : "alert"} size={14} />
+                <span>
+                  <strong>{packagingOk ? "Ready" : "Pending"}</strong> — {packagingNote}
+                </span>
+              </div>
+            </>
+          ) : null}
 
           <div className="dispatch-plan-section-title">Source & destination</div>
           <div className="field">
             <label className="field-label" htmlFor="sourceLocation">
               Source location (dispatch from)
             </label>
-            <input
+            <LocationAutocompleteInput
               id="sourceLocation"
-              className="input"
               value={form.values.sourceLocation}
-              onChange={(e) => form.setField("sourceLocation", e.target.value)}
-              placeholder="Plant / warehouse"
+              onChange={(v) => form.setField("sourceLocation", v)}
+              placeholder="Plant / warehouse — start typing for suggestions"
             />
           </div>
           <div className="field">
             <label className="field-label" htmlFor="deliveryLocation">
               Destination / delivery location
             </label>
-            <input
+            <LocationAutocompleteInput
               id="deliveryLocation"
-              className="input"
               value={form.values.deliveryLocation}
-              onChange={(e) => form.setField("deliveryLocation", e.target.value)}
-              placeholder="Customer address or site"
+              onChange={(v) => form.setField("deliveryLocation", v)}
+              placeholder="Customer address or site — start typing for suggestions"
             />
           </div>
 
@@ -258,7 +407,45 @@ export function DispatchPlanForm({
             />
           </div>
 
-          <div className="dispatch-plan-section-title">Vehicle capture</div>
+          <div className="dispatch-plan-section-title">Assign driver</div>
+          <div className="field">
+            <label className="field-label" htmlFor="registeredDriver">
+              Driver
+            </label>
+            <div className="dispatch-plan-driver-row">
+              <select
+                id="registeredDriver"
+                className="input"
+                value={selectedDriverId}
+                disabled={driversLoading}
+                onChange={(e) => applyDriver(e.target.value)}
+              >
+                <option value="">
+                  {driversLoading ? "Loading drivers…" : "Select driver to assign"}
+                </option>
+                {drivers.map((d) => (
+                  <option key={d._id} value={d._id}>
+                    {d.name} · {d.vehicleNumber}
+                  </option>
+                ))}
+              </select>
+              <Btn
+                variant="secondary"
+                size="sm"
+                icon="user"
+                type="button"
+                onClick={() => setAddDriverOpen(true)}
+              >
+                Add driver
+              </Btn>
+            </div>
+            {!isEdit ? (
+              <p className="dispatch-plan-field-hint">
+                Optional — assign now or leave blank and use <strong>Assign driver</strong> on a
+                planned dispatch later.
+              </p>
+            ) : null}
+          </div>
           <div className="field">
             <label className="field-label" htmlFor="vehicleReg">
               Vehicle registration
@@ -365,23 +552,30 @@ export function DispatchPlanForm({
 
           <div className="dispatch-plan-actions">
             <Btn variant="primary" size="sm" icon="truck" type="submit" disabled={saving}>
-              {saving ? "Planning…" : "Plan dispatch"}
+              {saving
+                ? isEdit
+                  ? "Saving…"
+                  : "Planning…"
+                : isEdit
+                  ? requireDriverAssignment
+                    ? "Assign driver"
+                    : "Save changes"
+                  : "Plan dispatch"}
             </Btn>
-            <Btn
-              variant="secondary"
-              size="sm"
-              icon="truck"
-              type="button"
-              disabled={saving}
-              onClick={() => {
-                planDispatch(true).catch(() => {});
-              }}
-            >
-              Assign vehicle
-            </Btn>
+            {isEdit ? (
+              <p className="dispatch-plan-field-hint">
+                Choose the sales order (SO-…). The dispatch number (DSP-…) is shown above — do not
+                enter it here.
+              </p>
+            ) : null}
           </div>
         </form>
       </div>
+      <AddDriverModal
+        open={addDriverOpen}
+        onClose={() => setAddDriverOpen(false)}
+        onSaved={() => void loadDrivers()}
+      />
     </div>
   );
 }

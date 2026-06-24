@@ -6,7 +6,6 @@ import { DashHead } from "@/components/erp/dashboards";
 import { DispatchPlanForm } from "@/components/dispatch/dispatch-plan-form";
 import { useDispatchPlanning } from "@/hooks/use-dispatch-planning";
 import { useErpData } from "@/context/erp-data-provider";
-import type { DispatchPlanFormValues } from "@/lib/dispatch-planning-api";
 
 export default function NewDispatchPlanPage() {
   const router = useRouter();
@@ -15,10 +14,6 @@ export default function NewDispatchPlanPage() {
   const { data, loading, error, reload } = useDispatchPlanning();
 
   const orderId = searchParams.get("order") ?? undefined;
-  const initialStatus = searchParams.get("status") as
-    | DispatchPlanFormValues["planStatus"]
-    | null;
-
   const awaitingOrders = data?.awaitingOrders ?? [];
   const canPlan = Boolean(data?.dbConfigured && awaitingOrders.length > 0);
 
@@ -31,7 +26,7 @@ export default function NewDispatchPlanPage() {
     <div className="dispatch-plan">
       <DashHead
         title="New dispatch plan"
-        sub="Plan a shipment, assign vehicle — driver app not mandatory"
+        sub="Plan route and delivery — assign a driver now or after planning"
       >
         <Btn
           variant="secondary"
@@ -63,7 +58,6 @@ export default function NewDispatchPlanPage() {
           orders={awaitingOrders}
           companyLabel={data?.companyLabel ?? ""}
           initialOrderId={orderId}
-          initialStatus={initialStatus ?? undefined}
           onSuccess={handleSuccess}
         />
       ) : null}

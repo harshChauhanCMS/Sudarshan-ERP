@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 
 export function FormGrid({
   children,
@@ -42,11 +42,15 @@ export function FormInput({
   onChange,
   placeholder,
   type = "text",
+  maxLength,
+  inputMode,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   type?: string;
+  maxLength?: number;
+  inputMode?: HTMLAttributes<HTMLInputElement>["inputMode"];
 }) {
   return (
     <input
@@ -54,6 +58,8 @@ export function FormInput({
       type={type}
       value={value}
       placeholder={placeholder}
+      maxLength={maxLength}
+      inputMode={inputMode}
       onChange={(e) => onChange(e.target.value)}
     />
   );

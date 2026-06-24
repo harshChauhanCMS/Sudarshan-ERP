@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/erp/icons";
+import { loadGoogleMapsScript } from "@/lib/google-maps-loader";
 
 export type FieldMapEmployee = {
   employeeId: string;
@@ -13,46 +14,8 @@ export type FieldMapEmployee = {
   initials: string;
 };
 
-const MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
 const DEFAULT_CENTER = { lat: 24.5854, lng: 73.7125 };
 const DEFAULT_ZOOM = 6;
-
-let mapsScriptPromise: Promise<void> | null = null;
-
-function loadGoogleMapsScript(): Promise<void> {
-  if (typeof window === "undefined") return Promise.resolve();
-  if (window.google?.maps) return Promise.resolve();
-  if (mapsScriptPromise) return mapsScriptPromise;
-
-  mapsScriptPromise = new Promise((resolve, reject) => {
-    if (!MAPS_API_KEY) {
-      reject(new Error("Google Maps API key is not configured"));
-      return;
-    }
-
-    const existing = document.querySelector<HTMLScriptElement>(
-      'script[data-google-maps="true"]',
-    );
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () =>
-        reject(new Error("Failed to load Google Maps")),
-      );
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(MAPS_API_KEY)}`;
-    script.async = true;
-    script.defer = true;
-    script.dataset.googleMaps = "true";
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load Google Maps"));
-    document.head.appendChild(script);
-  });
-
-  return mapsScriptPromise;
-}
 
 type Props = {
   employees: FieldMapEmployee[];

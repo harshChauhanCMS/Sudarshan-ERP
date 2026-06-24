@@ -2,7 +2,8 @@
 'use client';
 
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
+import { AddDriverModal } from "@/components/dispatch/add-driver-modal";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import {
@@ -2012,6 +2013,7 @@ function CoTag({ co }) {
 }
 
 const DispatchDashboard = ({ navigate }) => {
+  const [addDriverOpen, setAddDriverOpen] = useState(false);
   const DATA = useDATA();
   const dispatchCounts = dispatchStatusCounts(DATA.DISPATCHES);
   const mineralsPlant = dispatchesForPlant(DATA.DISPATCHES, "udaipur");
@@ -2034,6 +2036,14 @@ const DispatchDashboard = ({ navigate }) => {
           Map view
         </Btn>
         <Btn
+          variant="secondary"
+          size="sm"
+          icon="user"
+          onClick={() => setAddDriverOpen(true)}
+        >
+          Add driver
+        </Btn>
+        <Btn
           variant="primary"
           size="sm"
           icon="plus"
@@ -2042,6 +2052,8 @@ const DispatchDashboard = ({ navigate }) => {
           New dispatch
         </Btn>
       </DashHead>
+
+      <AddDriverModal open={addDriverOpen} onClose={() => setAddDriverOpen(false)} />
 
       <div className="disp-dash-stats">
         <DispStatCard label="Dispatch due today" value={String(dueToday)} tone="accent" />

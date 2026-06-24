@@ -32,6 +32,9 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as DispatchPlanningPayload | null;
   if (!body?.orderId?.trim()) return fail("orderId is required", 400);
+  if (/^DSP-\d+/i.test(body.orderId.trim())) {
+    return fail("orderId must be a sales order (SO-…), not a dispatch number", 400);
+  }
   if (!body.sourceLocation?.trim()) return fail("sourceLocation is required", 400);
   if (!body.deliveryLocation?.trim()) return fail("deliveryLocation is required", 400);
   if (!body.dispatchDate?.trim()) return fail("dispatchDate is required", 400);

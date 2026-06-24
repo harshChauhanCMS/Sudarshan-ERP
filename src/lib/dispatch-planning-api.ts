@@ -21,6 +21,7 @@ export type DispatchPlanningOverview = {
 export type DispatchPlanFormValues = {
   orderId: string;
   customer: string;
+  product?: string;
   sourceLocation: string;
   deliveryLocation: string;
   dispatchDate: string;
@@ -51,6 +52,20 @@ export async function fetchDispatchDetail(id: string): Promise<DispatchDetailVie
   return parseApi<DispatchDetailView>(res);
 }
 
+export type DispatchPlanEdit = {
+  dispatchId: string;
+  /** SO already on this dispatch (kept visible in edit dropdown even if in-transit). */
+  linkedOrderId?: string;
+  form: DispatchPlanFormValues;
+};
+
+export async function fetchDispatchPlanEdit(id: string): Promise<DispatchPlanEdit> {
+  const res = await fetch(`/api/dispatch/${encodeURIComponent(id)}?edit=1`, {
+    cache: "no-store",
+  });
+  return parseApi<DispatchPlanEdit>(res);
+}
+
 export async function fetchDispatchTrack(token: string): Promise<DispatchTrackView> {
   const res = await fetch(`/api/dispatch/track/${encodeURIComponent(token)}`, {
     cache: "no-store",
@@ -58,13 +73,46 @@ export async function fetchDispatchTrack(token: string): Promise<DispatchTrackVi
   return parseApi<DispatchTrackView>(res);
 }
 
-export async function shareDispatchTrackLocation(
+export async function sendDispatchDriverOtp(
   token: string,
-  location: { lat: number; lng: number; accuracy?: number }
-): Promise<{ dispatchId: string; lastLocation: DispatchTrackView["lastLocation"] }> {
-  const res = await fetch(`/api/dispatch/track/${encodeURIComponent(token)}`, {
+  email: string
+): Promise<{ sent: boolean; message: string }> {
+  const res = await fetch(`/api/dispatch/track/${encodeURIComponent(token)}/otp`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return parseApi(res);
+}
+
+export async function verifyDispatchDriverOtp(
+  token: string,
+  email: string,
+  otp: string
+): Promise<{ driverSessionToken: string; driverName: string; dispatchId: string }> {
+  const res = await fetch(`/api/dispatch/track/${encodeURIComponent(token)}/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, otp }),
+  });
+  return parseApi(res);
+}
+
+export async function shareDispatchTrackLocation(
+  token: string,
+  location: { lat: number; lng: number; accuracy?: number },
+  driverSessionToken: string
+): Promise<{
+  dispatchId: string;
+  status: string;
+  lastLocation: DispatchTrackView["lastLocation"];
+}> {
+  const res = await fetch(`/api/dispatch/track/${encodeURIComponent(token)}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${driverSessionToken}`,
+    },
     body: JSON.stringify({ location }),
   });
   return parseApi(res);
@@ -87,6 +135,18 @@ export async function createDispatchPlan(
 ): Promise<{ dispatch: { id: string }; orderId: string }> {
   const res = await fetch("/api/dispatch/plans", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return parseApi(res);
+}
+
+export async function updateDispatchPlan(
+  dispatchId: string,
+  payload: DispatchPlanningPayload
+): Promise<{ dispatch: { id: string }; orderId: string }> {
+  const res = await fetch(`/api/dispatch/${encodeURIComponent(dispatchId)}`, {
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
@@ -125,4 +185,31 @@ export function findAwaitingOrder(
 ): AwaitingOrderView | null {
   if (!orderId) return orders[0] ?? null;
   return orders.find((o) => o.id === orderId) ?? orders[0] ?? null;
+}
+
+export function isDispatchNumber(id: string): boolean {
+  return /^DSP-\d+/i.test(id.trim());
+}
+
+export function isDriverUnassigned(driver: string | null | undefined): boolean {
+  const value = driver?.trim() ?? "";
+  return !value || value === "—";
+}
+
+export function validateDispatchOrderId(orderId: string): string | null {
+  const trimmed = orderId.trim();
+  if (!trimmed) return "Sales order number is required";
+  if (isDispatchNumber(trimmed)) {
+    return "Enter the sales order (SO-…), not the dispatch number (DSP-…)";
+  }
+  return null;
+}
+
+export function parseOrderQtyMt(order: { qty: string; quantity?: number; unit?: string }): string {
+  if (typeof order.quantity === "number" && Number.isFinite(order.quantity)) {
+    const mt = order.unit === "KG" ? order.quantity / 1000 : order.quantity;
+    return String(mt);
+  }
+  const n = parseFloat(order.qty.replace(/[^\d.]/g, ""));
+  return Number.isFinite(n) ? String(n) : "";
 }

@@ -6,15 +6,14 @@ import { Btn } from "@/components/erp/ui";
 import { DashHead } from "@/components/erp/dashboards";
 import { DispatchPlanChip } from "@/components/dispatch/dispatch-plan-chip";
 import { useDispatchPlanning } from "@/hooks/use-dispatch-planning";
+import { isDriverUnassigned } from "@/lib/dispatch-planning-api";
 
 export default function DispatchPlanningPage() {
   const router = useRouter();
   const { data, loading, error, reload } = useDispatchPlanning();
 
-  const goToPlan = (orderId: string, status?: string) => {
-    const params = new URLSearchParams({ order: orderId });
-    if (status) params.set("status", status);
-    router.push(`/dispatch/new?${params.toString()}`);
+  const goToPlan = (orderId: string) => {
+    router.push(`/dispatch/new?order=${encodeURIComponent(orderId)}`);
   };
 
   const hasData = Boolean(data?.hasData);
@@ -26,7 +25,7 @@ export default function DispatchPlanningPage() {
     <div className="dispatch-plan">
       <DashHead
         title="Dispatch Planning"
-        sub="Plan shipments, assign vehicles — driver app not mandatory"
+        sub="Plan shipments first, then assign drivers to planned dispatches"
       >
         <Btn
           variant="primary"
@@ -125,24 +124,13 @@ export default function DispatchPlanningPage() {
                             <DispatchPlanChip status={row.status} />
                           </td>
                           <td>
-                            <div className="dispatch-plan-row-actions">
-                              {row.status !== "vehicle" && row.status !== "delayed" ? (
-                                <Btn
-                                  variant="primary"
-                                  size="sm"
-                                  onClick={() => goToPlan(row.id)}
-                                >
-                                  Plan
-                                </Btn>
-                              ) : null}
-                              <Btn
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => goToPlan(row.id, "vehicle")}
-                              >
-                                Assign vehicle
-                              </Btn>
-                            </div>
+                            <Btn
+                              variant="primary"
+                              size="sm"
+                              onClick={() => goToPlan(row.id)}
+                            >
+                              Plan
+                            </Btn>
                           </td>
                         </tr>
                       ))}
@@ -172,8 +160,9 @@ export default function DispatchPlanningPage() {
                         <th>Loaded</th>
                         <th>ETA</th>
                         <th>Vehicle</th>
+                        <th>Driver</th>
                         <th>Plan status</th>
-                        <th aria-label="Actions" />
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -188,19 +177,34 @@ export default function DispatchPlanningPage() {
                           <td>{row.loaded}</td>
                           <td>{row.eta}</td>
                           <td>{row.vehicle === "—" ? "—" : row.vehicle}</td>
+                          <td>{isDriverUnassigned(row.driver) ? "—" : row.driver}</td>
                           <td>
                             <DispatchPlanChip status={row.planStatus} />
                           </td>
                           <td>
-                            <button
-                              type="button"
-                              className="dispatch-plan-view-btn"
-                              title={`View ${row.id}`}
-                              aria-label={`View dispatch ${row.id}`}
-                              onClick={() => router.push(`/dispatch/${row.id}`)}
-                            >
-                              <Icon name="eye" size={15} />
-                            </button>
+                            <div className="dispatch-plan-row-actions">
+                              {isDriverUnassigned(row.driver) &&
+                              row.status !== "delivered" &&
+                              row.status !== "cancelled" ? (
+                                <Btn
+                                  variant="primary"
+                                  size="sm"
+                                  icon="user"
+                                  onClick={() => router.push(`/dispatch/${row.id}/edit`)}
+                                >
+                                  Assign driver
+                                </Btn>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="dispatch-plan-view-btn"
+                                title={`View ${row.id}`}
+                                aria-label={`View dispatch ${row.id}`}
+                                onClick={() => router.push(`/dispatch/${row.id}`)}
+                              >
+                                <Icon name="eye" size={15} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}

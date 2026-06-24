@@ -9504,6 +9504,43 @@ select.input {
   padding: 0.5rem 0.65rem;
 }
 
+.location-autocomplete {
+  position: relative;
+}
+
+.location-autocomplete__hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+/* Google Places suggestion dropdown */
+.pac-container {
+  z-index: 10050;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  font-family: var(--font-sans);
+  margin-top: 4px;
+}
+
+.pac-item {
+  padding: 0.45rem 0.65rem;
+  font-size: 13px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.pac-item:hover,
+.pac-item-selected {
+  background: var(--bg-muted);
+}
+
+.pac-icon {
+  margin-top: 2px;
+}
+
 .dispatch-plan-section-title {
   font-size: 0.75rem;
   font-weight: 600;
@@ -9590,6 +9627,14 @@ select.input {
   line-height: 1.6;
 }
 
+.dispatch-plan-field-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+  margin: 0.35rem 0 0;
+  line-height: 1.45;
+}
+
 .dispatch-plan-chip {
   display: inline-block;
   padding: 0.2rem 0.5rem;
@@ -9633,6 +9678,21 @@ select.input {
   justify-content: center;
   width: auto;
   flex: 0 0 auto;
+}
+
+.dispatch-plan-driver-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.dispatch-plan-driver-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dispatch-plan-driver-row .btn {
+  flex-shrink: 0;
 }
 
 .dispatch-plan-table-wrap {
@@ -9752,6 +9812,34 @@ select.input {
   font-size: 13px;
 }
 
+.order-detail {
+  display: grid;
+  gap: 1rem;
+}
+
+.order-detail-card .card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.order-detail-meta {
+  margin-bottom: 1rem;
+}
+
+.order-detail-notes {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--fg);
+  white-space: pre-wrap;
+}
+
+.capitalize {
+  text-transform: capitalize;
+}
+
 .dispatch-detail-route {
   display: flex;
   gap: 0.75rem;
@@ -9843,6 +9931,23 @@ select.input {
   background: #fff;
 }
 
+.dispatch-detail-qr__image-wrap--empty {
+  display: grid;
+  place-items: center;
+  width: 200px;
+  min-height: 200px;
+  background: var(--bg-sunken);
+}
+
+.dispatch-detail-qr__pending-icon {
+  font-size: 28px;
+  color: var(--fg-subtle);
+}
+
+.dispatch-detail-qr--pending {
+  opacity: 0.95;
+}
+
 .dispatch-detail-qr__image {
   display: block;
 }
@@ -9898,6 +10003,43 @@ select.input {
   width: 100%;
   min-height: 320px;
   border: 0;
+}
+
+.dispatch-google-map {
+  position: relative;
+}
+
+.dispatch-google-map__loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--bg);
+}
+
+.dispatch-detail-map--clickable {
+  cursor: pointer;
+}
+
+.dispatch-google-map__hint {
+  margin: 0.65rem 1rem 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--fg-muted);
+}
+
+.dispatch-google-map__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.65rem 1rem 1rem;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.dispatch-google-map__link:hover {
+  text-decoration: underline;
 }
 
 .dispatch-detail-map-empty {
@@ -9988,6 +10130,14 @@ select.input {
   padding: 1.25rem;
 }
 
+.dispatch-track-page--logged-in {
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 420px at 100% 0%, rgba(55, 77, 149, 0.12), transparent 60%),
+    var(--bg);
+  padding: 1.25rem;
+}
+
 .dispatch-track-page__status,
 .dispatch-track-page__error {
   max-width: 960px;
@@ -9997,6 +10147,13 @@ select.input {
 
 .dispatch-track-page__error {
   color: var(--danger);
+}
+
+.dispatch-track-page__welcome {
+  max-width: 960px;
+  margin: 0 auto 0.75rem;
+  font-size: 14px;
+  color: var(--fg-muted);
 }
 
 .dispatch-track {
@@ -10141,4 +10298,324 @@ select.input {
 .dispatch-track-map-head span {
   font-size: 11px;
   color: var(--fg-muted);
+}
+
+.dispatch-driver-checkin {
+  max-width: 480px;
+  margin: 2rem auto 1.5rem;
+}
+
+/* Driver login — matches ERP auth theme */
+.driver-auth-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(320px, 440px);
+  background:
+    radial-gradient(900px 500px at 90% -10%, rgba(55, 77, 149, 0.08), transparent 60%),
+    radial-gradient(700px 400px at -10% 100%, rgba(232, 169, 1, 0.08), transparent 60%),
+    var(--bg);
+}
+
+.driver-auth-brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(1.5rem, 5vw, 3.5rem);
+  background: linear-gradient(135deg, #2c3e7c 0%, #374d95 55%, #486bbf 100%);
+  color: #fff;
+  overflow: hidden;
+}
+
+.driver-auth-brand__glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(600px 400px at 100% 0%, rgba(232, 169, 1, 0.2), transparent 60%),
+    radial-gradient(400px 300px at 0% 100%, rgba(255, 255, 255, 0.1), transparent 60%);
+  pointer-events: none;
+}
+
+.driver-auth-brand__inner {
+  position: relative;
+  max-width: 380px;
+}
+
+.driver-auth-brand__logo {
+  width: clamp(88px, 18vw, 140px);
+  height: clamp(88px, 18vw, 140px);
+  object-fit: contain;
+  border-radius: 14px;
+  margin-bottom: 1.25rem;
+}
+
+.driver-auth-brand__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.driver-auth-brand__tag {
+  margin: 0.2rem 0 0;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.driver-auth-brand__quote {
+  margin: 2rem 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.35rem, 3vw, 1.75rem);
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.driver-auth-brand__gold {
+  color: #f5c249;
+}
+
+.driver-auth-main {
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 4vw, 2rem);
+}
+
+.driver-auth-card {
+  width: 100%;
+  max-width: 400px;
+  padding: clamp(1.25rem, 4vw, 1.75rem);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 12px 40px rgba(55, 77, 149, 0.08);
+}
+
+.driver-auth-card--center {
+  text-align: center;
+}
+
+.driver-auth-card__mobile-brand {
+  display: none;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.driver-auth-card__mobile-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+.driver-auth-card__icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 0.75rem;
+  border-radius: 14px;
+  background: rgba(55, 77, 149, 0.1);
+  color: var(--primary);
+}
+
+.driver-auth-card__head {
+  margin-bottom: 1.1rem;
+}
+
+.driver-auth-card__eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.driver-auth-card__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.35rem, 4vw, 1.6rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--fg);
+}
+
+.driver-auth-card__sub {
+  margin: 0.45rem 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+
+.driver-auth-dispatch {
+  margin-bottom: 1.1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(55, 77, 149, 0.08), rgba(55, 77, 149, 0.03));
+  border: 1px solid rgba(55, 77, 149, 0.12);
+}
+
+.driver-auth-dispatch__id {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.driver-auth-dispatch__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.driver-auth-dispatch__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.driver-auth-form .field {
+  margin-bottom: 0.9rem;
+}
+
+.driver-auth-otp {
+  letter-spacing: 0.35em;
+  text-align: center;
+  font-size: 1.15rem;
+}
+
+.driver-auth-form__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 0.25rem;
+}
+
+.driver-auth-form__btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.driver-auth-form__error {
+  margin: 0.75rem 0 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.driver-auth-form__msg {
+  margin: 0.75rem 0 0;
+  font-size: 13px;
+  color: var(--success);
+}
+
+.driver-auth-foot {
+  margin: 1.25rem 0 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--fg-subtle);
+}
+
+@media (max-width: 860px) {
+  .driver-auth-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .driver-auth-brand {
+    display: none;
+  }
+
+  .driver-auth-card__mobile-brand {
+    display: flex;
+  }
+
+  .driver-auth-main {
+    align-items: flex-start;
+    padding-top: 1.5rem;
+  }
+}
+
+.dispatch-driver-checkin__card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.dispatch-driver-checkin__eyebrow {
+  margin: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-subtle);
+}
+
+.dispatch-driver-checkin__title {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.dispatch-driver-checkin__sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.dispatch-driver-checkin__lead {
+  margin: 0.25rem 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+
+.dispatch-driver-checkin__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  text-align: left;
+}
+
+.dispatch-driver-checkin__field span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+.dispatch-driver-checkin__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 0.25rem;
+}
+
+.dispatch-driver-checkin__location-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0 auto;
+}
+
+.dispatch-driver-checkin__error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.dispatch-driver-checkin__msg {
+  margin: 0;
+  font-size: 13px;
+  color: var(--success);
 }
