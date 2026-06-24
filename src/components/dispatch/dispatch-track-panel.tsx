@@ -3,14 +3,13 @@
 import { useMemo } from "react";
 import { Icon } from "@/components/erp/icons";
 import { StatusBadge } from "@/components/erp/ui";
+import { DispatchGoogleMap } from "@/components/dispatch/dispatch-google-map";
 import type { DispatchTrackView } from "@/lib/dispatch-planning-api";
 
 type DispatchTrackPanelProps = {
   track: DispatchTrackView;
-  showShareLocation?: boolean;
-  onShareLocation?: () => void;
-  sharingLocation?: boolean;
   shareMessage?: string | null;
+  locating?: boolean;
 };
 
 function formatTimestamp(iso: string | undefined): string {
@@ -25,23 +24,15 @@ function formatTimestamp(iso: string | undefined): string {
   });
 }
 
-function mapEmbedUrl(lat: number, lng: number): string {
-  const pad = 0.08;
-  const bbox = [lng - pad, lat - pad, lng + pad, lat + pad].join("%2C");
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat}%2C${lng}`;
-}
-
 export function DispatchTrackPanel({
   track,
-  showShareLocation = false,
-  onShareLocation,
-  sharingLocation = false,
   shareMessage = null,
+  locating = false,
 }: DispatchTrackPanelProps) {
   const loc = track.lastLocation;
-  const mapUrl = useMemo(
-    () => (loc ? mapEmbedUrl(loc.lat, loc.lng) : null),
-    [loc]
+  const mapLabel = useMemo(
+    () => loc?.address ?? (loc ? `${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}` : undefined),
+    [loc],
   );
 
   return (
@@ -142,26 +133,17 @@ export function DispatchTrackPanel({
           ) : (
             <div className="dispatch-track-location-empty">
               <Icon name="pin" size={22} />
-              <p>No live location yet</p>
-              <span>Location appears after the driver shares GPS from this link.</span>
+              <p>{locating ? "Getting your location…" : "No live location yet"}</p>
+              <span>
+                {locating
+                  ? "Allow GPS access when prompted."
+                  : "Location is captured automatically after driver login."}
+              </span>
             </div>
           )}
 
-          {showShareLocation && track.active ? (
-            <div className="dispatch-track-share">
-              <button
-                type="button"
-                className="btn primary dispatch-track-share__btn"
-                onClick={onShareLocation}
-                disabled={sharingLocation}
-              >
-                <Icon name="pin" size={14} />
-                {sharingLocation ? "Sharing location…" : "Share my location"}
-              </button>
-              {shareMessage ? (
-                <p className="dispatch-track-share__msg">{shareMessage}</p>
-              ) : null}
-            </div>
+          {shareMessage ? (
+            <p className="dispatch-track-share__msg">{shareMessage}</p>
           ) : null}
         </section>
       </div>
@@ -173,19 +155,17 @@ export function DispatchTrackPanel({
             <span>{formatTimestamp(loc.updatedAt)}</span>
           ) : null}
         </div>
-        {mapUrl ? (
-          <iframe
-            title={`Map for ${track.id}`}
-            src={mapUrl}
-            className="dispatch-detail-map"
-            loading="lazy"
-          />
-        ) : (
-          <div className="dispatch-detail-map-empty">
-            <Icon name="map" size={28} />
-            <p>Map will appear here once location is available</p>
-          </div>
-        )}
+        <DispatchGoogleMap
+          lat={loc?.lat}
+          lng={loc?.lng}
+          title={track.vehicle}
+          subtitle={mapLabel}
+          sourceLocation={track.sourceLocation}
+          deliveryLocation={track.deliveryLocation}
+          openDirectionsOnClick
+          emptyTitle="Route not available"
+          emptyMessage="Dispatch source and delivery addresses are needed to show the route."
+        />
       </section>
     </div>
   );

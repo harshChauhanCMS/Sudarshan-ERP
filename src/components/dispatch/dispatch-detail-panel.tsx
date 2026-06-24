@@ -3,6 +3,7 @@
 import { Icon } from "@/components/erp/icons";
 import { Btn, StatusBadge } from "@/components/erp/ui";
 import { DispatchLocationEditor } from "@/components/dispatch/dispatch-location-editor";
+import { DispatchGoogleMap } from "@/components/dispatch/dispatch-google-map";
 import { DispatchPlanChip } from "@/components/dispatch/dispatch-plan-chip";
 import { DispatchQrBarcode } from "@/components/dispatch/dispatch-qr-barcode";
 import type { DispatchDetailView } from "@/lib/dispatch-planning-api";
@@ -26,12 +27,6 @@ function formatTimestamp(iso: string | undefined): string {
   });
 }
 
-function mapEmbedUrl(lat: number, lng: number): string {
-  const pad = 0.08;
-  const bbox = [lng - pad, lat - pad, lng + pad, lat + pad].join("%2C");
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat}%2C${lng}`;
-}
-
 export function DispatchDetailPanel({
   detail,
   lastRefreshedAt,
@@ -39,7 +34,7 @@ export function DispatchDetailPanel({
   onLocationUpdated,
 }: DispatchDetailPanelProps) {
   const loc = detail.lastLocation;
-  const mapUrl = loc ? mapEmbedUrl(loc.lat, loc.lng) : null;
+  const mapLabel = loc?.address ?? (loc ? `${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}` : undefined);
 
   return (
     <div className="dispatch-detail">
@@ -142,9 +137,13 @@ export function DispatchDetailPanel({
                 <Icon name="check" size={13} /> Driver checked in{" "}
                 {formatTimestamp(detail.driverCheckedInAt)}
               </p>
-            ) : (
+            ) : detail.vehicleAssigned ? (
               <p className="dispatch-detail-checkin dispatch-detail-checkin--pending">
                 <Icon name="clock" size={13} /> Awaiting driver QR check-in
+              </p>
+            ) : (
+              <p className="dispatch-detail-checkin dispatch-detail-checkin--pending">
+                <Icon name="truck" size={13} /> Assign a vehicle to enable driver check-in
               </p>
             )}
 
@@ -190,22 +189,15 @@ export function DispatchDetailPanel({
             lastLocation={detail.lastLocation}
             onUpdated={onLocationUpdated}
           />
-          {mapUrl ? (
-            <iframe
-              title={`Live map for ${detail.id}`}
-              src={mapUrl}
-              className="dispatch-detail-map"
-              loading="lazy"
-            />
-          ) : (
-            <div className="dispatch-detail-map-empty">
-              <Icon name="pin" size={28} />
-              <p>No GPS ping yet</p>
-              <span>
-                Map updates automatically after the driver scans the QR and shares location.
-              </span>
-            </div>
-          )}
+          <DispatchGoogleMap
+            lat={loc?.lat}
+            lng={loc?.lng}
+            title={detail.vehicle !== "—" ? detail.vehicle : detail.id}
+            subtitle={mapLabel}
+            sourceLocation={detail.sourceLocation}
+            deliveryLocation={detail.deliveryLocation}
+            openDirectionsOnClick
+          />
         </div>
       </div>
     </div>

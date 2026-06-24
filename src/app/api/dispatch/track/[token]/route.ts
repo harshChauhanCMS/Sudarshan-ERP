@@ -1,9 +1,13 @@
 import { ok, fail } from "@/lib/api-response";
 import {
+  driverCheckInFromTrack,
   getDispatchTrackByToken,
-  shareLocationFromTrackToken,
   validateLocationInput,
 } from "@/lib/dispatch-check-in-service";
+import {
+  bearerTokenFromRequest,
+  verifyDispatchDriverToken,
+} from "@/lib/dispatch-driver-session";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +36,16 @@ export async function POST(
   const { token } = await params;
   if (!token?.trim()) return fail("Tracking token is required", 400);
 
+  const sessionToken = bearerTokenFromRequest(request);
+  if (!sessionToken) {
+    return fail("Driver login required. Verify OTP before sharing location.", 401);
+  }
+
+  const session = await verifyDispatchDriverToken(sessionToken);
+  if (!session || session.trackToken !== token.trim()) {
+    return fail("Invalid or expired driver session. Log in again.", 401);
+  }
+
   const body = (await request.json().catch(() => null)) as {
     location?: unknown;
   } | null;
@@ -39,9 +53,14 @@ export async function POST(
   if ("error" in validated) return fail(validated.error, 400);
 
   try {
-    const result = await shareLocationFromTrackToken(token.trim(), validated.value);
+    const result = await driverCheckInFromTrack(token.trim(), validated.value, {
+      id: session.driverId,
+      email: session.email,
+      name: session.name,
+    });
     return ok({
       dispatchId: result.dispatch.id,
+      status: result.dispatch.status,
       lastLocation: result.lastLocation,
     });
   } catch (e) {

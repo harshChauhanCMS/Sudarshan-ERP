@@ -20,6 +20,21 @@ export function DispatchQrBarcode({
   trackUrl,
   vehicleAssigned,
 }: DispatchQrBarcodeProps) {
+  if (!vehicleAssigned || !trackUrl) {
+    return (
+      <div className="dispatch-detail-qr dispatch-detail-qr--pending">
+        <div className="dispatch-detail-qr__image-wrap dispatch-detail-qr__image-wrap--empty">
+          <span className="dispatch-detail-qr__pending-icon" aria-hidden="true">
+            —
+          </span>
+        </div>
+        <p className="dispatch-detail-qr__hint">
+          Assign a vehicle to generate the driver check-in QR and barcode for {dispatchId}.
+        </p>
+      </div>
+    );
+  }
+
   const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(trackUrl)}`;
   const widths = barcodeWidths(trackUrl);
 
@@ -35,9 +50,7 @@ export function DispatchQrBarcode({
         />
       </div>
       <p className="dispatch-detail-qr__hint">
-        {vehicleAssigned
-          ? "Scan to open the live tracking page with route and GPS details."
-          : "Assign a vehicle first. The QR opens the public tracking link."}
+        Scan to open the live tracking page with route and GPS details.
       </p>
       <a href={trackUrl} className="dispatch-detail-qr__link mono" target="_blank" rel="noreferrer">
         {trackUrl}

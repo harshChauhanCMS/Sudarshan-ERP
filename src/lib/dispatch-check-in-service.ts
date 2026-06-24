@@ -211,6 +211,37 @@ export async function shareLocationFromTrackToken(
   });
 }
 
+export async function driverCheckInFromTrack(
+  trackToken: string,
+  locationInput: { lat: number; lng: number; accuracy?: number },
+  driver: { id: string; email: string; name: string }
+) {
+  if (!isDbConfigured()) throw new Error("Database not configured");
+
+  const dispatch = await findDispatchByToken(trackToken.trim());
+  if (!dispatch) throw new Error("Invalid dispatch tracking link");
+  if (!dispatch.vehicle || dispatch.vehicle === "—") {
+    throw new Error("Vehicle is not assigned for this dispatch");
+  }
+  if (dispatch.status === "delivered" || dispatch.status === "cancelled") {
+    throw new Error("This dispatch is no longer active");
+  }
+
+  const result = await applyDispatchLocation(dispatch, locationInput, { markCheckIn: true });
+  const now = new Date().toISOString();
+  const patch: Partial<Dispatch> = {
+    driverUserEmail: driver.email,
+    driver: dispatch.driver && dispatch.driver !== "—" ? dispatch.driver : driver.name,
+    driverCheckedInAt: dispatch.driverCheckedInAt ?? now,
+  };
+
+  await updateEntityItem("dispatches", dispatch.id, patch as Record<string, unknown>, "id");
+  return {
+    dispatch: { ...result.dispatch, ...patch },
+    lastLocation: result.lastLocation,
+  };
+}
+
 export async function adminUpdateDispatchLocation(
   dispatchId: string,
   locationInput: { lat: number; lng: number; accuracy?: number }
@@ -288,6 +319,7 @@ function toDispatchDetailView(dispatch: Dispatch, token: string): DispatchDetail
       dispatch.status !== "delivered" &&
       dispatch.status !== "cancelled"
   );
+  const activeToken = vehicleAssigned && token ? token : "";
 
   return {
     id: dispatch.id,
@@ -308,9 +340,9 @@ function toDispatchDetailView(dispatch: Dispatch, token: string): DispatchDetail
     progress: dispatch.progress ?? 0,
     lastUpdate: dispatch.lastUpdate,
     plannedAt: dispatch.plannedAt ?? dispatch.lastUpdate,
-    checkInToken: token,
-    trackPath: buildDispatchTrackPath(token),
-    trackUrl: buildDispatchTrackUrl(token),
+    checkInToken: activeToken,
+    trackPath: activeToken ? buildDispatchTrackPath(activeToken) : "",
+    trackUrl: activeToken ? buildDispatchTrackUrl(activeToken) : "",
     driverCheckedInAt: dispatch.driverCheckedInAt,
     lastLocation: dispatch.lastLocation,
     vehicleAssigned,
@@ -323,6 +355,9 @@ export async function ensureDispatchCheckInToken(dispatchId: string): Promise<st
 
   const dispatch = await findDispatchById(dispatchId);
   if (!dispatch) throw new Error("Dispatch not found");
+  if (!dispatch.vehicle || dispatch.vehicle === "—") {
+    throw new Error("Vehicle is not assigned for this dispatch");
+  }
 
   if (dispatch.checkInToken) return dispatch.checkInToken;
 
@@ -343,7 +378,12 @@ export async function getDispatchDetail(id: string): Promise<DispatchDetailView 
   const dispatch = await findDispatchById(id);
   if (!dispatch) return null;
 
-  const token = dispatch.checkInToken ?? (await ensureDispatchCheckInToken(id));
+  const vehicleAssigned = Boolean(dispatch.vehicle && dispatch.vehicle !== "—");
+  let token = dispatch.checkInToken ?? "";
+  if (vehicleAssigned && !token) {
+    token = await ensureDispatchCheckInToken(id);
+  }
+
   return toDispatchDetailView({ ...dispatch, checkInToken: token }, token);
 }
 

@@ -14,6 +14,7 @@ import dayjs from "dayjs";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
+import { useOrders } from "@/hooks/use-orders";
 import {
   EntityFormModal,
   FormField,
@@ -173,15 +174,25 @@ const Customers = () => {
    ============================================================ */
 const CustomerOrders = () => {
   const router = useRouter();
-  const DATA = useDATA();
+  const { orders, loading, error, reload } = useOrders();
   const [tab, setTab] = useState("all");
+  const [search, setSearch] = useState("");
 
-  const ORDERS_EXT = DATA.ORDERS;
+  const ORDERS_EXT = orders;
   const openOrders = ORDERS_EXT.filter((o) => o.status !== "delivered").length;
-  const bookValue = ORDERS_EXT.reduce((s, o) => s + o.value, 0);
+  const bookValue = ORDERS_EXT.reduce((s, o) => s + (Number(o.value) || 0), 0);
   const atRisk = ORDERS_EXT.filter((o) => o.progress < 50 && o.status !== "delivered").length;
 
-  const filtered = tab === "all" ? ORDERS_EXT : ORDERS_EXT.filter(o => o.status === tab);
+  const tabFiltered = tab === "all" ? ORDERS_EXT : ORDERS_EXT.filter((o) => o.status === tab);
+  const searchLower = search.trim().toLowerCase();
+  const filtered = searchLower
+    ? tabFiltered.filter(
+        (o) =>
+          o.id.toLowerCase().includes(searchLower) ||
+          o.customer.toLowerCase().includes(searchLower) ||
+          o.product.toLowerCase().includes(searchLower)
+      )
+    : tabFiltered;
 
   const orderColumns = useMemo(
     () => [
@@ -243,7 +254,9 @@ const CustomerOrders = () => {
         key: "actions",
         width: 72,
         align: "center",
-        render: () => <ErpViewAction label="Open" />,
+        render: (_, row) => (
+          <ErpViewAction label="View order" href={`/orders/${encodeURIComponent(row.id)}`} />
+        ),
       },
     ],
     []
@@ -251,11 +264,20 @@ const CustomerOrders = () => {
 
   return (
     <>
-      <DashHead title="Customer Orders" sub="Sales orders across both companies">
-        <Btn icon="filter" size="sm">Filters</Btn>
-        <Btn icon="download" size="sm">Export</Btn>
+      <DashHead title="Customer Orders" sub="Sales orders loaded from database">
+        <Btn variant="secondary" size="sm" icon="refresh" onClick={() => void reload()} disabled={loading}>
+          Refresh
+        </Btn>
         <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/orders/add")}>New order</Btn>
       </DashHead>
+
+      {error ? (
+        <p style={{ color: "var(--danger)", fontSize: 13, margin: "0 0 1rem" }}>{error}</p>
+      ) : null}
+
+      {loading ? (
+        <p style={{ color: "var(--fg-muted)", fontSize: 14, margin: "0 0 1rem" }}>Loading orders…</p>
+      ) : null}
 
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
         <div className="kpi"><div className="kpi-label"><Icon name="ticket" size={13} className="ico" />Open orders</div><div className="kpi-value tabular">{openOrders}</div><div style={{ fontSize: 11, color: "var(--success)" }}>{ORDERS_EXT.length} total</div></div>
@@ -280,17 +302,37 @@ const CustomerOrders = () => {
             ))}
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <input className="input" placeholder="Search by SO #, customer, product…" style={{ height: 30, width: 240 }} />
-            <Btn size="sm" icon="sort">Sort</Btn>
+            <input
+              className="input"
+              placeholder="Search by SO #, customer, product…"
+              style={{ height: 30, width: 240 }}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
         </div>
         <div style={{ padding: 16 }}>
-          <CommonTable
-            {...ERP_TABLE_PROPS}
-            columns={orderColumns}
-            dataSource={filtered}
-            rowKey="id"
-          />
+          {!loading && ORDERS_EXT.length === 0 ? (
+            <p style={{ margin: 0, color: "var(--fg-muted)", fontSize: 14 }}>
+              No orders in the database yet.{" "}
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() => router.push("/orders/add")}
+                style={{ color: "var(--primary)", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit" }}
+              >
+                Create the first order
+              </button>
+            </p>
+          ) : (
+            <CommonTable
+              {...ERP_TABLE_PROPS}
+              columns={orderColumns}
+              dataSource={filtered}
+              rowKey="id"
+              loading={loading}
+            />
+          )}
         </div>
       </div>
     </>

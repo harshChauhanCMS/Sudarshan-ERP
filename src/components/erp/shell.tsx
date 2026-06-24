@@ -629,6 +629,13 @@ const BREADCRUMB_CATEGORY_HREFS = {
 
 const breadcrumbsFor = (route) => {
   if (
+    route?.startsWith("/orders/") &&
+    route !== "/orders" &&
+    route !== "/orders/add"
+  ) {
+    return ["Sales", "Orders", "Order detail"];
+  }
+  if (
     route?.startsWith("/dispatch/") &&
     route !== "/dispatch" &&
     route !== "/dispatch/new"

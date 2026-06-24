@@ -23,6 +23,14 @@ export default function DispatchDetailPage({ params }: PageProps) {
         sub="Live tracking, route, and driver check-in barcode"
       >
         <Btn
+          variant="primary"
+          size="sm"
+          icon="edit"
+          onClick={() => router.push(`/dispatch/${id}/edit`)}
+        >
+          Edit dispatch
+        </Btn>
+        <Btn
           variant="secondary"
           size="sm"
           icon="chevLeft"
