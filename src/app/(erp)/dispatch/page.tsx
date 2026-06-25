@@ -31,7 +31,7 @@ export default function DispatchPlanningPage() {
           variant="primary"
           size="sm"
           icon="invoice"
-          disabled={!data?.dbConfigured || awaitingOrders.length === 0}
+          disabled={!data?.dbConfigured}
           onClick={() => router.push("/dispatch/new")}
         >
           New dispatch plan

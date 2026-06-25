@@ -7078,6 +7078,159 @@ select.input {
   margin: 0.5rem 0 0;
 }
 
+.owner-dash-nav {
+  display: block;
+  width: 100%;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Flat row / inline links only — do not strip card chrome */
+.owner-dash-nav--row,
+.owner-dash-nav--inline {
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+}
+
+button.owner-dash-nav--row:hover,
+button.owner-dash-nav--row:focus-visible,
+button.owner-dash-nav--inline:hover,
+button.owner-dash-nav--inline:focus-visible {
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.04));
+  outline: none;
+}
+
+button.owner-dash-nav.admin-stat-card:hover,
+button.owner-dash-nav.admin-stat-card:focus-visible,
+button.owner-dash-nav.owner-company-tile:hover,
+button.owner-dash-nav.owner-company-tile:focus-visible,
+button.owner-dash-nav.card:hover,
+button.owner-dash-nav.card:focus-visible {
+  background: var(--bg-elev);
+  outline: none;
+}
+
+button.owner-dash-nav:hover,
+button.owner-dash-nav:focus-visible {
+  outline: none;
+}
+
+.owner-company-tile--nav {
+  text-align: left;
+}
+
+.owner-stat-card--nav {
+  height: 100%;
+}
+
+/* Preserve card borders when stat/company tiles are buttons */
+button.owner-dash-nav.admin-stat-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  padding: 0.9rem 1rem;
+}
+
+button.owner-dash-nav.owner-company-tile {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm, none);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-left: 4px solid var(--primary);
+}
+
+button.owner-dash-nav.owner-company-tile.microns {
+  border-left-color: var(--secondary);
+}
+
+button.owner-dash-nav.card.owner-card--nav {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  padding: 0;
+}
+
+.owner-widget-header__title--nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.35rem;
+  margin: -0.15rem -0.35rem;
+  border-radius: 6px;
+}
+
+.owner-alert-list__row,
+.owner-field-visit-list__row,
+.owner-employees-field__row,
+.owner-top-list__row,
+.owner-risks-list__row,
+.owner-price-var-list__row,
+.owner-dispatch-list__item--nav {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.25rem;
+  text-align: left;
+}
+
+.owner-price-var-list__row {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.owner-employees-field__row {
+  align-items: center;
+}
+
+.owner-risks-list__row {
+  align-items: flex-start;
+}
+
+.owner-dispatch-box--nav {
+  width: 100%;
+  text-align: center;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.owner-prod-overview--nav {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.owner-card--nav {
+  text-align: left;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+button.owner-card--nav:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-color: var(--primary-soft, rgba(55, 77, 149, 0.35));
+}
+
+.owner-critical-notifs__item--nav {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.25rem;
+  text-align: left;
+}
+
 .owner-alert-list {
   list-style: none;
   padding: 0;
@@ -10347,6 +10500,8 @@ select.input {
   object-fit: contain;
   border-radius: 14px;
   margin-bottom: 1.25rem;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 6px;
 }
 
 .driver-auth-brand__name {
@@ -10410,6 +10565,8 @@ select.input {
   height: 72px;
   object-fit: contain;
   border-radius: 12px;
+  background: #fff;
+  padding: 4px;
 }
 
 .driver-auth-card__icon-wrap {

@@ -166,6 +166,46 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
       let dailyRows: AttendanceDailyRow[] = json.data.daily ?? [];
       dailyRows = filterAndSortDailyRows(dailyRows, opts);
 
+      if (isDaily && dailyRows.length) {
+        const logParams = new URLSearchParams({
+          from: opts.range[0].format("YYYY-MM-DD"),
+          to: opts.range[1].format("YYYY-MM-DD"),
+        });
+        const logRes = await fetch(`/api/hrms/attendance/log?${logParams}`);
+        const logJson = await logRes.json().catch(() => ({}));
+        if (logRes.ok && !logJson?.error) {
+          const logRows: Array<{
+            day: string;
+            id: string;
+            inAddress?: string;
+            outAddress?: string;
+            inLat?: number | null;
+            inLng?: number | null;
+            outLat?: number | null;
+            outLng?: number | null;
+          }> = logJson?.data?.rows ?? [];
+          const locByKey = new Map(
+            logRows.map((row) => [
+              `${row.id}|${row.day}`,
+              row,
+            ]),
+          );
+          dailyRows = dailyRows.map((row) => {
+            const loc = locByKey.get(`${row.employeeId}|${row.day}`);
+            if (!loc) return row;
+            return {
+              ...row,
+              inAddress: loc.inAddress,
+              outAddress: loc.outAddress,
+              inLat: loc.inLat,
+              inLng: loc.inLng,
+              outLat: loc.outLat,
+              outLng: loc.outLng,
+            };
+          });
+        }
+      }
+
       setKpi(json.data.kpi ?? EMPTY_KPI);
       setWorkingDays(json.data.workingDays ?? 0);
       setGpsSummary(json.data.gpsSummary ?? EMPTY_GPS);

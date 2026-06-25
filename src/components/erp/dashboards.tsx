@@ -3,9 +3,11 @@
 
 
 import React, { useMemo, useState } from "react";
+import { Spin } from "antd";
 import { AddDriverModal } from "@/components/dispatch/add-driver-modal";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
+import { useOwnerDashboard } from "@/hooks/use-owner-dashboard";
 import {
   revenueMtdRupees,
   revenueLakhsFromSeries,
@@ -909,8 +911,29 @@ const OwnerEyebrow = ({ children }) => (
   <div className="owner-eyebrow">{children}</div>
 );
 
-const OwnerCompanyTile = ({ company, accent, metrics, footnote }) => (
-  <div className={`owner-company-tile ${accent === "gold" ? "microns" : ""}`}>
+const ownerCanNav = (href) => Boolean(href);
+
+const OwnerNavButton = ({ navigate, href, className = "", children, disabled = false }) => {
+  if (disabled || !ownerCanNav(href) || !navigate) {
+    return <div className={className}>{children}</div>;
+  }
+  return (
+    <button
+      type="button"
+      className={`owner-dash-nav ${className}`.trim()}
+      onClick={() => navigate(href)}
+    >
+      {children}
+    </button>
+  );
+};
+
+const OwnerCompanyTile = ({ company, accent, metrics, footnote, href, navigate }) => (
+  <OwnerNavButton
+    navigate={navigate}
+    href={href}
+    className={`owner-company-tile ${accent === "gold" ? "microns" : ""} owner-company-tile--nav`}
+  >
     <div>
       <div className="owner-company-tile__name">{company.name}</div>
       <div className="owner-company-tile__loc">
@@ -926,15 +949,31 @@ const OwnerCompanyTile = ({ company, accent, metrics, footnote }) => (
       ))}
     </div>
     {footnote ? <p className="owner-company-tile__note">{footnote}</p> : null}
-  </div>
+  </OwnerNavButton>
 );
 
-const OwnerWidget = ({ title, icon, badge, wide, children }) => (
+const OwnerStatCard = ({ label, value, tone = "default", href, navigate }) => (
+  <OwnerNavButton
+    navigate={navigate}
+    href={href}
+    className={`admin-stat-card owner-stat-card--nav ${tone !== "default" ? `tone-${tone}` : ""}`}
+  >
+    <div className="admin-stat-card__label">{label}</div>
+    <div className={`admin-stat-card__value ${tone !== "default" ? tone : ""}`}>{value}</div>
+  </OwnerNavButton>
+);
+
+const OwnerWidget = ({ title, icon, badge, wide, children, titleHref, navigate }) => (
   <div className={`owner-widget ${wide ? "owner-widget--wide" : ""}`}>
     <div className="owner-widget-header">
-      <span className="owner-widget-header__title">
+      <OwnerNavButton
+        navigate={navigate}
+        href={titleHref}
+        className="owner-widget-header__title owner-widget-header__title--nav owner-dash-nav--inline"
+        disabled={!titleHref}
+      >
         {icon ? <Icon name={icon} size={14} /> : null} {title}
-      </span>
+      </OwnerNavButton>
       {badge}
     </div>
     <div className="owner-widget-body">{children}</div>
@@ -945,258 +984,101 @@ const OwnerCoTag = ({ microns, children }) => (
   <span className={`owner-co-tag ${microns ? "microns" : ""}`}>{children}</span>
 );
 
-const OwnerDashboard = () => {
-  const DATA = useDATA();
-  const rev = revenueLakhsFromSeries(DATA.REVENUE_DATA);
-  const revenueRupees = revenueMtdRupees(DATA.REVENUE_DATA);
-  const grossProfit = grossProfitRupees(revenueRupees);
-  const cogs = revenueRupees - grossProfit;
-  const attendance = DATA.ATTENDANCE_TODAY;
-  const rmLow = lowStockCount(DATA.RAW_MATERIALS);
-  const packLow = lowStockCount(DATA.PACKAGING);
-  const spareLow = lowStockCount(DATA.SPARE_PARTS);
-  const dispatchesDue = activeDispatches(DATA.DISPATCHES);
-  const overdueCount = overdueOpenOrders(DATA.ORDERS);
-  const mineralsDispatch = dispatchesForPlant(DATA.DISPATCHES, "udaipur");
-  const micronsDispatch = dispatchesForPlant(DATA.DISPATCHES, "ahmedabad");
-  const dispatchCounts = dispatchStatusCounts(DATA.DISPATCHES);
-  const prodToday = productionDayActual(DATA.PRODUCTION_DATA);
-  const activeJobs = activeProductionJobs(DATA.ORDERS);
-  const fieldCount = attendance.onField || fieldVisitsTodayCount(DATA.FIELD_VISITS);
+const OwnerDashboard = ({ navigate }) => {
+  const { data, loading, error } = useOwnerDashboard();
 
-  const lowRmAlerts = useMemo(
-    () =>
-      DATA.RAW_MATERIALS.filter((r) => r.status === "low" || r.status === "critical")
-        .slice(0, 6)
-        .map((r) => ({
-          key: r.code,
-          microns: false,
-          name: r.name,
-          meta:
-            r.status === "critical"
-              ? `Critical · ${r.stock} ${r.unit}`
-              : `Below reorder · ${r.stock} ${r.unit}`,
-        })),
-    [DATA.RAW_MATERIALS]
-  );
+  if (loading) {
+    return (
+      <div className="owner-dash" style={{ display: "flex", justifyContent: "center", padding: "4rem 0" }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
 
-  const lowPackAlerts = useMemo(
-    () =>
-      DATA.PACKAGING.filter((p) => p.status === "low" || p.status === "critical")
-        .slice(0, 4)
-        .map((p, i) => ({
-          key: p.code,
-          microns: i >= 2,
-          name: p.name.split(" · ")[0],
-          meta: `${p.stock.toLocaleString()} left · reorder ${p.reorder.toLocaleString()}`,
-        })),
-    [DATA.PACKAGING]
-  );
+  if (error || !data) {
+    return (
+      <div className="owner-dash">
+        <DashHead title="Owner Dashboard" sub="Unable to load dashboard data" />
+        <div className="card" style={{ padding: 24 }}>
+          <p style={{ color: "var(--danger)", margin: 0 }}>{error ?? "No data available"}</p>
+        </div>
+      </div>
+    );
+  }
 
-  const spareAlerts = useMemo(
-    () =>
-      DATA.SPARE_PARTS.filter((s) => s.status === "low" || s.status === "critical")
-        .slice(0, 3)
-        .map((s, i) => ({
-          key: s.code,
-          microns: i === 2,
-          name: s.name,
-          meta:
-            s.status === "critical"
-              ? "Critical stock"
-              : s.lastIssued
-                ? `Last issued ${s.lastIssued}`
-                : "Low stock",
-        })),
-    [DATA.SPARE_PARTS]
-  );
-
-  const vendorPriceAlerts = [
-    { name: "Titanium Dioxide — Pigments & Fillers", change: "+8.2%", up: true },
-    { name: "HDPE Bags — Prime Pack Ltd", change: "+3.5%", up: true },
-    { name: "Calcium Carbonate — Minerals & Chem", change: "−2.1%", up: false },
-    { name: "Kaolin Clay — Minerals & Chemicals", change: "+5.0%", up: true },
-  ];
-
-  const dispatchDueItems = useMemo(
-    () =>
-      DATA.DISPATCHES.filter((d) => d.status !== "delivered")
-        .slice(0, 5)
-        .map((d) => ({
-          key: d.id,
-          label: `${d.customer} — ${d.loaded}`,
-          microns: d.route.startsWith("Ahmedabad"),
-        })),
-    [DATA.DISPATCHES]
-  );
-
-  const dispatchOverdueItems = useMemo(() => {
-    const items = DATA.ORDERS.filter(
-      (o) => o.status !== "delivered" && o.status !== "dispatched"
-    )
-      .slice(0, 2)
-      .map((o) => ({
-        key: o.id,
-        label: `${o.customer.split(" ")[0]} — ${o.qty} (due ${o.due})`,
-        microns: false,
-      }));
-    if (items.length === 0 && overdueCount > 0) {
-      return [
-        {
-          key: "overdue",
-          label: `${overdueCount} open order${overdueCount === 1 ? "" : "s"} past due`,
-          microns: false,
-        },
-      ];
-    }
-    return items;
-  }, [DATA.ORDERS, overdueCount]);
-
-  const topCustomers = useMemo(
-    () =>
-      [...DATA.CUSTOMERS]
-        .sort((a, b) => (Number(b.ytd) || 0) - (Number(a.ytd) || 0))
-        .slice(0, 5)
-        .map((c, i) => ({
-          rank: i + 1,
-          name: c.name,
-          meta: fmtINR(Math.round((Number(c.ytd) || 0) / 12)),
-        })),
-    [DATA.CUSTOMERS]
-  );
-
-  const topMaterials = [
-    { rank: 1, name: "Talc 400/500 Mesh", meta: "186 MT" },
-    { rank: 2, name: "Calcium Carbonate 300M", meta: "142 MT" },
-    { rank: 3, name: "Kaolin Clay 200M", meta: "98 MT" },
-    { rank: 4, name: "Detergent Base Powder", meta: "75 MT" },
-    { rank: 5, name: "Barytes 200 Mesh", meta: "62 MT" },
-  ];
-
-  const fieldVisits = useMemo(
-    () =>
-      DATA.FIELD_VISITS.slice(0, 5).map((v) => ({
-        key: v.id,
-        customer: `${v.customer.split(" ")[0]} — ${v.city}`,
-        rep: v.rep.split(" ")[0] + " " + (v.rep.split(" ")[1]?.[0] ?? "") + ".",
-      })),
-    [DATA.FIELD_VISITS]
-  );
-
-  const employeesInField = useMemo(() => {
-    const sales = DATA.EMPLOYEES.filter((e) =>
-      e.role.toLowerCase().includes("field sales")
-    ).slice(0, 2);
-    const extras = [
-      { name: "Sunita Meena", role: "Prod (Microns)" },
-      { name: "Anita Patel", role: "Dispatch" },
-      { name: "Rakesh Purohit", role: "Logistics" },
-    ];
-    return [
-      ...sales.map((e) => ({ key: e.id, name: e.name, role: e.role })),
-      ...extras.map((e, i) => ({ key: `extra-${i}`, ...e })),
-    ].slice(0, 5);
-  }, [DATA.EMPLOYEES]);
-
-  const operationalRisks = useMemo(() => {
-    const risks = [];
-    if (rmLow > 0) {
-      risks.push({
-        sev: "high",
-        icon: "box",
-        title: "Raw material stock-out risk (Minerals)",
-        desc: `${lowRmAlerts.slice(0, 3).map((a) => a.name.split(" ")[0]).join(", ") || "Key RM items"} below reorder. If not ordered this week, paint-grade production may be impacted in 10–12 days.`,
-      });
-    }
-    if (overdueCount > 0) {
-      risks.push({
-        sev: "high",
-        icon: "truck",
-        title: `${overdueCount} dispatch${overdueCount === 1 ? "" : "es"} overdue`,
-        desc: "Open orders past due. Customer notified. Escalate if not shipped by EOD.",
-      });
-    }
-    risks.push({
-      sev: "med",
-      icon: "money",
-      title: "Vendor price increases",
-      desc: "TiO₂ +8.2%, Kaolin +5%. Review margins on running orders and quotes for paint segment.",
-    });
-    if (spareLow > 0) {
-      risks.push({
-        sev: "med",
-        icon: "wrench",
-        title: "Spare parts lead time",
-        desc: "Grinder blade set and belt assembly — order before 15 Mar to avoid unplanned downtime.",
-      });
-    }
-    return risks.slice(0, 4);
-  }, [rmLow, overdueCount, spareLow, lowRmAlerts]);
-
-  const criticalNotifs = useMemo(
-    () => DATA.NOTIFS.slice(0, 3),
-    [DATA.NOTIFS]
-  );
+  const {
+    periodLabel,
+    subtitle,
+    companyTiles,
+    stats,
+    counts,
+    lowRmAlerts,
+    lowPackAlerts,
+    spareAlerts,
+    vendorPriceAlerts,
+    dispatchDueItems,
+    dispatchOverdueItems,
+    production,
+    fieldVisits,
+    employeesInField,
+    operationalRisks,
+    profit,
+    topCustomers,
+    topMaterials,
+    criticalNotifs,
+  } = data;
 
   return (
     <div className="owner-dash">
-      <DashHead
-        title="Owner Dashboard"
-        sub="High-level view across both companies — alerts, dispatch, production, field & risks"
-      >
-        <Btn icon="calendar" size="sm">May 2026</Btn>
+      <DashHead title="Owner Dashboard" sub={subtitle}>
+        <Btn icon="calendar" size="sm">{periodLabel}</Btn>
         <Btn icon="download" size="sm">Export PDF</Btn>
       </DashHead>
 
       <OwnerEyebrow>Company summary</OwnerEyebrow>
       <div className="owner-company-switch">
-        {DATA.COMPANIES[0] ? (
+        {companyTiles.map((tile) => (
           <OwnerCompanyTile
-            company={DATA.COMPANIES[0]}
-            accent="primary"
-            metrics={[
-              { label: "Sales (MTD)", value: formatLakhs(rev.smi) },
-              { label: "RM alerts", value: rmLow, tone: rmLow > 0 ? "warn" : "" },
-              { label: "Dispatches today", value: String(mineralsDispatch.due) },
-            ]}
-            footnote="Minerals processing, paint & paper grades. 12 batches produced today."
+            key={tile.company.id}
+            company={tile.company}
+            accent={tile.accent}
+            metrics={tile.metrics}
+            footnote={tile.footnote}
+            href={tile.href}
+            navigate={navigate}
           />
-        ) : null}
-        {DATA.COMPANIES[1] ? (
-          <OwnerCompanyTile
-            company={DATA.COMPANIES[1]}
-            accent="gold"
-            metrics={[
-              { label: "Sales (MTD)", value: formatLakhs(rev.smic) },
-              { label: "Overdue", value: String(micronsDispatch.overdue), tone: micronsDispatch.overdue > 0 ? "danger" : "" },
-              { label: "Dispatches today", value: String(micronsDispatch.due) },
-            ]}
-            footnote="Micronized fillers. 6 batches produced today. Switch company for detail."
-          />
-        ) : null}
+        ))}
       </div>
 
       <div className="owner-stats-row">
-        <AdminStatCard label="Combined sales (MTD)" value={formatLakhs(rev.total)} tone="accent" />
-        <AdminStatCard label="Gross margin" value={revenueRupees > 0 ? `${grossMarginPct()}%` : "—"} tone="success" />
-        <AdminStatCard label="Dispatches due today" value={String(dispatchesDue)} />
-        <AdminStatCard label="Overdue" value={String(overdueCount)} tone={overdueCount > 0 ? "danger" : "default"} />
-        <AdminStatCard label="Vendor price alerts" value="4" tone="warning" />
-        <AdminStatCard label="Employees in field" value={String(fieldCount)} />
+        {stats.map((stat) => (
+          <OwnerStatCard
+            key={stat.label}
+            label={stat.label}
+            value={stat.value}
+            tone={stat.tone ?? "default"}
+            href={stat.href}
+            navigate={navigate}
+          />
+        ))}
       </div>
 
       <div className="owner-dash-grid">
         <OwnerWidget
           title="Low raw material alerts"
           icon="box"
-          badge={rmLow > 0 ? <Badge tone="danger">{rmLow}</Badge> : null}
+          titleHref="/inventory/raw-material"
+          navigate={navigate}
+          badge={counts.rmLow > 0 ? <Badge tone="danger">{counts.rmLow}</Badge> : null}
         >
           <ul className="owner-alert-list">
-            {(lowRmAlerts.length ? lowRmAlerts : [{ key: "none", microns: false, name: "No RM alerts", meta: "Stock healthy" }]).map((item) => (
+            {lowRmAlerts.map((item) => (
               <li key={item.key}>
-                <OwnerCoTag microns={item.microns}>{item.microns ? "Microns" : "Minerals"}</OwnerCoTag>
-                <span className="owner-alert-list__name">{item.name}</span>
-                <span className="owner-alert-list__meta">{item.meta}</span>
+                <OwnerNavButton navigate={navigate} href={item.href} className="owner-dash-nav--row owner-alert-list__row" disabled={item.key === "none"}>
+                  <OwnerCoTag microns={item.microns}>{item.microns ? "Microns" : "Minerals"}</OwnerCoTag>
+                  <span className="owner-alert-list__name">{item.name}</span>
+                  <span className="owner-alert-list__meta">{item.meta}</span>
+                </OwnerNavButton>
               </li>
             ))}
           </ul>
@@ -1205,14 +1087,18 @@ const OwnerDashboard = () => {
         <OwnerWidget
           title="Low packaging alerts"
           icon="package"
-          badge={packLow > 0 ? <Badge tone="warning">{packLow}</Badge> : null}
+          titleHref="/inventory/packaging"
+          navigate={navigate}
+          badge={counts.packLow > 0 ? <Badge tone="warning">{counts.packLow}</Badge> : null}
         >
           <ul className="owner-alert-list">
-            {(lowPackAlerts.length ? lowPackAlerts : [{ key: "none", microns: false, name: "No packaging alerts", meta: "—" }]).map((item) => (
+            {lowPackAlerts.map((item) => (
               <li key={item.key}>
-                <OwnerCoTag microns={item.microns}>{item.microns ? "Microns" : "Minerals"}</OwnerCoTag>
-                <span className="owner-alert-list__name">{item.name}</span>
-                <span className="owner-alert-list__meta">{item.meta}</span>
+                <OwnerNavButton navigate={navigate} href={item.href} className="owner-dash-nav--row owner-alert-list__row" disabled={item.key === "none"}>
+                  <OwnerCoTag microns={item.microns}>{item.microns ? "Microns" : "Minerals"}</OwnerCoTag>
+                  <span className="owner-alert-list__name">{item.name}</span>
+                  <span className="owner-alert-list__meta">{item.meta}</span>
+                </OwnerNavButton>
               </li>
             ))}
           </ul>
@@ -1221,14 +1107,18 @@ const OwnerDashboard = () => {
         <OwnerWidget
           title="Spare parts alerts"
           icon="wrench"
-          badge={spareLow > 0 ? <Badge tone="warning">{spareLow}</Badge> : null}
+          titleHref="/inventory/spare-parts"
+          navigate={navigate}
+          badge={counts.spareLow > 0 ? <Badge tone="warning">{counts.spareLow}</Badge> : null}
         >
           <ul className="owner-alert-list">
-            {(spareAlerts.length ? spareAlerts : [{ key: "none", microns: false, name: "No spare alerts", meta: "—" }]).map((item) => (
+            {spareAlerts.map((item) => (
               <li key={item.key}>
-                <OwnerCoTag microns={item.microns}>{item.microns ? "Microns" : "Minerals"}</OwnerCoTag>
-                <span className="owner-alert-list__name">{item.name}</span>
-                <span className="owner-alert-list__meta">{item.meta}</span>
+                <OwnerNavButton navigate={navigate} href={item.href} className="owner-dash-nav--row owner-alert-list__row" disabled={item.key === "none"}>
+                  <OwnerCoTag microns={item.microns}>{item.microns ? "Microns" : "Minerals"}</OwnerCoTag>
+                  <span className="owner-alert-list__name">{item.name}</span>
+                  <span className="owner-alert-list__meta">{item.meta}</span>
+                </OwnerNavButton>
               </li>
             ))}
           </ul>
@@ -1239,46 +1129,60 @@ const OwnerDashboard = () => {
         <OwnerWidget
           title="Vendor price change alerts"
           icon="money"
-          badge={<Badge tone="warning">4</Badge>}
+          titleHref="/procurement/vendors"
+          navigate={navigate}
+          badge={<Badge tone="warning">{counts.vendorPriceAlerts}</Badge>}
         >
           <ul className="owner-price-var-list">
             {vendorPriceAlerts.map((item) => (
               <li key={item.name}>
-                <span>{item.name}</span>
-                <span className={item.up ? "up" : "down"}>{item.change}</span>
+                <OwnerNavButton navigate={navigate} href={item.href} className="owner-price-var-list__row">
+                  <span>{item.name}</span>
+                  <span className={item.up ? "up" : "down"}>{item.change}</span>
+                </OwnerNavButton>
               </li>
             ))}
           </ul>
           <p className="owner-widget-footnote">Review margin impact. Both companies.</p>
         </OwnerWidget>
 
-        <OwnerWidget title="Dispatch due & overdue summary" icon="truck" wide>
+        <OwnerWidget title="Dispatch due & overdue summary" icon="truck" wide titleHref="/dispatch" navigate={navigate}>
           <div className="owner-dispatch-summary">
             <div>
-              <div className="owner-dispatch-box due">
-                <div className="owner-dispatch-box__num">{dispatchCounts.active}</div>
+              <OwnerNavButton navigate={navigate} href="/dispatch" className="owner-dispatch-box due owner-dispatch-box--nav">
+                <div className="owner-dispatch-box__num">{counts.dispatchActiveCount}</div>
                 <div className="owner-dispatch-box__lbl">Due today</div>
-              </div>
+              </OwnerNavButton>
               <div className="owner-dispatch-list">
                 {dispatchDueItems.map((item) => (
-                  <div key={item.key} className="owner-dispatch-list__item">
+                  <OwnerNavButton
+                    key={item.key}
+                    navigate={navigate}
+                    href={item.href}
+                    className="owner-dispatch-list__item owner-dispatch-list__item--nav"
+                  >
                     <span>{item.label}</span>
                     <OwnerCoTag microns={item.microns}>{item.microns ? "Microns" : "Minerals"}</OwnerCoTag>
-                  </div>
+                  </OwnerNavButton>
                 ))}
               </div>
             </div>
             <div>
-              <div className="owner-dispatch-box overdue">
-                <div className="owner-dispatch-box__num">{overdueCount}</div>
+              <OwnerNavButton navigate={navigate} href="/orders" className="owner-dispatch-box overdue owner-dispatch-box--nav">
+                <div className="owner-dispatch-box__num">{counts.overdueCount}</div>
                 <div className="owner-dispatch-box__lbl">Overdue</div>
-              </div>
+              </OwnerNavButton>
               <div className="owner-dispatch-list">
                 {dispatchOverdueItems.map((item) => (
-                  <div key={item.key} className="owner-dispatch-list__item">
+                  <OwnerNavButton
+                    key={item.key}
+                    navigate={navigate}
+                    href={item.href}
+                    className="owner-dispatch-list__item owner-dispatch-list__item--nav"
+                  >
                     <span>{item.label}</span>
-                    <OwnerCoTag microns={item.microns}>Minerals</OwnerCoTag>
-                  </div>
+                    <OwnerCoTag microns={item.microns}>{item.microns ? "Microns" : "Minerals"}</OwnerCoTag>
+                  </OwnerNavButton>
                 ))}
               </div>
             </div>
@@ -1287,66 +1191,82 @@ const OwnerDashboard = () => {
       </div>
 
       <div className="owner-dash-grid">
-        <OwnerWidget title="Production overview" icon="factory">
-          <div className="owner-prod-overview">
+        <OwnerWidget title="Production overview" icon="factory" titleHref={production.href} navigate={navigate}>
+          <OwnerNavButton navigate={navigate} href={production.href} className="owner-prod-overview owner-prod-overview--nav">
             <div className="owner-prod-stat">
-              <div className="owner-prod-stat__val">{activeJobs + 12}</div>
+              <div className="owner-prod-stat__val">{production.batchesCompleted}</div>
               <div className="owner-prod-stat__lbl">Batches completed today</div>
             </div>
             <div className="owner-prod-stat">
-              <div className="owner-prod-stat__val">12</div>
+              <div className="owner-prod-stat__val">{production.mineralsBatches}</div>
               <div className="owner-prod-stat__lbl">Minerals (Udaipur)</div>
             </div>
             <div className="owner-prod-stat">
-              <div className="owner-prod-stat__val">6</div>
+              <div className="owner-prod-stat__val">{production.micronsBatches}</div>
               <div className="owner-prod-stat__lbl">Microns (Makrana)</div>
             </div>
             <div className="owner-prod-stat">
-              <div className="owner-prod-stat__val">{prodToday > 0 ? `~${prodToday} MT` : "—"}</div>
+              <div className="owner-prod-stat__val">{production.totalOutput}</div>
               <div className="owner-prod-stat__lbl">Total output (est.)</div>
             </div>
-          </div>
-          <p className="owner-widget-footnote">No line stoppages reported. Plan vs actual on track.</p>
+          </OwnerNavButton>
+          <p className="owner-widget-footnote">{production.footnote}</p>
         </OwnerWidget>
 
-        <OwnerWidget title="Field sales / visits today" icon="user">
+        <OwnerWidget title="Field sales / visits today" icon="user" titleHref="/field-sales/visit-log" navigate={navigate}>
           <ul className="owner-field-visit-list">
             {fieldVisits.map((v) => (
               <li key={v.key}>
-                <span className="owner-field-visit-list__cust">{v.customer}</span>
-                <span className="owner-field-visit-list__rep">{v.rep}</span>
+                <OwnerNavButton navigate={navigate} href={v.href} className="owner-field-visit-list__row" disabled={v.key === "none"}>
+                  <span className="owner-field-visit-list__cust">{v.customer}</span>
+                  <span className="owner-field-visit-list__rep">{v.rep}</span>
+                </OwnerNavButton>
               </li>
             ))}
           </ul>
+          {fieldVisits[0]?.key !== "none" ? (
+            <p className="owner-widget-footnote">
+              Live from today&apos;s field visit assignments (IST).
+            </p>
+          ) : null}
         </OwnerWidget>
 
-        <OwnerWidget title="Employees in field today" icon="users">
+        <OwnerWidget title="Employees in field today" icon="users" titleHref="/field-sales/activity-dashboard" navigate={navigate}>
           <ul className="owner-employees-field">
             {employeesInField.map((e) => (
               <li key={e.key}>
-                <span className="owner-employees-field__avatar">
-                  {e.name.split(" ").map((p) => p[0]).join("").slice(0, 2)}
-                </span>
-                <span>{e.name}</span>
-                <span className="owner-employees-field__role">{e.role}</span>
+                <OwnerNavButton navigate={navigate} href={e.href} className="owner-employees-field__row" disabled={e.key === "none" || e.key.startsWith("extra-")}>
+                  <span className="owner-employees-field__avatar">
+                    {e.name.split(" ").map((p) => p[0]).join("").slice(0, 2)}
+                  </span>
+                  <span>{e.name}</span>
+                  <span className="owner-employees-field__role">{e.role}</span>
+                </OwnerNavButton>
               </li>
             ))}
           </ul>
+          {employeesInField[0]?.key !== "none" ? (
+            <p className="owner-widget-footnote">
+              Live from mobile field punch-in with GPS. Hidden after punch-out today.
+            </p>
+          ) : null}
         </OwnerWidget>
       </div>
 
       <div className="owner-dash-grid owner-dash-grid--single">
-        <OwnerWidget title="Top operational risks" icon="alert">
+        <OwnerWidget title="Top operational risks" icon="alert" titleHref="/reports" navigate={navigate}>
           <ul className="owner-risks-list">
             {operationalRisks.map((risk) => (
               <li key={risk.title}>
-                <span className={`owner-risks-list__icon ${risk.sev}`}>
-                  <Icon name={risk.icon} size={14} />
-                </span>
-                <div>
-                  <div className="owner-risks-list__title">{risk.title}</div>
-                  <div className="owner-risks-list__desc">{risk.desc}</div>
-                </div>
+                <OwnerNavButton navigate={navigate} href={risk.href} className="owner-risks-list__row">
+                  <span className={`owner-risks-list__icon ${risk.sev}`}>
+                    <Icon name={risk.icon} size={14} />
+                  </span>
+                  <div>
+                    <div className="owner-risks-list__title">{risk.title}</div>
+                    <div className="owner-risks-list__desc">{risk.desc}</div>
+                  </div>
+                </OwnerNavButton>
               </li>
             ))}
           </ul>
@@ -1354,37 +1274,35 @@ const OwnerDashboard = () => {
       </div>
 
       <div className="owner-grid">
-        <div className="card">
+        <OwnerNavButton navigate={navigate} href={profit.href} className="card owner-card--nav">
           <div className="card-head">
             <div className="card-title">Profit overview</div>
           </div>
           <div className="card-body">
             <div className="owner-profit-overview">
-              <h3>This month (May 2026) — combined</h3>
+              <h3>{profit.title}</h3>
               <div className="owner-profit-row">
                 <span>Revenue</span>
-                <span className="val">{formatLakhs(rev.total)}</span>
+                <span className="val">{profit.revenue}</span>
               </div>
               <div className="owner-profit-row">
                 <span>COGS</span>
-                <span className="val">{cogs > 0 ? fmtINR(cogs) : "—"}</span>
+                <span className="val">{profit.cogs}</span>
               </div>
               <div className="owner-profit-row">
                 <span>Gross profit</span>
-                <span className="val positive">{grossProfit > 0 ? fmtINR(grossProfit) : "—"}</span>
+                <span className="val positive">{profit.grossProfit}</span>
               </div>
               <div className="owner-profit-row">
                 <span>Gross margin</span>
-                <span className="val positive">{revenueRupees > 0 ? `${grossMarginPct()}%` : "—"}</span>
+                <span className="val positive">{profit.grossMargin}</span>
               </div>
             </div>
-            <p className="owner-widget-footnote">
-              Estimate. Final P&amp;L at month close. Split by company in Reports.
-            </p>
+            <p className="owner-widget-footnote">{profit.footnote}</p>
           </div>
-        </div>
+        </OwnerNavButton>
 
-        <div className="card">
+        <OwnerNavButton navigate={navigate} href="/customers" className="card owner-card--nav">
           <div className="card-head">
             <div className="card-title">Top customers (MTD)</div>
           </div>
@@ -1392,36 +1310,45 @@ const OwnerDashboard = () => {
             <ul className="owner-top-list">
               {topCustomers.map((c) => (
                 <li key={c.rank}>
-                  <span className="owner-top-list__rank">{c.rank}</span>
-                  <span className="owner-top-list__name">{c.name}</span>
-                  <span className="owner-top-list__meta">{c.meta}</span>
+                  <OwnerNavButton navigate={navigate} href={c.href} className="owner-top-list__row">
+                    <span className="owner-top-list__rank">{c.rank}</span>
+                    <span className="owner-top-list__name">{c.name}</span>
+                    <span className="owner-top-list__meta">{c.meta}</span>
+                  </OwnerNavButton>
                 </li>
               ))}
             </ul>
           </div>
-        </div>
+        </OwnerNavButton>
       </div>
 
       <div className="owner-dash-grid owner-dash-grid--two">
-        <OwnerWidget title="Top supplied materials (MTD)">
+        <OwnerWidget title="Top supplied materials (MTD)" titleHref="/inventory/raw-material" navigate={navigate}>
           <ul className="owner-top-list">
             {topMaterials.map((m) => (
               <li key={m.rank}>
-                <span className="owner-top-list__rank">{m.rank}</span>
-                <span className="owner-top-list__name">{m.name}</span>
-                <span className="owner-top-list__meta">{m.meta}</span>
+                <OwnerNavButton navigate={navigate} href={m.href} className="owner-top-list__row">
+                  <span className="owner-top-list__rank">{m.rank}</span>
+                  <span className="owner-top-list__name">{m.name}</span>
+                  <span className="owner-top-list__meta">{m.meta}</span>
+                </OwnerNavButton>
               </li>
             ))}
           </ul>
         </OwnerWidget>
 
-        <OwnerWidget title="Recent critical notifications">
+        <OwnerWidget title="Recent critical notifications" titleHref="/hrms/notifications" navigate={navigate}>
           <div className="owner-critical-notifs">
             {criticalNotifs.map((n) => (
-              <div key={n.id} className="owner-critical-notifs__item">
+              <OwnerNavButton
+                key={n.id}
+                navigate={navigate}
+                href={n.href}
+                className="owner-critical-notifs__item owner-critical-notifs__item--nav"
+              >
                 <strong>{n.type === "alert" ? "Alert:" : n.type === "success" ? "Update:" : "Info:"}</strong>{" "}
                 {n.text}
-              </div>
+              </OwnerNavButton>
             ))}
           </div>
         </OwnerWidget>

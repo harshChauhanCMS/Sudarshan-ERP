@@ -176,13 +176,13 @@ export function FieldActivityDashboardPage() {
             <div className="field-activity-bottom-card__head">
               <div className="field-activity-bottom-card__title">
                 <Icon name="clock" size={14} />
-                Today&apos;s visits
+                Today&apos;s visits & employee check-ins
               </div>
             </div>
             <div style={{ padding: "0 1rem 1rem" }}>
               {(data.todayVisits ?? data.activeVisits).length === 0 ? (
                 <p style={{ fontSize: 13, color: "var(--fg-muted)", margin: "0.75rem 0 0" }}>
-                  No visits scheduled for today.
+                  No visits scheduled or logged for today.
                 </p>
               ) : (
                 <table className="dispatch-plan-table">
@@ -190,7 +190,9 @@ export function FieldActivityDashboardPage() {
                     <tr>
                       <th>Employee</th>
                       <th>Party</th>
+                      <th>Date</th>
                       <th>Location</th>
+                      <th>Source</th>
                       <th>Status</th>
                       <th>Duration</th>
                       <th style={{ width: 72 }} />
@@ -201,7 +203,15 @@ export function FieldActivityDashboardPage() {
                       <tr key={v.id}>
                         <td>{v.assignedEmployeeName}</td>
                         <td>{v.partyName}</td>
+                        <td style={{ fontSize: 12 }}>{v.visitDate}</td>
                         <td>{v.locationText || "—"}</td>
+                        <td>
+                          <span
+                            className={`field-activity-badge field-activity-badge--${v.selfInitiated ? "field" : "office"}`}
+                          >
+                            {v.selfInitiated ? "Self" : "Assigned"}
+                          </span>
+                        </td>
                         <td>
                           <span
                             className={`field-activity-badge field-activity-badge--${visitStatusBadgeClass(v.status)}`}

@@ -34,6 +34,11 @@ export type CreateFieldVisitPayload = {
   notes?: string;
 };
 
+export type CreateSelfFieldVisitPayload = Omit<
+  CreateFieldVisitPayload,
+  "assignedEmployeeId"
+>;
+
 export type FieldVisitView = {
   id: string;
   visitId: string;
@@ -59,6 +64,7 @@ export type FieldVisitView = {
   visitLocation?: FieldVisitLocation;
   createdAt: string;
   updatedAt: string;
+  selfInitiated: boolean;
 };
 
 export type FieldActivityEmployee = {

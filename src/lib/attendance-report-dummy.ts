@@ -33,6 +33,12 @@ export type AttendanceDailyRow = {
   workedHours: number;
   shortfall: number;
   overtime: number;
+  inAddress?: string;
+  outAddress?: string;
+  inLat?: number | null;
+  inLng?: number | null;
+  outLat?: number | null;
+  outLng?: number | null;
 };
 
 export type AttendanceReportKpi = {

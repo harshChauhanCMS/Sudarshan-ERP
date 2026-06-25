@@ -10,6 +10,23 @@ import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fm
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { nextEmployeeId } from "@/lib/id-generators";
+import {
+  MODULE_GROUPS,
+  MODULE_LABELS,
+  PERM_ACTIONS,
+  PERM_ACTION_LABELS,
+  PERM_MATRIX_GRID,
+  countGrantedPermissions,
+  normalizePermissionsMap,
+  permissionsEqual,
+  toggleModulePermission,
+} from "@/lib/rbac-permissions";
+import {
+  canPerform,
+  type ModuleKey,
+  type PermissionAction,
+  type PermissionsMap,
+} from "@/lib/permission-types";
 import { useEffect, useCallback } from "react";
 import { Button, Drawer, Checkbox, Spin, Tag, message, Tooltip, Divider } from "antd";
 import { LockOutlined, CheckCircleFilled, MinusCircleFilled, SafetyCertificateOutlined, CrownOutlined, EyeOutlined, IdcardOutlined } from "@ant-design/icons";
@@ -22,54 +39,6 @@ import StatCard from "@/components/common/StatCard";
 /* ============================================================
    USER MANAGEMENT + PERMISSION MATRIX
    ============================================================ */
-// ─── Types ────────────────────────────────────────────────────────────────────
-const MODULE_KEYS = [
-  "dashboard", "hr", "payroll",
-  "inventory_raw", "inventory_packaging", "inventory_spares",
-  "procurement_vendors", "procurement_po", "procurement_invoice",
-  "sales_customers", "sales_orders",
-  "operations_production", "operations_quality",
-  "dispatch", "settings", "user_management", "reports",
-] as const;
-type ModuleKey = (typeof MODULE_KEYS)[number];
-type PermAction = "view" | "add" | "edit" | "approve" | "export";
-
-const MODULE_LABELS: Record<ModuleKey, string> = {
-  dashboard: "Dashboard",
-  hr: "HR & Attendance",
-  payroll: "Payroll",
-  inventory_raw: "Inventory: Raw Material",
-  inventory_packaging: "Inventory: Packaging",
-  inventory_spares: "Inventory: Spare Parts",
-  procurement_vendors: "Procurement: Vendors",
-  procurement_po: "Procurement: Purchase Orders",
-  procurement_invoice: "Procurement: Invoice Verify",
-  sales_customers: "Sales: Customers",
-  sales_orders: "Sales: Orders",
-  operations_production: "Operations: Production",
-  operations_quality: "Operations: Quality",
-  dispatch: "Dispatch",
-  settings: "Settings",
-  user_management: "User Management",
-  reports: "Reports",
-};
-
-const MODULE_GROUPS = [
-  { label: "Core", keys: ["dashboard", "reports"] },
-  { label: "HRMS", keys: ["hr", "payroll"] },
-  { label: "Inventory", keys: ["inventory_raw", "inventory_packaging", "inventory_spares"] },
-  { label: "Procurement", keys: ["procurement_vendors", "procurement_po", "procurement_invoice"] },
-  { label: "Sales", keys: ["sales_customers", "sales_orders"] },
-  { label: "Operations", keys: ["operations_production", "operations_quality"] },
-  { label: "Logistics", keys: ["dispatch"] },
-  { label: "Administration", keys: ["settings", "user_management"] },
-] as const;
-
-const PERM_ACTIONS: PermAction[] = ["view", "add", "edit", "approve", "export"];
-
-type ModulePerm = { view: boolean; add: boolean; edit: boolean; approve: boolean; export: boolean };
-type PermissionsMap = Record<ModuleKey, ModulePerm>;
-
 interface Role {
   _id: string;
   roleKey: string;
@@ -102,6 +71,8 @@ const UserManagement = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [viewingRole, setViewingRole] = useState<Role | null>(null);
   const [viewPerms, setViewPerms] = useState<PermissionsMap | null>(null);
+  const [canEditRoles, setCanEditRoles] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
 
   const loadData = useCallback(async () => {
@@ -121,28 +92,83 @@ const UserManagement = () => {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((json) => {
+        const user = json?.data?.user;
+        if (!user) return;
+        const role = String(user.role ?? "").toLowerCase();
+        if (role === "owner" || role === "admin") {
+          setCanEditRoles(true);
+        } else if (user.permissions && canPerform(user.permissions, "user_management", "edit")) {
+          setCanEditRoles(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const openDrawer = (role: Role) => {
     setViewingRole(role);
-    setViewPerms(JSON.parse(JSON.stringify(role.permissions)));
+    setViewPerms(normalizePermissionsMap(role.permissions));
     setDrawerOpen(true);
   };
 
   const closeDrawer = () => {
+    if (
+      canEditRoles &&
+      viewingRole &&
+      viewPerms &&
+      !permissionsEqual(viewPerms, normalizePermissionsMap(viewingRole.permissions))
+    ) {
+      if (!window.confirm("Discard unsaved permission changes?")) return;
+    }
     setDrawerOpen(false);
     setViewingRole(null);
     setViewPerms(null);
   };
 
-  // ─── Count perms summary ────────────────────────────────────────────────────
-  const countPerms = (perms: PermissionsMap) => {
-    let total = 0;
-    MODULE_KEYS.forEach((mod) => {
-      PERM_ACTIONS.forEach((act) => {
-        if (perms[mod]?.[act]) total++;
-      });
-    });
-    return total;
+  const resetPermissions = () => {
+    if (viewingRole) {
+      setViewPerms(normalizePermissionsMap(viewingRole.permissions));
+    }
   };
+
+  const savePermissions = async () => {
+    if (!viewingRole || !viewPerms || !canEditRoles) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/system/roles/${encodeURIComponent(viewingRole.roleKey)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permissions: viewPerms }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        throw new Error(json.error || "Failed to save permissions");
+      }
+      const saved = normalizePermissionsMap(json.data?.permissions ?? viewPerms);
+      const updatedRole = { ...viewingRole, permissions: saved };
+      setViewingRole(updatedRole);
+      setViewPerms(structuredClone(saved));
+      setRoles((prev) =>
+        prev.map((r) => (r.roleKey === viewingRole.roleKey ? { ...r, permissions: saved } : r)),
+      );
+      messageApi.success(`Permissions updated for ${viewingRole.label}`);
+    } catch (err) {
+      messageApi.error(err instanceof Error ? err.message : "Failed to save permissions");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onTogglePermission = (modKey: ModuleKey, action: PermissionAction, checked: boolean) => {
+    setViewPerms((prev) => (prev ? toggleModulePermission(prev, modKey, action, checked) : prev));
+  };
+
+  const isDirty =
+    Boolean(viewingRole && viewPerms) &&
+    !permissionsEqual(viewPerms!, normalizePermissionsMap(viewingRole!.permissions));
 
   return (
     <div className="attendance-reports-page">
@@ -168,7 +194,7 @@ const UserManagement = () => {
             <span className="font-semibold text-sm">Roles &amp; Permissions</span>
           </div>
           <p className="text-zinc-500 text-sm users-roles-section__hint">
-            {roles.length} roles defined — click any card to view permissions.
+            {roles.length} roles defined — click any card to {canEditRoles ? "edit" : "view"} permissions.
           </p>
         </div>
         {rolesLoading ? (
@@ -178,7 +204,7 @@ const UserManagement = () => {
             <div className="grid grid-3" style={{ gap: 16 }}>
               {roles.map((role) => {
                 const color = getRoleColor(role.roleKey);
-                const permCount = countPerms(role.permissions);
+                const permCount = countGrantedPermissions(normalizePermissionsMap(role.permissions));
                 return (
                   <div
                     key={role.roleKey}
@@ -242,10 +268,26 @@ const UserManagement = () => {
         }
         open={drawerOpen}
         onClose={closeDrawer}
-        width={640}
+        width={680}
         footer={
-          <div className="flex justify-end py-1" style={{ display: "flex", justifyContent: "flex-end", padding: "4px 0" }}>
-            <Button onClick={closeDrawer} style={{ fontWeight: 500 }}>Close</Button>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0" }}>
+            <div>
+              {canEditRoles && isDirty && (
+                <Button onClick={resetPermissions} disabled={saving}>
+                  Reset
+                </Button>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {canEditRoles && (
+                <Button type="primary" onClick={savePermissions} loading={saving} disabled={!isDirty}>
+                  Save changes
+                </Button>
+              )}
+              <Button onClick={closeDrawer} style={{ fontWeight: 500 }}>
+                Close
+              </Button>
+            </div>
           </div>
         }
       >
@@ -265,19 +307,61 @@ const UserManagement = () => {
               <div className="flex items-center gap-2 mb-3" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                 <LockOutlined style={{ color: "var(--fg-muted)", fontSize: 14 }} />
                 <span className="font-bold text-zinc-800 text-sm" style={{ fontWeight: 700, fontSize: 14 }}>Permission matrix</span>
-                <span style={{ fontSize: 11, color: "var(--fg-muted)", fontWeight: 500 }}>(read-only)</span>
+                {canEditRoles ? (
+                  <span style={{ fontSize: 11, color: isDirty ? "#b45309" : "var(--fg-muted)", fontWeight: 500 }}>
+                    {isDirty ? "Unsaved changes" : "Editable"}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 11, color: "var(--fg-muted)", fontWeight: 500 }}>(read-only)</span>
+                )}
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: PERM_MATRIX_GRID,
+                  alignItems: "center",
+                  columnGap: 4,
+                  padding: "4px 4px 8px",
+                  borderBottom: "1px solid var(--border)",
+                  marginBottom: 4,
+                }}
+              >
+                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  Module
+                </div>
+                {PERM_ACTIONS.map((act) => (
+                  <Tooltip key={act} title={act.charAt(0).toUpperCase() + act.slice(1)}>
+                    <div
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 700,
+                        color: "var(--fg-muted)",
+                        textTransform: "uppercase",
+                        textAlign: "center",
+                        letterSpacing: "0.02em",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        minWidth: 0,
+                      }}
+                    >
+                      {PERM_ACTION_LABELS[act]}
+                    </div>
+                  </Tooltip>
+                ))}
               </div>
 
               {MODULE_GROUPS.map((group) => (
                 <div key={group.label} style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-muted)", textTransform: "uppercase", letterSpacing: "0.1em", padding: "0 4px", marginBottom: 4, marginTop: 8 }}>{group.label}</div>
-                  {(group.keys as unknown as ModuleKey[]).map((modKey) => {
+                  {group.keys.map((modKey) => {
                     const perm = viewPerms[modKey] ?? { view: false, add: false, edit: false, approve: false, export: false };
                     const hasAny = PERM_ACTIONS.some((a) => perm[a]);
                     return (
                       <div
                         key={modKey}
-                        style={{ display: "grid", gridTemplateColumns: "1fr 40px 40px 40px 40px 40px", alignItems: "center", gap: 0, padding: "8px 4px", borderRadius: 8, opacity: hasAny ? 1 : 0.5 }}
+                        style={{ display: "grid", gridTemplateColumns: PERM_MATRIX_GRID, columnGap: 4, alignItems: "center", padding: "8px 4px", borderRadius: 8, opacity: hasAny ? 1 : 0.55 }}
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <Tooltip title={hasAny ? "Has permissions" : "No permissions"}>
@@ -290,7 +374,11 @@ const UserManagement = () => {
                         </div>
                         {PERM_ACTIONS.map((act) => (
                           <div key={act} style={{ display: "flex", justifyContent: "center" }}>
-                            <Checkbox checked={perm[act]} disabled />
+                            <Checkbox
+                              checked={perm[act]}
+                              disabled={!canEditRoles || saving}
+                              onChange={(e) => onTogglePermission(modKey, act, e.target.checked)}
+                            />
                           </div>
                         ))}
                       </div>

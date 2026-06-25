@@ -1,7 +1,7 @@
 import { connectDB } from "@/lib/db";
 import Notification from "@/lib/models/Notification";
 import { ok, fail } from "@/lib/api-response";
-import { getSession } from "@/lib/session";
+import { getUserFromRequest } from "@/lib/api-request-auth";
 
 function formatRelativeTime(d: Date): string {
   const diffMs = Date.now() - d.getTime();
@@ -15,8 +15,8 @@ function formatRelativeTime(d: Date): string {
 }
 
 export async function GET(request: Request) {
-  const session = await getSession();
-  if (!session.isLoggedIn || !session.user?.email) {
+  const user = await getUserFromRequest(request);
+  if (!user?.email) {
     return fail("Unauthorized", 401);
   }
 
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
       200
     );
     const filter = url.searchParams.get("filter")?.trim().toLowerCase();
-    const email = session.user.email.trim().toLowerCase();
+    const email = user.email.trim().toLowerCase();
 
     const query: Record<string, unknown> = { recipientEmail: email };
     if (filter === "unread") query.read = false;
@@ -60,15 +60,15 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const session = await getSession();
-  if (!session.isLoggedIn || !session.user?.email) {
+  const user = await getUserFromRequest(request);
+  if (!user?.email) {
     return fail("Unauthorized", 401);
   }
 
   try {
     await connectDB();
     const body = await request.json().catch(() => ({}));
-    const email = session.user.email.trim().toLowerCase();
+    const email = user.email.trim().toLowerCase();
 
     if (body.all === true) {
       await Notification.updateMany(

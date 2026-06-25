@@ -114,8 +114,9 @@ const INVOICES = [
   { id: "INV-PEW-26-0507", po: "PO-2026-0137", vendor: "Pratap Engineering", invDate: "May 14, 2026", invAmt: 218000, poAmt: 215000, status: "mismatch", reason: "₹3,000 diff · quantity" },
 ];
 
-/** Demo users — password for all: `sudarshan123` */
+/** Demo users — default password `sudarshan123`; owner@sudarshan.com uses `Test@123` (see seed-users). */
 const USERS = [
+  { email: "owner@sudarshan.com", name: "Sudarshan Owner", role: "owner", employeeId: "E-OWNER" },
   { email: "rajiv@sudarshan.co.in", name: "Rajiv Mehta", role: "owner", employeeId: "E-2014" },
   { email: "priya@sudarshan.co.in", name: "Priya Sharma", role: "admin", employeeId: "EMP-3002" },
   { email: "anil@sudarshan.co.in", name: "Anil Kapoor", role: "rm", employeeId: "E-2019" },

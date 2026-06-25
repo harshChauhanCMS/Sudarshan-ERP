@@ -7,18 +7,26 @@ import {
   isAdminOrOwner,
 } from "@/lib/api-auth";
 import { pickAllowedFields, ROLE_WRITABLE_FIELDS } from "@/lib/field-allowlists";
+import { normalizePermissionsMap } from "@/lib/rbac-permissions";
 
 function requireRoleManagement(user: NonNullable<Awaited<ReturnType<typeof requireSession>>["user"]>) {
   if (isAdminOrOwner(user.role)) return null;
   return requirePermission(user, "user_management", "edit");
 }
 
+function requireRoleView(user: NonNullable<Awaited<ReturnType<typeof requireSession>>["user"]>) {
+  if (isAdminOrOwner(user.role)) return null;
+  return requirePermission(user, "user_management", "view");
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error } = await requireSession();
+  const { user, error } = await requireSession();
   if (error) return error;
+  const viewErr = requireRoleView(user);
+  if (viewErr) return viewErr;
 
   try {
     await connectDB();
@@ -54,6 +62,9 @@ export async function PUT(
     }
 
     const safe = pickAllowedFields(payload, ROLE_WRITABLE_FIELDS);
+    if (safe.permissions != null) {
+      safe.permissions = normalizePermissionsMap(safe.permissions);
+    }
 
     const updated = await Role.findOneAndUpdate(
       { roleKey: id },

@@ -26,6 +26,34 @@ function fmtTime(iso: string | null) {
   return dayjs(iso).format("HH:mm");
 }
 
+function PunchLocationCell({
+  address,
+  lat,
+  lng,
+}: {
+  address?: string;
+  lat?: number | null;
+  lng?: number | null;
+}) {
+  if (!address && (lat == null || lng == null)) return <span>—</span>;
+  const label =
+    address?.trim() ||
+    (lat != null && lng != null ? `${lat.toFixed(4)}, ${lng.toFixed(4)}` : "—");
+  if (lat != null && lng != null) {
+    return (
+      <a
+        href={`https://www.google.com/maps?q=${lat},${lng}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[12px] text-[#374d95] hover:underline"
+      >
+        {label}
+      </a>
+    );
+  }
+  return <span className="text-[12px]">{label}</span>;
+}
+
 export default function DailyAttendancePage() {
   const r = useAttendanceReport({ variant: "daily" });
 
@@ -81,6 +109,30 @@ export default function DailyAttendancePage() {
       ),
     },
     {
+      title: "Punch in GPS",
+      key: "inLoc",
+      width: 180,
+      render: (_: unknown, row: AttendanceDailyRow) => (
+        <PunchLocationCell
+          address={row.inAddress}
+          lat={row.inLat}
+          lng={row.inLng}
+        />
+      ),
+    },
+    {
+      title: "Punch out GPS",
+      key: "outLoc",
+      width: 180,
+      render: (_: unknown, row: AttendanceDailyRow) => (
+        <PunchLocationCell
+          address={row.outAddress}
+          lat={row.outLat}
+          lng={row.outLng}
+        />
+      ),
+    },
+    {
       title: "Worked (h)",
       dataIndex: "workedHours",
       key: "worked",
@@ -129,7 +181,7 @@ export default function DailyAttendancePage() {
     <div className="attendance-reports-page">
       <RepHeader
         title="Daily Attendance"
-        subtitle={`${r.rangeLabel} · in/out times, worked hours & status per day`}
+        subtitle={`${r.rangeLabel} · in/out times, GPS locations, worked hours & status per day`}
         actions={
           <Button
             icon={<DownloadOutlined />}
