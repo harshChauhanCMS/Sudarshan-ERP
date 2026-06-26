@@ -56,7 +56,7 @@ export function customerStatusBadge(status?: string) {
 }
 
 export const ERP_TABLE_PROPS = {
-  bordered: true as const,
+  bordered: false as const,
   size: "middle" as const,
   className: "attendance-report-table",
   pagination: false as const,

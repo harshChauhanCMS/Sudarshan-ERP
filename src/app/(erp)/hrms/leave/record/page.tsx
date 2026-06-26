@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Button, Select, Tag } from "antd";
-import { DownloadOutlined, FilterOutlined } from "@ant-design/icons";
+import { DownloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
 import RepHeader from "@/components/hrms/RepHeader";
@@ -10,7 +10,8 @@ import { HRMS_BACK } from "@/lib/hrms-nav";
 import CommonTable, { type CommonTableColumn } from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
 import EmployeeSelect from "@/components/erp/EmployeeSelect";
-import FilterSearchField from "@/components/hrms/FilterSearchField";
+import PageFilterDrawer from "@/components/common/PageFilterDrawer";
+import PageFilterToolbar from "@/components/common/PageFilterToolbar";
 import { leaveTypeColor } from "@/lib/leave-apply";
 import { filterBySearch } from "@/lib/filter-search";
 
@@ -111,6 +112,7 @@ export default function LeaveRecordPage() {
   const [year, setYear] = useState(String(dayjs().year()));
   const [typeFilter, setTypeFilter] = useState("All");
   const [search, setSearch] = useState("");
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [leaves, setLeaves] = useState<Record<string, unknown>[]>([]);
   const [employees, setEmployees] = useState<
     { employeeId: string; fullName: string; department?: string; designation?: string }[]
@@ -216,7 +218,7 @@ export default function LeaveRecordPage() {
   };
 
   const tp = {
-    bordered: true as const,
+    bordered: false as const,
     size: "middle" as const,
     className: "attendance-report-table",
   };
@@ -253,39 +255,36 @@ export default function LeaveRecordPage() {
         actions={<Button icon={<DownloadOutlined />}>Export</Button>}
       />
 
-      <div className="arf-panel ap-filters-panel">
-        <div className="arf-head">
-          <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
-          <span className="arf-head-title">Filters</span>
+      <PageFilterToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search leave type, reason, approver…"
+        onFilterClick={() => setFilterDrawerOpen(true)}
+        activeFilterCount={
+          (employee ? 1 : 0) + (year !== String(dayjs().year()) ? 1 : 0)
+        }
+      />
+
+      <PageFilterDrawer
+        open={filterDrawerOpen}
+        onClose={() => setFilterDrawerOpen(false)}
+        onApply={() => setFilterDrawerOpen(false)}
+        onClear={handleClearFilters}
+      >
+        <div className="arf-item">
+          <span className="arf-label">Employee</span>
+          <EmployeeSelect value={employee} onChange={(v) => setEmployee(v)} />
         </div>
-        <div className="arf-body">
-          <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
-            <FilterSearchField
-              value={search}
-              onChange={setSearch}
-              placeholder="Search leave type, reason, approver…"
-            />
-            <div className="arf-item">
-              <span className="arf-label">Employee</span>
-              <EmployeeSelect value={employee} onChange={(v) => setEmployee(v)} />
-            </div>
-            <div className="arf-item">
-              <span className="arf-label">Leave year</span>
-              <Select
-                className="w-full"
-                value={year}
-                onChange={setYear}
-                options={yearOptions}
-              />
-            </div>
-            <div className="ap-filters-row-break" aria-hidden="true" />
-            <div className="ap-filters-spacer" aria-hidden="true" />
-            <div className="arf-item ap-filters-actions ap-filters-actions--multi">
-              <Button onClick={handleClearFilters}>Clear filters</Button>
-            </div>
-          </div>
+        <div className="arf-item">
+          <span className="arf-label">Leave year</span>
+          <Select
+            className="w-full"
+            value={year}
+            onChange={setYear}
+            options={yearOptions}
+          />
         </div>
-      </div>
+      </PageFilterDrawer>
 
       {selectedEmployee ? (
         <div className="lv-emp-card">

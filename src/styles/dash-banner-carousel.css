@@ -1,0 +1,347 @@
+.dash-banner-carousel {
+  position: relative;
+  margin-bottom: 1.25rem;
+  border-radius: 14px;
+  overflow: visible;
+}
+
+.dash-banner-carousel__viewport {
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow: 0 10px 24px -14px rgba(15, 23, 42, 0.12);
+}
+
+.dash-banner-carousel__track {
+  display: flex;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dash-banner-carousel__slide {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  padding: 1.1rem calc(110px + 3.5rem) 1.35rem 2rem;
+  min-height: 128px;
+  border: none;
+  border-radius: 14px;
+  background-color: var(--bg-elev);
+}
+
+.dash-banner-carousel__slide--rose {
+  background-color: #fecdd3;
+}
+
+.dash-banner-carousel__slide--blue {
+  background-color: #bfdbfe;
+}
+
+.dash-banner-carousel__slide--green {
+  background-color: #bbf7d0;
+}
+
+.dash-banner-carousel__slide--amber {
+  background-color: #fed7aa;
+}
+
+.dash-banner-carousel__slide--violet {
+  background-color: #ddd6fe;
+}
+
+.dash-banner-carousel__slide--ocean {
+  background-color: #99f6e4;
+}
+
+.dash-banner-carousel__slide--rose .dash-banner-carousel__eyebrow,
+.dash-banner-carousel__slide--rose .dash-banner-carousel__cta {
+  color: #e11d48;
+}
+
+.dash-banner-carousel__slide--blue .dash-banner-carousel__eyebrow,
+.dash-banner-carousel__slide--blue .dash-banner-carousel__cta {
+  color: #2563eb;
+}
+
+.dash-banner-carousel__slide--green .dash-banner-carousel__eyebrow,
+.dash-banner-carousel__slide--green .dash-banner-carousel__cta {
+  color: #16a34a;
+}
+
+.dash-banner-carousel__slide--amber .dash-banner-carousel__eyebrow,
+.dash-banner-carousel__slide--amber .dash-banner-carousel__cta {
+  color: #ea580c;
+}
+
+.dash-banner-carousel__slide--violet .dash-banner-carousel__eyebrow,
+.dash-banner-carousel__slide--violet .dash-banner-carousel__cta {
+  color: #7c3aed;
+}
+
+.dash-banner-carousel__slide--ocean .dash-banner-carousel__eyebrow,
+.dash-banner-carousel__slide--ocean .dash-banner-carousel__cta {
+  color: #0d9488;
+}
+
+.dash-banner-carousel__avatar-wrap {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 110px;
+  height: 110px;
+}
+
+.dash-banner-carousel__avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  display: block;
+}
+
+.dash-banner-carousel__avatar-wrap .avatar {
+  width: 52px;
+  height: 52px;
+  font-size: 1rem;
+  border-width: 2px;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+.dash-banner-carousel__copy {
+  min-width: 0;
+  flex: 1;
+  padding-left: 1rem;
+}
+
+.dash-banner-carousel__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.dash-banner-carousel__eyebrow {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.dash-banner-carousel__role {
+  font-size: 0.72rem;
+  color: var(--fg-subtle);
+}
+
+.dash-banner-carousel__title {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+  line-height: 1.25;
+}
+
+.dash-banner-carousel__text {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--fg-muted);
+  max-width: 52rem;
+}
+
+.dash-banner-carousel__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dash-banner-carousel__cta:hover {
+  text-decoration: underline;
+}
+
+.dash-banner-carousel__nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow:
+    0 4px 12px rgba(15, 23, 42, 0.12),
+    0 1px 3px rgba(15, 23, 42, 0.08);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+  z-index: 2;
+}
+
+.dash-banner-carousel__nav:hover {
+  background: var(--bg-elev);
+  color: var(--fg);
+  box-shadow:
+    0 6px 16px rgba(15, 23, 42, 0.16),
+    0 2px 6px rgba(15, 23, 42, 0.1);
+}
+
+.dash-banner-carousel__nav--prev {
+  left: 0.55rem;
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.dash-banner-carousel__nav--next {
+  right: 0.55rem;
+}
+
+.dash-banner-carousel__dots {
+  position: absolute;
+  left: 50%;
+  bottom: 0.55rem;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.35rem;
+  z-index: 2;
+}
+
+.dash-banner-carousel__dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 22%, transparent);
+  cursor: pointer;
+  transition:
+    width 0.2s ease,
+    background 0.2s ease;
+}
+
+.dash-banner-carousel__dot.is-active {
+  width: 18px;
+  background: var(--primary);
+}
+
+@media (max-width: 640px) {
+  .dash-banner-carousel__slide {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1rem 1rem 2rem 1.5rem;
+    min-height: 0;
+  }
+
+  .dash-banner-carousel__copy {
+    padding-left: 0.35rem;
+  }
+
+  .dash-banner-carousel__avatar-wrap {
+    align-self: flex-end;
+  }
+
+  .dash-banner-carousel__nav {
+    display: none;
+  }
+}
+
+/* Dispatch dashboard — avatar peeks above banner (banner body size unchanged) */
+.disp-dash .dash-banner-carousel__viewport {
+  padding-top: 2rem;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.disp-dash .dash-banner-carousel__slide {
+  position: relative;
+  overflow: visible;
+}
+
+.disp-dash .dash-banner-carousel__avatar-wrap {
+  position: absolute;
+  right: 3.5rem;
+  bottom: 0;
+  width: 118px;
+  height: 118px;
+  overflow: visible;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.disp-dash .dash-banner-carousel__avatar {
+  transform: scale(1.45);
+  transform-origin: center bottom;
+}
+
+/* Owner dashboard — same avatar treatment as dispatch */
+.owner-dash .dash-banner-carousel__viewport {
+  padding-top: 3rem;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.owner-dash .dash-banner-carousel__slide {
+  position: relative;
+  overflow: visible;
+  min-height: 112px;
+  padding-top: 0.85rem;
+  padding-bottom: 1rem;
+}
+
+.owner-dash .dash-banner-carousel__avatar-wrap {
+  position: absolute;
+  right: 3.5rem;
+  bottom: 0;
+  width: 140px;
+  height: 120px;
+  overflow: visible;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.owner-dash .dash-banner-carousel__avatar {
+  transform: scale(1.2);
+  transform-origin: center bottom;
+}
+
+/* Admin dashboard — same avatar treatment as owner */
+.admin-dash .dash-banner-carousel__viewport {
+  padding-top: 3rem;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.admin-dash .dash-banner-carousel__slide {
+  position: relative;
+  overflow: visible;
+  min-height: 112px;
+  padding-top: 0.85rem;
+  padding-bottom: 1rem;
+}
+
+.admin-dash .dash-banner-carousel__avatar-wrap {
+  position: absolute;
+  right: 3.5rem;
+  bottom: 0;
+  width: 140px;
+  height: 120px;
+  overflow: visible;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.admin-dash .dash-banner-carousel__avatar {
+  transform: scale(1.2);
+  transform-origin: center bottom;
+}

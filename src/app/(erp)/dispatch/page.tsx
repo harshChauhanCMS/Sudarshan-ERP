@@ -1,9 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import {
+  CarOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  InboxOutlined,
+} from "@ant-design/icons";
 import { Icon } from "@/components/erp/icons";
 import { Btn } from "@/components/erp/ui";
-import { DashHead } from "@/components/erp/dashboards";
+import StatCard from "@/components/common/StatCard";
+import { DashHead, DashboardBannerCarousel, DISPATCH_BANNER_SLIDES } from "@/components/erp/dashboards";
 import { DispatchPlanChip } from "@/components/dispatch/dispatch-plan-chip";
 import { useDispatchPlanning } from "@/hooks/use-dispatch-planning";
 import { isDriverUnassigned } from "@/lib/dispatch-planning-api";
@@ -31,7 +38,7 @@ export default function DispatchPlanningPage() {
           variant="primary"
           size="sm"
           icon="invoice"
-          disabled={!data?.dbConfigured || awaitingOrders.length === 0}
+          disabled={!data?.dbConfigured}
           onClick={() => router.push("/dispatch/new")}
         >
           New dispatch plan
@@ -45,6 +52,11 @@ export default function DispatchPlanningPage() {
           Dispatch dashboard
         </Btn>
       </DashHead>
+
+      <DashboardBannerCarousel
+        slides={DISPATCH_BANNER_SLIDES}
+        navigate={(href) => router.push(href)}
+      />
 
       {loading ? (
         <p style={{ color: "var(--fg-muted)", fontSize: 14, margin: 0 }}>Loading…</p>
@@ -63,27 +75,35 @@ export default function DispatchPlanningPage() {
 
       {!loading && !error && hasData ? (
         <>
-          <div className="dispatch-plan-stats">
-            <div className="dispatch-plan-stat dispatch-plan-stat--ready">
-              <div className="dispatch-plan-stat__label">Ready</div>
-              <div className="dispatch-plan-stat__value success">{stats.ready}</div>
-              <div className="dispatch-plan-stat__sub">Packaged & ready to load</div>
-            </div>
-            <div className="dispatch-plan-stat dispatch-plan-stat--pack">
-              <div className="dispatch-plan-stat__label">Packaging Pending</div>
-              <div className="dispatch-plan-stat__value warning">{stats.pack}</div>
-              <div className="dispatch-plan-stat__sub">Awaiting packing</div>
-            </div>
-            <div className="dispatch-plan-stat dispatch-plan-stat--vehicle">
-              <div className="dispatch-plan-stat__label">Vehicle Pending</div>
-              <div className="dispatch-plan-stat__value accent">{stats.vehicle}</div>
-              <div className="dispatch-plan-stat__sub">Vehicle to assign</div>
-            </div>
-            <div className="dispatch-plan-stat dispatch-plan-stat--delayed">
-              <div className="dispatch-plan-stat__label">Delayed</div>
-              <div className="dispatch-plan-stat__value danger">{stats.delayed}</div>
-              <div className="dispatch-plan-stat__sub">Past requested date</div>
-            </div>
+          <div className="dispatch-plan-stats attendance-kpi-grid attendance-kpi-grid--4">
+            <StatCard
+              icon={CheckCircleOutlined}
+              label="Ready"
+              value={stats.ready}
+              hint="Packaged & ready to load"
+              hintTone="positive"
+            />
+            <StatCard
+              icon={InboxOutlined}
+              label="Packaging Pending"
+              value={stats.pack}
+              hint="Awaiting packing"
+              hintTone="warning"
+            />
+            <StatCard
+              icon={CarOutlined}
+              label="Vehicle Pending"
+              value={stats.vehicle}
+              hint="Vehicle to assign"
+              hintTone="accent"
+            />
+            <StatCard
+              icon={ClockCircleOutlined}
+              label="Delayed"
+              value={stats.delayed}
+              hint="Past requested date"
+              hintTone="negative"
+            />
           </div>
 
           {awaitingOrders.length > 0 ? (

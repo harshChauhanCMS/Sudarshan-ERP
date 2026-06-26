@@ -4,6 +4,7 @@ import FieldVisitAssignment from "@/lib/models/FieldVisitAssignment";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import type {
   CreateFieldVisitPayload,
+  CreateSelfFieldVisitPayload,
   FieldActivityDashboard,
   FieldActivityEmployee,
   FieldVisitLocation,
@@ -12,26 +13,21 @@ import type {
 } from "@/lib/field-visit-types";
 import {
   notifyFieldVisitAssigned,
+  notifyFieldVisitSelfCreated,
   notifyFieldVisitStatusChange,
 } from "@/lib/field-visit-notifications";
 import { enrichLocation } from "@/lib/reverse-geocode";
+import {
+  fieldVisitDayBoundsIST,
+  formatFieldVisitDateYmdIST,
+  parseFieldVisitDateYmd,
+} from "@/lib/field-visit-dates";
+import { isFieldWorkLocation } from "@/lib/hrms-employee-options";
 
 const MAP_COLORS = ["#0d9488", "#374d95", "#0369a1", "#16a34a", "#6b7280", "#b45309"];
 
-function startOfDay(d = new Date()) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function endOfDay(d = new Date()) {
-  const x = new Date(d);
-  x.setHours(23, 59, 59, 999);
-  return x;
-}
-
 function formatDateOnly(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return formatFieldVisitDateYmdIST(d);
 }
 
 function initials(name: string): string {
@@ -79,12 +75,16 @@ function toView(doc: Record<string, unknown>): FieldVisitView {
     visitLocation: doc.visitLocation as FieldVisitLocation | undefined,
     createdAt: new Date(doc.createdAt as string).toISOString(),
     updatedAt: new Date(doc.updatedAt as string).toISOString(),
+    selfInitiated:
+      String(doc.createdByEmail).trim().toLowerCase() ===
+      String(doc.assignedEmployeeEmail).trim().toLowerCase(),
   };
 }
 
 export async function createFieldVisit(
   payload: CreateFieldVisitPayload,
-  creator: { email: string; name?: string }
+  creator: { email: string; name?: string },
+  options?: { notifyEmployee?: boolean; autoAccept?: boolean }
 ): Promise<FieldVisitView> {
   await connectDB();
 
@@ -95,8 +95,9 @@ export async function createFieldVisit(
     String(employee.officialEmail || employee.personalEmail || "").trim().toLowerCase();
   if (!email) throw new Error("Assigned employee has no email for notifications");
 
-  const visitDate = new Date(payload.visitDate);
-  if (Number.isNaN(visitDate.getTime())) throw new Error("Invalid visit date");
+  const visitDate = parseFieldVisitDateYmd(payload.visitDate);
+
+  const acceptedAt = options?.autoAccept ? new Date() : undefined;
 
   const created = await FieldVisitAssignment.create({
     visitId: await nextVisitId(),
@@ -114,11 +115,27 @@ export async function createFieldVisit(
     returnTime: payload.returnTime?.trim() || "17:00",
     purpose: payload.purpose?.trim() || "",
     notes: payload.notes?.trim() || "",
-    status: "pending",
+    status: options?.autoAccept ? "accepted" : "pending",
+    ...(acceptedAt ? { acceptedAt } : {}),
   });
 
   const view = toView(created.toObject());
-  void notifyFieldVisitAssigned(view);
+  if (options?.notifyEmployee !== false) {
+    void notifyFieldVisitAssigned(view);
+  }
+  return view;
+}
+
+export async function createSelfFieldVisit(
+  payload: CreateSelfFieldVisitPayload,
+  creator: { email: string; name?: string; employeeId: string }
+): Promise<FieldVisitView> {
+  const view = await createFieldVisit(
+    { ...payload, assignedEmployeeId: creator.employeeId },
+    { email: creator.email, name: creator.name },
+    { notifyEmployee: false, autoAccept: true }
+  );
+  void notifyFieldVisitSelfCreated(view);
   return view;
 }
 
@@ -193,7 +210,15 @@ export async function completeFieldVisit(
 ): Promise<FieldVisitView> {
   const doc = await getVisitDoc(id);
   if (!doc) throw new Error("Visit not found");
-  if (!["accepted", "in-progress"].includes(String(doc.status))) {
+
+  const isSelfInitiated =
+    String(doc.createdByEmail).trim().toLowerCase() ===
+    String(doc.assignedEmployeeEmail).trim().toLowerCase();
+  const allowedStatuses = isSelfInitiated
+    ? ["pending", "accepted", "in-progress"]
+    : ["accepted", "in-progress"];
+
+  if (!allowedStatuses.includes(String(doc.status))) {
     throw new Error("Visit must be accepted before completion");
   }
 
@@ -208,6 +233,7 @@ export async function completeFieldVisit(
       $set: {
         status: "completed",
         completedAt: new Date(),
+        ...(doc.status === "pending" ? { acceptedAt: new Date() } : {}),
         ...(notes?.trim() ? { notes: notes.trim() } : {}),
       },
     },
@@ -257,12 +283,14 @@ export async function cancelFieldVisit(
 export async function getFieldActivityDashboard(): Promise<FieldActivityDashboard> {
   await connectDB();
 
-  const todayStart = startOfDay();
-  const todayEnd = endOfDay();
+  const { start: todayStart, end: todayEnd } = fieldVisitDayBoundsIST();
 
-  const [todayVisits, todayPunches, activeEmployees] = await Promise.all([
+  const [todayVisitRows, todayPunches, activeEmployees] = await Promise.all([
     FieldVisitAssignment.find({
-      visitDate: { $gte: todayStart, $lte: todayEnd },
+      $or: [
+        { visitDate: { $gte: todayStart, $lte: todayEnd } },
+        { createdAt: { $gte: todayStart, $lte: todayEnd } },
+      ],
     })
       .sort({ createdAt: -1 })
       .lean(),
@@ -289,7 +317,7 @@ export async function getFieldActivityDashboard(): Promise<FieldActivityDashboar
     activeEmployees.map((e) => [String(e.employeeId), e])
   );
 
-  const visits = todayVisits.map((v) => toView(v as Record<string, unknown>));
+  const visits = todayVisitRows.map((v) => toView(v as Record<string, unknown>));
   const completedToday = visits.filter((v) => v.status === "completed").length;
   const pendingVisits = visits.filter((v) => v.status === "pending").length;
   const inFieldVisits = visits.filter((v) =>
@@ -379,7 +407,12 @@ export async function getFieldActivityDashboard(): Promise<FieldActivityDashboar
   const timeline = visits.slice(0, 8).map((v) => ({
     time: v.startTime || "—",
     title: `${v.assignedEmployeeName} — ${v.partyName} (${v.status})`,
-    sub: `${v.visitType} · ${v.locationText || "—"}`,
+    sub: [
+      v.selfInitiated ? "Self-scheduled" : "Assigned",
+      v.visitType,
+      v.locationText || "—",
+      v.visitDate,
+    ].join(" · "),
     status: v.status,
   }));
 
@@ -400,4 +433,201 @@ export async function getFieldActivityDashboard(): Promise<FieldActivityDashboar
       .sort((a, b) => b.visits - a.visits)
       .slice(0, 6),
   };
+}
+
+export type OwnerEmployeesInFieldRow = {
+  key: string;
+  name: string;
+  role: string;
+  href?: string;
+};
+
+export type OwnerFieldVisitRow = {
+  key: string;
+  customer: string;
+  rep: string;
+  href?: string;
+};
+
+function isFieldPunchIn(
+  punch: { notes?: string | null },
+  workLocationType?: string | null,
+): boolean {
+  if (isFieldWorkLocation(workLocationType)) return true;
+  return String(punch.notes ?? "").includes("Field");
+}
+
+/** Employees currently punched in from the field (mobile GPS punch-in, not punched out). */
+export async function getEmployeesInFieldFromPunches(): Promise<{
+  fieldCount: number;
+  employees: OwnerEmployeesInFieldRow[];
+}> {
+  await connectDB();
+
+  const { start: todayStart, end: todayEnd } = fieldVisitDayBoundsIST();
+
+  const todayPunches = await AttendancePunch.find({
+    punchedAt: { $gte: todayStart, $lte: todayEnd },
+    location: { $exists: true },
+    "location.lat": { $exists: true },
+    "location.lng": { $exists: true },
+  })
+    .sort({ punchedAt: 1 })
+    .lean();
+
+  if (todayPunches.length === 0) {
+    return { fieldCount: 0, employees: [] };
+  }
+
+  const punchesByKey = new Map<string, typeof todayPunches>();
+  for (const punch of todayPunches) {
+    const key = punch.employeeId
+      ? `id:${String(punch.employeeId)}`
+      : punch.userEmail
+        ? `email:${String(punch.userEmail).toLowerCase()}`
+        : "";
+    if (!key) continue;
+    const list = punchesByKey.get(key) ?? [];
+    list.push(punch);
+    punchesByKey.set(key, list);
+  }
+
+  const employeeIds = [
+    ...new Set(
+      todayPunches
+        .map((p) => (p.employeeId ? String(p.employeeId) : ""))
+        .filter(Boolean),
+    ),
+  ];
+  const emails = [
+    ...new Set(
+      todayPunches
+        .map((p) => (p.userEmail ? String(p.userEmail).toLowerCase() : ""))
+        .filter(Boolean),
+    ),
+  ];
+
+  const employeeRows =
+    employeeIds.length || emails.length
+      ? await Employee.find({
+          $or: [
+            ...(employeeIds.length ? [{ employeeId: { $in: employeeIds } }] : []),
+            ...(emails.length
+              ? [
+                  { officialEmail: { $in: emails } },
+                  { personalEmail: { $in: emails } },
+                ]
+              : []),
+          ],
+        })
+          .select({
+            employeeId: 1,
+            fullName: 1,
+            designation: 1,
+            department: 1,
+            workLocationType: 1,
+            officialEmail: 1,
+            personalEmail: 1,
+          })
+          .lean()
+      : [];
+
+  const byEmployeeId = new Map(
+    employeeRows.map((e) => [String(e.employeeId), e]),
+  );
+  const byEmail = new Map<string, (typeof employeeRows)[number]>();
+  for (const e of employeeRows) {
+    if (e.officialEmail) byEmail.set(String(e.officialEmail).toLowerCase(), e);
+    if (e.personalEmail) byEmail.set(String(e.personalEmail).toLowerCase(), e);
+  }
+
+  const employees: OwnerEmployeesInFieldRow[] = [];
+
+  for (const [mapKey, punches] of punchesByKey) {
+    const last = punches[punches.length - 1];
+    if (!last || last.punchType !== "in") continue;
+
+    const emp =
+      mapKey.startsWith("id:")
+        ? byEmployeeId.get(mapKey.slice(3))
+        : byEmail.get(mapKey.slice(6));
+
+    if (!isFieldPunchIn(last, emp?.workLocationType ? String(emp.workLocationType) : null)) {
+      continue;
+    }
+
+    const loc = last.location as FieldVisitLocation | undefined;
+    const city = loc?.city?.trim() || loc?.address?.split(",")[0]?.trim() || "";
+    const name = emp?.fullName
+      ? String(emp.fullName)
+      : last.userEmail
+        ? String(last.userEmail)
+        : mapKey.slice(3);
+    const designation = emp?.designation ? String(emp.designation) : "Field";
+    const role = [designation, city].filter(Boolean).join(" · ");
+
+    employees.push({
+      key: emp?.employeeId ? String(emp.employeeId) : mapKey,
+      name,
+      role: role || designation,
+      href: emp?.employeeId ? `/hrms/employees/${encodeURIComponent(String(emp.employeeId))}` : undefined,
+    });
+  }
+
+  employees.sort((a, b) => a.name.localeCompare(b.name));
+
+  return {
+    fieldCount: employees.length,
+    employees: employees.slice(0, 10),
+  };
+}
+
+function abbreviateRepName(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+  return name.trim();
+}
+
+function visitStatusLabel(status: FieldVisitStatus): string {
+  const labels: Record<FieldVisitStatus, string> = {
+    pending: "Pending",
+    accepted: "Accepted",
+    "in-progress": "In progress",
+    completed: "Done",
+    cancelled: "Cancelled",
+  };
+  return labels[status] ?? status;
+}
+
+/** Today's field visit assignments for the owner dashboard. */
+export async function getTodayFieldVisitsForOwner(): Promise<OwnerFieldVisitRow[]> {
+  await connectDB();
+
+  const { start: todayStart, end: todayEnd } = fieldVisitDayBoundsIST();
+
+  const rows = await FieldVisitAssignment.find({
+    $or: [
+      { visitDate: { $gte: todayStart, $lte: todayEnd } },
+      { createdAt: { $gte: todayStart, $lte: todayEnd } },
+    ],
+  })
+    .sort({ createdAt: -1 })
+    .limit(10)
+    .lean();
+
+  return rows.map((doc) => {
+    const visit = toView(doc as Record<string, unknown>);
+    const customerName = visit.partyName.trim().split(/\s+/)[0] || visit.partyName;
+    const location =
+      visit.locationText?.split(",")[0]?.trim() ||
+      visit.locationText?.trim() ||
+      visit.visitType;
+    const rep = abbreviateRepName(visit.assignedEmployeeName);
+    return {
+      key: visit.id,
+      customer: `${customerName} — ${location}`,
+      rep: `${rep} · ${visitStatusLabel(visit.status)}`,
+      href: "/field-sales/visit-log",
+    };
+  });
 }

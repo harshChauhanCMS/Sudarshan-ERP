@@ -2,7 +2,7 @@
 'use client';
 
 
-import React, { useEffect } from "react";
+import React, { useEffect, useId, useState } from "react";
 import { Icon } from "./icons";
 
 /* ============================================================
@@ -269,71 +269,213 @@ const AreaChart = ({ data, keys, colors, h = 200, labelKey = "month", showGrid =
 /* ============================================================
    BAR CHART
    ============================================================ */
-const BarChart = ({ data, keys, colors, labelKey = "day", h = 200 }) => {
+const BarChart = ({
+  data,
+  keys,
+  colors,
+  labelKey = "day",
+  h = 200,
+  groupColors,
+  groupGradients,
+  showValues = false,
+  valueFormatter = (v) => String(Math.round(v * 10) / 10),
+  tooltipFormatter,
+  barRadius = 4,
+  axisFontSize = 10,
+  valueFontSize = 12,
+  labelFontSize = 10,
+}) => {
+  const uid = useId().replace(/:/g, "");
+  const [hover, setHover] = useState(null);
   const w = 600;
-  const padL = 32, padR = 8, padT = 12, padB = 22;
+  const padL = 36, padR = 12, padT = showValues ? Math.max(30, valueFontSize + 16) : 14, padB = Math.max(28, labelFontSize + 16);
   const innerW = w - padL - padR;
   const innerH = h - padT - padB;
   const groups = data.length;
-  const barGroupW = innerW / groups;
-  const barW = (barGroupW - 14) / keys.length;
+  const barGroupW = innerW / Math.max(groups, 1);
+  const barW = (barGroupW - 16) / keys.length;
 
-  const max = Math.max(...data.flatMap((d) => keys.map((k) => d[k]))) * 1.15;
-  const y = (v) => padT + innerH - (v / max) * innerH;
+  const maxRaw = Math.max(...data.flatMap((d) => keys.map((k) => d[k] ?? 0)), 0);
+  const max = maxRaw > 0 ? maxRaw * 1.18 : 1;
+  const y = (v) => padT + innerH - (Math.max(v, 0) / max) * innerH;
   const ticks = 4;
 
+  const barColor = (groupIndex, keyIndex) => {
+    if (groupColors?.length) return groupColors[groupIndex % groupColors.length];
+    return colors[keyIndex % colors.length];
+  };
+
+  const tooltipText = (d, k, val) => {
+    const label = d[labelKey];
+    if (tooltipFormatter) return tooltipFormatter({ label, key: k, value: val, row: d });
+    return `${label}: ${valueFormatter(val)}`;
+  };
+
   return (
-    <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: "block" }}>
-      {[...Array(ticks + 1)].map((_, i) => {
-        const yy = padT + (i / ticks) * innerH;
-        const v = max * (1 - i / ticks);
-        return (
-          <g key={i}>
-            <line x1={padL} y1={yy} x2={w - padR} y2={yy} stroke="var(--border)" strokeDasharray="2 3" />
-            <text x={padL - 6} y={yy + 3} fill="var(--fg-subtle)" fontSize="10" textAnchor="end" fontFamily="var(--font-mono)">
-              {Math.round(v)}
-            </text>
-          </g>
-        );
-      })}
-      {data.map((d, i) => {
-        const gx = padL + i * barGroupW + 7;
-        return (
-          <g key={i}>
-            {keys.map((k, ki) => {
-              const yy = y(d[k]);
-              const hh = padT + innerH - yy;
-              return (
-                <rect key={k} x={gx + ki * barW} y={yy} width={barW - 3} height={hh} fill={colors[ki]} rx="2" />
-              );
-            })}
-            <text x={gx + (barGroupW - 14) / 2} y={h - 6} fill="var(--fg-subtle)" fontSize="10" textAnchor="middle">
-              {d[labelKey]}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+    <div className="erp-bar-chart-wrap">
+      <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: "block" }} className="erp-bar-chart">
+        <defs>
+          {groupGradients?.length
+            ? data.map((_, i) => {
+                const grad = groupGradients[i];
+                if (!grad) return null;
+                return (
+                  <linearGradient key={i} id={`${uid}-bar-${i}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={grad.from} />
+                    <stop offset="100%" stopColor={grad.to} />
+                  </linearGradient>
+                );
+              })
+            : null}
+        </defs>
+        {[...Array(ticks + 1)].map((_, i) => {
+          const yy = padT + (i / ticks) * innerH;
+          const v = max * (1 - i / ticks);
+          return (
+            <g key={i}>
+              <line x1={padL} y1={yy} x2={w - padR} y2={yy} stroke="var(--border)" strokeDasharray="3 4" strokeOpacity="0.7" />
+              <text x={padL - 8} y={yy + 3.5} fill="var(--fg-subtle)" fontSize={axisFontSize} textAnchor="end" fontFamily="var(--font-mono)">
+                {Math.round(v * 10) / 10}
+              </text>
+            </g>
+          );
+        })}
+        {data.map((d, i) => {
+          const gx = padL + i * barGroupW + 8;
+          const groupCenter = gx + (barGroupW - 16) / 2;
+          return (
+            <g key={i}>
+              {keys.map((k, ki) => {
+                const val = d[k] ?? 0;
+                const yy = y(val);
+                const hh = Math.max(padT + innerH - yy, val > 0 ? 3 : 0);
+                const bx = gx + ki * barW;
+                const barWidth = Math.max(barW - 4, 2);
+                const fill =
+                  groupGradients?.[i]
+                    ? `url(#${uid}-bar-${i})`
+                    : barColor(i, ki);
+                const isHovered = hover?.i === i && hover?.ki === ki;
+                return (
+                  <g key={k}>
+                    <rect
+                      x={bx - 3}
+                      y={padT}
+                      width={barWidth + 6}
+                      height={innerH}
+                      fill="transparent"
+                      style={{ cursor: "pointer" }}
+                      onMouseEnter={() =>
+                        setHover({
+                          i,
+                          ki,
+                          cx: bx + barWidth / 2,
+                          cy: yy,
+                          text: tooltipText(d, k, val),
+                          color: groupGradients?.[i]?.to ?? groupGradients?.[ki]?.to ?? barColor(i, ki),
+                        })
+                      }
+                      onMouseLeave={() => setHover(null)}
+                    />
+                    <rect
+                      x={bx}
+                      y={yy}
+                      width={barWidth}
+                      height={hh}
+                      fill={fill}
+                      rx={barRadius}
+                      ry={barRadius}
+                      className={`erp-bar-chart__bar${isHovered ? " erp-bar-chart__bar--hover" : ""}`}
+                      pointerEvents="none"
+                    />
+                    {showValues ? (
+                      <text
+                        x={bx + barWidth / 2}
+                        y={yy - 8}
+                        fill="var(--fg)"
+                        fontSize={valueFontSize}
+                        fontWeight="700"
+                        textAnchor="middle"
+                        fontFamily="var(--font-mono)"
+                        pointerEvents="none"
+                      >
+                        {valueFormatter(val)}
+                      </text>
+                    ) : null}
+                  </g>
+                );
+              })}
+              <text
+                x={groupCenter}
+                y={h - 8}
+                fill="var(--fg-subtle)"
+                fontSize={labelFontSize}
+                textAnchor="middle"
+                fontWeight="600"
+                pointerEvents="none"
+              >
+                {d[labelKey]}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      {hover ? (
+        <div
+          className="erp-bar-chart__tooltip"
+          style={{
+            left: `${(hover.cx / w) * 100}%`,
+            top: `${(hover.cy / h) * 100}%`,
+            "--tooltip-accent": hover.color,
+          }}
+        >
+          <span className="erp-bar-chart__tooltip-dot" />
+          {hover.text}
+        </div>
+      ) : null}
+    </div>
   );
 };
 
 /* ============================================================
    DONUT
    ============================================================ */
-const Donut = ({ value, max = 100, size = 100, stroke = 10, color = "var(--primary)", track = "var(--bg-sunken)", label, sub }) => {
+const Donut = ({
+  value,
+  max = 100,
+  size = 100,
+  stroke = 10,
+  color = "var(--primary)",
+  gradientFrom,
+  gradientTo,
+  track = "var(--bg-sunken)",
+  label,
+  sub,
+}) => {
+  const uid = useId().replace(/:/g, "");
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = Math.min(value / max, 1);
+  const useGradient = gradientFrom && gradientTo;
+  const strokeColor = useGradient ? `url(#${uid}-donut-grad)` : color;
   return (
     <div style={{ position: "relative", width: size, height: size }}>
       <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        {useGradient ? (
+          <defs>
+            <linearGradient id={`${uid}-donut-grad`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={gradientFrom} />
+              <stop offset="100%" stopColor={gradientTo} />
+            </linearGradient>
+          </defs>
+        ) : null}
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={track} strokeWidth={stroke} />
         <circle
           cx={size/2}
           cy={size/2}
           r={r}
           fill="none"
-          stroke={color}
+          stroke={strokeColor}
           strokeWidth={stroke}
           strokeDasharray={`${c * pct} ${c}`}
           strokeLinecap="round"

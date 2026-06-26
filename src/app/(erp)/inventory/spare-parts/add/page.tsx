@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { message } from "antd";
 import { Icon } from "@/components/erp/icons";
 import { Btn } from "@/components/erp/ui";
@@ -110,9 +110,46 @@ function isCriticalPart(criticality: string): boolean {
 
 export default function SparePartsMasterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editCode = searchParams.get("code")?.trim() ?? "";
   const DATA = useDATA();
-  const { append, saving, error, clearError } = useEntityMutation();
+  const { append, update, saving, error, clearError } = useEntityMutation();
   const form = useFormState(INITIAL);
+
+  const editing = useMemo(
+    () =>
+      editCode
+        ? DATA.SPARE_PARTS.find(
+            (p) => p.code.toLowerCase() === editCode.toLowerCase()
+          ) ?? null
+        : null,
+    [DATA.SPARE_PARTS, editCode]
+  );
+
+  useEffect(() => {
+    if (!editCode) return;
+    if (!editing) {
+      message.error(`Spare part "${editCode}" not found.`);
+      router.replace("/inventory/spare-parts");
+      return;
+    }
+    const vendor = DATA.VENDORS.find((v) => v.name === editing.vendor);
+    form.setValues({
+      partName: editing.name,
+      partCode: editing.code,
+      machineName: editing.machineName ?? "",
+      category: editing.category,
+      vendor: vendor?.id ?? "",
+      unit: editing.unit,
+      standardRate:
+        editing.standardRate != null ? String(editing.standardRate) : "",
+      minStock: String(editing.reorder),
+      criticality: editing.criticality ?? (editing.critical ? "critical" : ""),
+      storageLocation: editing.location === "—" ? "" : editing.location,
+      notes: editing.notes ?? "",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once when edit target resolves
+  }, [editCode, editing?.code]);
 
   const spareVendors = useMemo(() => [...DATA.VENDORS], [DATA.VENDORS]);
 
@@ -145,7 +182,11 @@ export default function SparePartsMasterPage() {
       return "Part code must be alphanumeric (hyphens allowed).";
     }
     if (
-      DATA.SPARE_PARTS.some((p) => p.code.toLowerCase() === code.toLowerCase())
+      DATA.SPARE_PARTS.some(
+        (p) =>
+          p.code.toLowerCase() === code.toLowerCase() &&
+          p.code.toLowerCase() !== editing?.code.toLowerCase()
+      )
     ) {
       return "Part code already exists.";
     }
@@ -187,13 +228,43 @@ export default function SparePartsMasterPage() {
     const reorder = form.values.minStock.trim()
       ? parseFloat(form.values.minStock)
       : 0;
-    const stock = 0;
     const rate = form.values.standardRate.trim()
       ? parseFloat(form.values.standardRate)
       : 0;
     const vendor = DATA.VENDORS.find((v) => v.id === form.values.vendor);
     const critical = isCriticalPart(form.values.criticality);
     const machine = MACHINES.find((m) => m.id === form.values.machineName);
+
+    if (editing) {
+      const stock = editing.stock;
+      await update(
+        "spareParts",
+        editing.code,
+        {
+          name: form.values.partName.trim(),
+          vendor: vendor?.name ?? "",
+          category: form.values.category,
+          unit: form.values.unit,
+          reorder,
+          value: stock * (rate || editing.standardRate || 0),
+          location: form.values.storageLocation.trim() || "—",
+          status: stockStatus(stock, reorder, critical),
+          critical,
+          machineName: machine?.id ?? "",
+          standardRate: rate,
+          criticality: form.values.criticality,
+          notes: form.values.notes.trim(),
+        },
+        "code"
+      );
+      message.success("Spare part updated.");
+      if (!addAnother) {
+        router.push("/inventory/spare-parts");
+      }
+      return;
+    }
+
+    const stock = 0;
 
     await append("spareParts", {
       code,
@@ -227,8 +298,12 @@ export default function SparePartsMasterPage() {
   return (
     <div className="sp-master">
       <DashHead
-        title="Spare Parts Master"
-        sub="Create or edit machine spare parts records"
+        title={editing ? "Edit Spare Part" : "Spare Parts Master"}
+        sub={
+          editing
+            ? `Update spare part · ${editing.code}`
+            : "Create or edit machine spare parts records"
+        }
       >
         <Btn
           variant="secondary"
@@ -281,6 +356,8 @@ export default function SparePartsMasterPage() {
                         form.setField("partCode", e.target.value.toUpperCase())
                       }
                       placeholder="e.g. SP-102 (auto if blank)"
+                      readOnly={!!editing}
+                      disabled={!!editing}
                     />
                   </div>
                 </div>
@@ -464,18 +541,20 @@ export default function SparePartsMasterPage() {
                   type="submit"
                   disabled={saving}
                 >
-                  {saving ? "Saving…" : "Save"}
+                  {saving ? "Saving…" : editing ? "Update" : "Save"}
                 </Btn>
-                <Btn
-                  variant="secondary"
-                  size="sm"
-                  icon="plus"
-                  type="button"
-                  disabled={saving}
-                  onClick={() => saveSparePart(true).catch(() => {})}
-                >
-                  Save &amp; add new
-                </Btn>
+                {!editing ? (
+                  <Btn
+                    variant="secondary"
+                    size="sm"
+                    icon="plus"
+                    type="button"
+                    disabled={saving}
+                    onClick={() => saveSparePart(true).catch(() => {})}
+                  >
+                    Save &amp; add new
+                  </Btn>
+                ) : null}
                 <Btn
                   variant="secondary"
                   size="sm"

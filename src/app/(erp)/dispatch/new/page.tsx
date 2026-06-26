@@ -15,7 +15,7 @@ export default function NewDispatchPlanPage() {
 
   const orderId = searchParams.get("order") ?? undefined;
   const awaitingOrders = data?.awaitingOrders ?? [];
-  const canPlan = Boolean(data?.dbConfigured && awaitingOrders.length > 0);
+  const canPlan = Boolean(data?.dbConfigured);
 
   const handleSuccess = async () => {
     await Promise.all([reload(), refreshErp()]);

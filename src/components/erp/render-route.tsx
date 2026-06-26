@@ -29,7 +29,7 @@ export function renderErpRoute(route: string, navigate: Navigate) {
     case "/dashboard/admin":
       return <AdminDashboard navigate={navigate} />;
     case "/dashboard/owner":
-      return <OwnerDashboard />;
+      return <OwnerDashboard navigate={navigate} />;
     case "/dashboard/production":
       return <ProductionDashboard navigate={navigate} />;
     case "/dashboard/dispatch":

@@ -6,13 +6,31 @@ import React, { useState } from "react";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { DashHead } from "./dashboards";
-import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
+import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { nextEmployeeId } from "@/lib/id-generators";
+import {
+  MODULE_GROUPS,
+  MODULE_LABELS,
+  PERM_ACTIONS,
+  PERM_ACTION_LABELS,
+  PERM_MATRIX_GRID,
+  countGrantedPermissions,
+  emptyPermissionsMap,
+  normalizePermissionsMap,
+  permissionsEqual,
+  toggleModulePermission,
+} from "@/lib/rbac-permissions";
+import {
+  canPerform,
+  type ModuleKey,
+  type PermissionAction,
+  type PermissionsMap,
+} from "@/lib/permission-types";
 import { useEffect, useCallback } from "react";
-import { Button, Drawer, Checkbox, Spin, Tag, message, Tooltip, Divider } from "antd";
-import { LockOutlined, CheckCircleFilled, MinusCircleFilled, SafetyCertificateOutlined, CrownOutlined, EyeOutlined, IdcardOutlined } from "@ant-design/icons";
+import { Button, Drawer, Checkbox, Spin, Tag, message, Tooltip, Divider, Modal, Input } from "antd";
+import { LockOutlined, CheckCircleFilled, MinusCircleFilled, SafetyCertificateOutlined, CrownOutlined, EyeOutlined, IdcardOutlined, PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import StatCard from "@/components/common/StatCard";
 /* ============================================================
    ADMIN — Users, Permissions, Design System, Placeholders
@@ -22,54 +40,6 @@ import StatCard from "@/components/common/StatCard";
 /* ============================================================
    USER MANAGEMENT + PERMISSION MATRIX
    ============================================================ */
-// ─── Types ────────────────────────────────────────────────────────────────────
-const MODULE_KEYS = [
-  "dashboard", "hr", "payroll",
-  "inventory_raw", "inventory_packaging", "inventory_spares",
-  "procurement_vendors", "procurement_po", "procurement_invoice",
-  "sales_customers", "sales_orders",
-  "operations_production", "operations_quality",
-  "dispatch", "settings", "user_management", "reports",
-] as const;
-type ModuleKey = (typeof MODULE_KEYS)[number];
-type PermAction = "view" | "add" | "edit" | "approve" | "export";
-
-const MODULE_LABELS: Record<ModuleKey, string> = {
-  dashboard: "Dashboard",
-  hr: "HR & Attendance",
-  payroll: "Payroll",
-  inventory_raw: "Inventory: Raw Material",
-  inventory_packaging: "Inventory: Packaging",
-  inventory_spares: "Inventory: Spare Parts",
-  procurement_vendors: "Procurement: Vendors",
-  procurement_po: "Procurement: Purchase Orders",
-  procurement_invoice: "Procurement: Invoice Verify",
-  sales_customers: "Sales: Customers",
-  sales_orders: "Sales: Orders",
-  operations_production: "Operations: Production",
-  operations_quality: "Operations: Quality",
-  dispatch: "Dispatch",
-  settings: "Settings",
-  user_management: "User Management",
-  reports: "Reports",
-};
-
-const MODULE_GROUPS = [
-  { label: "Core", keys: ["dashboard", "reports"] },
-  { label: "HRMS", keys: ["hr", "payroll"] },
-  { label: "Inventory", keys: ["inventory_raw", "inventory_packaging", "inventory_spares"] },
-  { label: "Procurement", keys: ["procurement_vendors", "procurement_po", "procurement_invoice"] },
-  { label: "Sales", keys: ["sales_customers", "sales_orders"] },
-  { label: "Operations", keys: ["operations_production", "operations_quality"] },
-  { label: "Logistics", keys: ["dispatch"] },
-  { label: "Administration", keys: ["settings", "user_management"] },
-] as const;
-
-const PERM_ACTIONS: PermAction[] = ["view", "add", "edit", "approve", "export"];
-
-type ModulePerm = { view: boolean; add: boolean; edit: boolean; approve: boolean; export: boolean };
-type PermissionsMap = Record<ModuleKey, ModulePerm>;
-
 interface Role {
   _id: string;
   roleKey: string;
@@ -95,6 +65,120 @@ const ROLE_COLORS: Record<string, string> = {
 
 const getRoleColor = (key: string) => ROLE_COLORS[key] ?? "#374d95";
 
+const PROTECTED_ROLE_KEYS = new Set(["owner", "admin"]);
+
+function isRoleDeletable(role: Role): boolean {
+  return !PROTECTED_ROLE_KEYS.has(role.roleKey.toLowerCase());
+}
+
+function slugifyRoleKey(label: string): string {
+  return label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function PermissionMatrix({
+  perms,
+  canEdit,
+  saving,
+  onToggle,
+  readOnlyHint,
+}: {
+  perms: PermissionsMap;
+  canEdit: boolean;
+  saving?: boolean;
+  onToggle: (modKey: ModuleKey, action: PermissionAction, checked: boolean) => void;
+  readOnlyHint?: string;
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <LockOutlined style={{ color: "var(--fg-muted)", fontSize: 14 }} />
+        <span className="font-bold text-zinc-800 text-sm" style={{ fontWeight: 700, fontSize: 14 }}>Permission matrix</span>
+        {canEdit ? (
+          <span style={{ fontSize: 11, color: "var(--fg-muted)", fontWeight: 500 }}>Assign module access</span>
+        ) : (
+          <span style={{ fontSize: 11, color: "var(--fg-muted)", fontWeight: 500 }}>{readOnlyHint ?? "(read-only)"}</span>
+        )}
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: PERM_MATRIX_GRID,
+          alignItems: "center",
+          columnGap: 4,
+          padding: "4px 4px 8px",
+          borderBottom: "1px solid var(--border)",
+          marginBottom: 4,
+        }}
+      >
+        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          Module
+        </div>
+        {PERM_ACTIONS.map((act) => (
+          <Tooltip key={act} title={act.charAt(0).toUpperCase() + act.slice(1)}>
+            <div
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                color: "var(--fg-muted)",
+                textTransform: "uppercase",
+                textAlign: "center",
+                letterSpacing: "0.02em",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                minWidth: 0,
+              }}
+            >
+              {PERM_ACTION_LABELS[act]}
+            </div>
+          </Tooltip>
+        ))}
+      </div>
+
+      {MODULE_GROUPS.map((group) => (
+        <div key={group.label} style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-muted)", textTransform: "uppercase", letterSpacing: "0.1em", padding: "0 4px", marginBottom: 4, marginTop: 8 }}>{group.label}</div>
+          {group.keys.map((modKey) => {
+            const perm = perms[modKey] ?? { view: false, add: false, edit: false, approve: false, export: false };
+            const hasAny = PERM_ACTIONS.some((a) => perm[a]);
+            return (
+              <div
+                key={modKey}
+                style={{ display: "grid", gridTemplateColumns: PERM_MATRIX_GRID, columnGap: 4, alignItems: "center", padding: "8px 4px", borderRadius: 8, opacity: hasAny ? 1 : 0.55 }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Tooltip title={hasAny ? "Has permissions" : "No permissions"}>
+                    {hasAny
+                      ? <CheckCircleFilled style={{ color: "#16a34a", fontSize: 12 }} />
+                      : <MinusCircleFilled style={{ color: "#d4d4d8", fontSize: 12 }} />
+                    }
+                  </Tooltip>
+                  <span style={{ fontSize: 12.5, color: "var(--fg)", fontWeight: 500 }}>{MODULE_LABELS[modKey]}</span>
+                </div>
+                {PERM_ACTIONS.map((act) => (
+                  <div key={act} style={{ display: "flex", justifyContent: "center" }}>
+                    <Checkbox
+                      checked={perm[act]}
+                      disabled={!canEdit || saving}
+                      onChange={(e) => onToggle(modKey, act, e.target.checked)}
+                    />
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          <Divider style={{ margin: "8px 0", borderColor: "var(--border)" }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 const UserManagement = () => {
   const [roles, setRoles] = useState<Role[]>([]);
@@ -102,6 +186,16 @@ const UserManagement = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [viewingRole, setViewingRole] = useState<Role | null>(null);
   const [viewPerms, setViewPerms] = useState<PermissionsMap | null>(null);
+  const [canEditRoles, setCanEditRoles] = useState(false);
+  const [canCreateRoles, setCanCreateRoles] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [newRoleKey, setNewRoleKey] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [newPerms, setNewPerms] = useState<PermissionsMap>(() => emptyPermissionsMap());
+  const [deletingRoleKey, setDeletingRoleKey] = useState<string | null>(null);
   const [messageApi, contextHolder] = message.useMessage();
 
   const loadData = useCallback(async () => {
@@ -121,27 +215,214 @@ const UserManagement = () => {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((json) => {
+        const user = json?.data?.user;
+        if (!user) return;
+        const role = String(user.role ?? "").toLowerCase();
+        if (role === "owner" || role === "admin") {
+          setCanEditRoles(true);
+          setCanCreateRoles(true);
+        } else if (user.permissions) {
+          if (canPerform(user.permissions, "user_management", "edit")) {
+            setCanEditRoles(true);
+          }
+          if (canPerform(user.permissions, "user_management", "add")) {
+            setCanCreateRoles(true);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const openDrawer = (role: Role) => {
+    setCreateOpen(false);
     setViewingRole(role);
-    setViewPerms(JSON.parse(JSON.stringify(role.permissions)));
+    setViewPerms(normalizePermissionsMap(role.permissions));
     setDrawerOpen(true);
   };
 
   const closeDrawer = () => {
+    if (
+      canEditRoles &&
+      viewingRole &&
+      viewPerms &&
+      !permissionsEqual(viewPerms, normalizePermissionsMap(viewingRole.permissions))
+    ) {
+      if (!window.confirm("Discard unsaved permission changes?")) return;
+    }
     setDrawerOpen(false);
     setViewingRole(null);
     setViewPerms(null);
   };
 
-  // ─── Count perms summary ────────────────────────────────────────────────────
-  const countPerms = (perms: PermissionsMap) => {
-    let total = 0;
-    MODULE_KEYS.forEach((mod) => {
-      PERM_ACTIONS.forEach((act) => {
-        if (perms[mod]?.[act]) total++;
+  const resetPermissions = () => {
+    if (viewingRole) {
+      setViewPerms(normalizePermissionsMap(viewingRole.permissions));
+    }
+  };
+
+  const savePermissions = async () => {
+    if (!viewingRole || !viewPerms || !canEditRoles) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/system/roles/${encodeURIComponent(viewingRole.roleKey)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permissions: viewPerms }),
       });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        throw new Error(json.error || "Failed to save permissions");
+      }
+      const saved = normalizePermissionsMap(json.data?.permissions ?? viewPerms);
+      const updatedRole = { ...viewingRole, permissions: saved };
+      setViewingRole(updatedRole);
+      setViewPerms(structuredClone(saved));
+      setRoles((prev) =>
+        prev.map((r) => (r.roleKey === viewingRole.roleKey ? { ...r, permissions: saved } : r)),
+      );
+      messageApi.success(`Permissions updated for ${viewingRole.label}`);
+    } catch (err) {
+      messageApi.error(err instanceof Error ? err.message : "Failed to save permissions");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onTogglePermission = (modKey: ModuleKey, action: PermissionAction, checked: boolean) => {
+    setViewPerms((prev) => (prev ? toggleModulePermission(prev, modKey, action, checked) : prev));
+  };
+
+  const onToggleNewPermission = (modKey: ModuleKey, action: PermissionAction, checked: boolean) => {
+    setNewPerms((prev) => toggleModulePermission(prev, modKey, action, checked));
+  };
+
+  const openCreateRole = () => {
+    setDrawerOpen(false);
+    setViewingRole(null);
+    setViewPerms(null);
+    setNewRoleKey("");
+    setNewLabel("");
+    setNewDescription("");
+    setNewPerms(emptyPermissionsMap());
+    setCreateOpen(true);
+  };
+
+  const closeCreateRole = () => {
+    if (createSaving) return;
+    setCreateOpen(false);
+  };
+
+  const handleNewLabelChange = (value: string) => {
+    setNewLabel(value);
+    if (!newRoleKey.trim()) {
+      setNewRoleKey(slugifyRoleKey(value));
+    }
+  };
+
+  const createRole = async () => {
+    const label = newLabel.trim();
+    const roleKey = (newRoleKey.trim() || slugifyRoleKey(label)).toLowerCase();
+    const description = newDescription.trim();
+
+    if (!label) {
+      messageApi.error("Role name is required");
+      return;
+    }
+    if (!roleKey || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(roleKey)) {
+      messageApi.error("Role key must use lowercase letters, numbers, and hyphens only");
+      return;
+    }
+    if (roles.some((r) => r.roleKey === roleKey)) {
+      messageApi.error(`Role key "${roleKey}" already exists`);
+      return;
+    }
+
+    setCreateSaving(true);
+    try {
+      const res = await fetch("/api/system/roles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roleKey,
+          label,
+          description,
+          permissions: normalizePermissionsMap(newPerms),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        throw new Error(json.error || "Failed to create role");
+      }
+
+      const created: Role = {
+        _id: String(json.data?._id ?? roleKey),
+        roleKey: json.data?.roleKey ?? roleKey,
+        label: json.data?.label ?? label,
+        description: json.data?.description ?? description,
+        isSystem: false,
+        permissions: normalizePermissionsMap(json.data?.permissions ?? newPerms),
+      };
+
+      setRoles((prev) => [...prev, created].sort((a, b) => {
+        if (a.isSystem !== b.isSystem) return a.isSystem ? -1 : 1;
+        return a.label.localeCompare(b.label);
+      }));
+      setCreateOpen(false);
+      messageApi.success(`Role "${created.label}" created`);
+      openDrawer(created);
+    } catch (err) {
+      messageApi.error(err instanceof Error ? err.message : "Failed to create role");
+    } finally {
+      setCreateSaving(false);
+    }
+  };
+
+  const isDirty =
+    Boolean(viewingRole && viewPerms) &&
+    !permissionsEqual(viewPerms!, normalizePermissionsMap(viewingRole!.permissions));
+
+  const canManageRoles = canEditRoles || canCreateRoles;
+
+  const deleteRole = (role: Role) => {
+    if (!canManageRoles || !isRoleDeletable(role)) return;
+
+    Modal.confirm({
+      title: `Delete role "${role.label}"?`,
+      content:
+        "This role will be removed permanently. Reassign any users on this role before deleting.",
+      okText: "Delete role",
+      okType: "danger",
+      cancelText: "Cancel",
+      onOk: async () => {
+        setDeletingRoleKey(role.roleKey);
+        try {
+          const res = await fetch(`/api/system/roles/${encodeURIComponent(role.roleKey)}`, {
+            method: "DELETE",
+          });
+          const json = await res.json();
+          if (!res.ok || json.error) {
+            throw new Error(json.error || "Failed to delete role");
+          }
+
+          setRoles((prev) => prev.filter((r) => r.roleKey !== role.roleKey));
+          if (viewingRole?.roleKey === role.roleKey) {
+            setDrawerOpen(false);
+            setViewingRole(null);
+            setViewPerms(null);
+          }
+          messageApi.success(`Role "${role.label}" deleted`);
+        } catch (err) {
+          messageApi.error(err instanceof Error ? err.message : "Failed to delete role");
+          throw err;
+        } finally {
+          setDeletingRoleKey(null);
+        }
+      },
     });
-    return total;
   };
 
   return (
@@ -168,8 +449,13 @@ const UserManagement = () => {
             <span className="font-semibold text-sm">Roles &amp; Permissions</span>
           </div>
           <p className="text-zinc-500 text-sm users-roles-section__hint">
-            {roles.length} roles defined — click any card to view permissions.
+            {roles.length} roles defined — click any card to {canEditRoles ? "edit" : "view"} permissions.
           </p>
+          {canCreateRoles ? (
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateRole}>
+              Create role
+            </Button>
+          ) : null}
         </div>
         {rolesLoading ? (
           <div className="flex items-center justify-center py-16"><Spin size="large" /></div>
@@ -178,7 +464,9 @@ const UserManagement = () => {
             <div className="grid grid-3" style={{ gap: 16 }}>
               {roles.map((role) => {
                 const color = getRoleColor(role.roleKey);
-                const permCount = countPerms(role.permissions);
+                const permCount = countGrantedPermissions(normalizePermissionsMap(role.permissions));
+                const deletable = canManageRoles && isRoleDeletable(role);
+                const isDeleting = deletingRoleKey === role.roleKey;
                 return (
                   <div
                     key={role.roleKey}
@@ -199,20 +487,38 @@ const UserManagement = () => {
                           <div className="text-[10px] text-zinc-400 font-mono uppercase mt-0.5 tracking-wider" style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--fg-muted)", marginTop: 2, textTransform: "uppercase" }}>{role.roleKey}</div>
                         </div>
                       </div>
-                      <Tooltip title="View permissions">
-                        <span style={{ display: "inline-flex", lineHeight: 1, color, fontSize: 14, opacity: 0.85 }}>
-                          <EyeOutlined />
-                        </span>
-                      </Tooltip>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        {deletable ? (
+                          <Tooltip title="Delete role">
+                            <Button
+                              type="text"
+                              size="small"
+                              danger
+                              icon={<DeleteOutlined />}
+                              loading={isDeleting}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteRole(role);
+                              }}
+                              aria-label={`Delete ${role.label}`}
+                            />
+                          </Tooltip>
+                        ) : null}
+                        <Tooltip title="View permissions">
+                          <span style={{ display: "inline-flex", lineHeight: 1, color, fontSize: 14, opacity: 0.85 }}>
+                            <EyeOutlined />
+                          </span>
+                        </Tooltip>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-zinc-100" style={{ display: "flex", justifyContent: "space-between", paddingTop: 12, marginTop: 12, borderTop: "1px solid var(--border)" }}>
+                    <div className="flex items-center justify-between pt-3 border-t border-zinc-100" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 12, marginTop: 12, borderTop: "1px solid var(--border)" }}>
                       <div className="text-[11px] text-zinc-400" style={{ fontSize: 11, color: "var(--fg-muted)" }}>
                         <span className="font-bold text-zinc-700" style={{ fontWeight: 700, color: "var(--fg)" }}>{permCount}</span> permissions granted
                       </div>
                       {role.isSystem ? (
-                        <Tag style={{ fontSize: 10, lineHeight: "16px", borderRadius: 4 }} color="blue">System</Tag>
+                        <Tag style={{ fontSize: 10, lineHeight: "16px", borderRadius: 4, margin: 0 }} color="blue">System</Tag>
                       ) : (
-                        <Tag style={{ fontSize: 10, lineHeight: "16px", borderRadius: 4 }} color="default">Custom</Tag>
+                        <Tag style={{ fontSize: 10, lineHeight: "16px", borderRadius: 4, margin: 0 }} color="default">Custom</Tag>
                       )}
                     </div>
                   </div>
@@ -242,10 +548,39 @@ const UserManagement = () => {
         }
         open={drawerOpen}
         onClose={closeDrawer}
-        width={640}
+        width={680}
         footer={
-          <div className="flex justify-end py-1" style={{ display: "flex", justifyContent: "flex-end", padding: "4px 0" }}>
-            <Button onClick={closeDrawer} style={{ fontWeight: 500 }}>Close</Button>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0" }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              {canEditRoles && isDirty && (
+                <Button onClick={resetPermissions} disabled={saving}>
+                  Reset
+                </Button>
+              )}
+              {viewingRole && canManageRoles && isRoleDeletable(viewingRole) ? (
+                <Tooltip title="Delete role">
+                  <Button
+                    type="text"
+                    danger
+                    icon={<DeleteOutlined />}
+                    loading={deletingRoleKey === viewingRole.roleKey}
+                    disabled={saving}
+                    onClick={() => deleteRole(viewingRole)}
+                    aria-label={`Delete ${viewingRole.label}`}
+                  />
+                </Tooltip>
+              ) : null}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {canEditRoles && (
+                <Button type="primary" onClick={savePermissions} loading={saving} disabled={!isDirty}>
+                  Save changes
+                </Button>
+              )}
+              <Button onClick={closeDrawer} style={{ fontWeight: 500 }}>
+                Close
+              </Button>
+            </div>
           </div>
         }
       >
@@ -259,50 +594,127 @@ const UserManagement = () => {
               <Tag color={viewingRole.isSystem ? "blue" : "default"} style={{ alignSelf: "flex-start" }}>
                 {viewingRole.isSystem ? "System role" : "Custom role"}
               </Tag>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 mb-3" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <LockOutlined style={{ color: "var(--fg-muted)", fontSize: 14 }} />
-                <span className="font-bold text-zinc-800 text-sm" style={{ fontWeight: 700, fontSize: 14 }}>Permission matrix</span>
-                <span style={{ fontSize: 11, color: "var(--fg-muted)", fontWeight: 500 }}>(read-only)</span>
-              </div>
-
-              {MODULE_GROUPS.map((group) => (
-                <div key={group.label} style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-muted)", textTransform: "uppercase", letterSpacing: "0.1em", padding: "0 4px", marginBottom: 4, marginTop: 8 }}>{group.label}</div>
-                  {(group.keys as unknown as ModuleKey[]).map((modKey) => {
-                    const perm = viewPerms[modKey] ?? { view: false, add: false, edit: false, approve: false, export: false };
-                    const hasAny = PERM_ACTIONS.some((a) => perm[a]);
-                    return (
-                      <div
-                        key={modKey}
-                        style={{ display: "grid", gridTemplateColumns: "1fr 40px 40px 40px 40px 40px", alignItems: "center", gap: 0, padding: "8px 4px", borderRadius: 8, opacity: hasAny ? 1 : 0.5 }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <Tooltip title={hasAny ? "Has permissions" : "No permissions"}>
-                            {hasAny
-                              ? <CheckCircleFilled style={{ color: "#16a34a", fontSize: 12 }} />
-                              : <MinusCircleFilled style={{ color: "#d4d4d8", fontSize: 12 }} />
-                            }
-                          </Tooltip>
-                          <span style={{ fontSize: 12.5, color: "var(--fg)", fontWeight: 500 }}>{MODULE_LABELS[modKey]}</span>
-                        </div>
-                        {PERM_ACTIONS.map((act) => (
-                          <div key={act} style={{ display: "flex", justifyContent: "center" }}>
-                            <Checkbox checked={perm[act]} disabled />
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
-                  <Divider style={{ margin: "8px 0", borderColor: "var(--border)" }} />
+              {viewingRole.description ? (
+                <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.5 }}>
+                  {viewingRole.description}
                 </div>
-              ))}
-
+              ) : null}
             </div>
+
+            {canEditRoles ? (
+              <div style={{ fontSize: 11, color: isDirty ? "#b45309" : "var(--fg-muted)", fontWeight: 600 }}>
+                {isDirty ? "Unsaved permission changes" : "Permissions are editable"}
+              </div>
+            ) : null}
+
+            <PermissionMatrix
+              perms={viewPerms}
+              canEdit={canEditRoles}
+              saving={saving}
+              onToggle={onTogglePermission}
+              readOnlyHint={canEditRoles ? undefined : "(read-only)"}
+            />
           </div>
         )}
+      </Drawer>
+
+      <Drawer
+        title={
+          <div className="flex items-center gap-3" style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm"
+              style={{ background: "#374d95", width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "white" }}
+            >
+              <PlusOutlined />
+            </div>
+            <div>
+              <div className="font-bold text-zinc-900 text-base leading-none" style={{ fontWeight: 700, fontSize: 16 }}>
+                Create new role
+              </div>
+              <div className="text-[11px] text-zinc-400 font-mono mt-0.5" style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--fg-muted)", marginTop: 2 }}>
+                Define role details and assign permissions
+              </div>
+            </div>
+          </div>
+        }
+        open={createOpen}
+        onClose={closeCreateRole}
+        width={680}
+        destroyOnClose
+        footer={
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "4px 0" }}>
+            <Button onClick={closeCreateRole} disabled={createSaving} style={{ fontWeight: 500 }}>
+              Cancel
+            </Button>
+            <Button type="primary" onClick={() => void createRole()} loading={createSaving}>
+              Create role
+            </Button>
+          </div>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+              padding: 16,
+              background: "var(--bg-sunken)",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", textTransform: "uppercase" }}>
+                Role name *
+              </label>
+              <Input
+                value={newLabel}
+                onChange={(e) => handleNewLabelChange(e.target.value)}
+                placeholder="e.g. Field Sales Lead"
+                disabled={createSaving}
+              />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", textTransform: "uppercase" }}>
+                Role key *
+              </label>
+              <Input
+                value={newRoleKey}
+                onChange={(e) => setNewRoleKey(e.target.value.toLowerCase())}
+                placeholder="field-sales-lead"
+                disabled={createSaving}
+              />
+              <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>
+                Lowercase ID used when assigning users to this role.
+              </span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", textTransform: "uppercase" }}>
+                Description
+              </label>
+              <Input.TextArea
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                placeholder="What this role can do in the organization"
+                rows={3}
+                disabled={createSaving}
+              />
+            </div>
+          </div>
+
+          <PermissionMatrix
+            perms={newPerms}
+            canEdit
+            saving={createSaving}
+            onToggle={onToggleNewPermission}
+          />
+
+          <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+            <strong>{countGrantedPermissions(newPerms)}</strong> permissions selected.
+            You can adjust permissions later from the role card.
+          </div>
+        </div>
       </Drawer>
     </div>
   );

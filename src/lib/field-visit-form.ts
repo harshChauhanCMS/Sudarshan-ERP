@@ -1,5 +1,6 @@
 import type { CreateFieldVisitPayload, FieldVisitType } from "@/lib/field-visit-types";
 import { FIELD_VISIT_TYPES } from "@/lib/field-visit-types";
+import { fieldVisitDateYmdIST } from "@/lib/field-visit-dates";
 
 export const FIELD_VISIT_COMPANY_OPTIONS = [
   { value: "smi", label: "Sudarshan Minerals & Industries (Udaipur)" },
@@ -17,7 +18,7 @@ export function defaultFieldVisitForm(): CreateFieldVisitPayload {
   return {
     assignedEmployeeId: "",
     company: "smi",
-    visitDate: new Date().toISOString().slice(0, 10),
+    visitDate: fieldVisitDateYmdIST(),
     visitType: "Customer",
     partyName: "",
     locationText: "",

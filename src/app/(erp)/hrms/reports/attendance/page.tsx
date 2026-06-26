@@ -119,7 +119,7 @@ export default function AttendanceOverviewPage() {
   ];
 
   const tableProps = {
-    bordered: true as const,
+    bordered: false as const,
     size: "middle" as const,
     className: "attendance-report-table",
   };
@@ -161,7 +161,6 @@ export default function AttendanceOverviewPage() {
         onClear={r.handleClearFilters}
         search={r.search}
         setSearch={r.setSearch}
-        splitApplyRow
       />
 
       {!r.loading && r.kpi?.totalEmployees === 0 ? (

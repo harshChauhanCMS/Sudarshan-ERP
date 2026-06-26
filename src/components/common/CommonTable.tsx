@@ -39,7 +39,7 @@ export default function CommonTable<RecordType extends AnyObject>({
   rowKey,
   pagination,
   size = "middle",
-  bordered = true,
+  bordered = false,
   scroll,
   className,
   ...rest

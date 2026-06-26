@@ -4,16 +4,24 @@
 
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button as AntButton } from "antd";
-import { MoreOutlined } from "@ant-design/icons";
+import {
+  AlertOutlined,
+  AppstoreOutlined,
+  CarOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  DollarOutlined,
+  SettingOutlined,
+  WarningOutlined,
+} from "@ant-design/icons";
 import CommonTable from "@/components/common/CommonTable";
+import StatCard, { ErpStatGrid } from "@/components/common/StatCard";
 import { ERP_TABLE_PROPS, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
+import { ViewEditActions } from "@/components/common/TableActionIcons";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
-import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
-import { useEntityMutation } from "@/hooks/use-entity-mutation";
-import { formatDisplayDate } from "@/lib/id-generators";
+import { buildInventoryItemDetailView } from "@/lib/inventory-mobile";
 import { DashHead, SectionH } from "./dashboards";
 
 /* ============================================================
@@ -27,25 +35,13 @@ import { DashHead, SectionH } from "./dashboards";
 const SparePartsInventory = () => {
   const router = useRouter();
   const DATA = useDATA();
-  const { update, saving, error, clearError } = useEntityMutation();
-  const [issueOpen, setIssueOpen] = useState(null);
-  const [issueQty, setIssueQty] = useState("1");
+  const [viewItem, setViewItem] = useState(null);
   const [tab, setTab] = useState("all");
-  const issueSpare = async () => {
-    if (!issueOpen) return;
-    const qty = parseInt(issueQty, 10) || 0;
-    const newStock = Math.max(0, issueOpen.stock - qty);
-    let status = "ok";
-    if (newStock === 0) status = "critical";
-    else if (newStock <= issueOpen.reorder) status = "low";
-    await update("spareParts", issueOpen.code, {
-      stock: newStock,
-      status,
-      lastIssued: formatDisplayDate(),
-    }, "code");
-    setIssueOpen(null);
-    setIssueQty("1");
-  };
+
+  const viewDetail = useMemo(() => {
+    if (!viewItem) return null;
+    return buildInventoryItemDetailView("spare-part", viewItem.code, DATA);
+  }, [viewItem, DATA]);
 
   const filtered = tab === "all" ? DATA.SPARE_PARTS
     : tab === "low" ? DATA.SPARE_PARTS.filter(p => p.status === "low" || p.status === "critical")
@@ -142,15 +138,13 @@ const SparePartsInventory = () => {
       {
         title: "Actions",
         key: "actions",
-        width: 110,
+        width: 88,
         align: "center",
         render: (_, p) => (
-          <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "center" }}>
-            <AntButton type="link" size="small" onClick={() => setIssueOpen(p)}>
-              Issue
-            </AntButton>
-            <AntButton type="text" size="small" icon={<MoreOutlined />} aria-label="More actions" />
-          </div>
+          <ViewEditActions
+            onView={() => setViewItem(p)}
+            editHref={`/inventory/spare-parts/add?code=${encodeURIComponent(p.code)}`}
+          />
         ),
       },
     ],
@@ -162,15 +156,38 @@ const SparePartsInventory = () => {
       <DashHead title="Spare Parts Inventory" sub="Mechanical, electrical & instrumentation spares · reorder & breakdown alerts">
         <Btn size="sm" icon="filter">Filters</Btn>
         <Btn size="sm" icon="download">Export</Btn>
-        <Btn variant="primary" size="sm" icon="plus" onClick={() => { clearError(); router.push("/inventory/spare-parts/add"); }}>Add spare part</Btn>
+        <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/inventory/spare-parts/add")}>Add spare part</Btn>
       </DashHead>
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="kpi"><div className="kpi-label"><Icon name="wrench" size={13} className="ico" />Total SKUs</div><div className="kpi-value tabular">{DATA.SPARE_PARTS.length}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{criticalSKUs} marked critical</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="money" size={13} className="ico" />Stock value</div><div className="kpi-value">{totalValue > 0 ? fmtINR(totalValue) : "—"}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{DATA.SPARE_PARTS.length} SKUs</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="alert" size={13} className="ico" />Low stock</div><div className="kpi-value" style={{ color: "var(--warning)" }}>{lowCount}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Reorder recommended</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="alert" size={13} className="ico" />Critical / out</div><div className="kpi-value" style={{ color: "var(--danger)" }}>{critCount}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{criticalSKUs} critical SKUs</div></div>
-      </div>
+      <ErpStatGrid cols={4}>
+        <StatCard
+          icon={SettingOutlined}
+          label="Total SKUs"
+          value={DATA.SPARE_PARTS.length}
+          hint={`${criticalSKUs} marked critical`}
+        />
+        <StatCard
+          icon={DollarOutlined}
+          label="Stock value"
+          value={totalValue > 0 ? fmtINR(totalValue) : "—"}
+          hint={`${DATA.SPARE_PARTS.length} SKUs`}
+          hintTone="positive"
+        />
+        <StatCard
+          icon={WarningOutlined}
+          label="Low stock"
+          value={lowCount}
+          hint="Reorder recommended"
+          hintTone="warning"
+        />
+        <StatCard
+          icon={AlertOutlined}
+          label="Critical / out"
+          value={critCount}
+          hint={`${criticalSKUs} critical SKUs`}
+          hintTone="negative"
+        />
+      </ErpStatGrid>
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center" }}>
@@ -204,11 +221,56 @@ const SparePartsInventory = () => {
         </div>
       </div>
 
-      <EntityFormModal open={!!issueOpen} onClose={() => setIssueOpen(null)} title={issueOpen ? `Issue ${issueOpen.name}` : ""} sub={issueOpen ? `In stock: ${issueOpen.stock} ${issueOpen.unit}` : ""} submitLabel="Issue & update stock" saving={saving} error={error} onSubmit={issueSpare}>
-        <FormGrid>
-          <FormField label="Quantity"><FormInput value={issueQty} onChange={setIssueQty} /></FormField>
-        </FormGrid>
-      </EntityFormModal>
+      <Modal
+        open={!!viewItem}
+        onClose={() => setViewItem(null)}
+        title={viewDetail?.name ?? viewItem?.name ?? "Spare part"}
+        sub={viewDetail ? `${viewDetail.code} · ${viewDetail.statusLabel}` : viewItem?.code}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setViewItem(null)}>
+              Close
+            </Btn>
+            {viewItem ? (
+              <Btn
+                variant="primary"
+                size="sm"
+                icon="edit"
+                onClick={() => {
+                  router.push(
+                    `/inventory/spare-parts/add?code=${encodeURIComponent(viewItem.code)}`
+                  );
+                  setViewItem(null);
+                }}
+              >
+                Edit
+              </Btn>
+            ) : null}
+          </>
+        }
+      >
+        {viewDetail ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(120px, 38%) 1fr",
+              gap: "10px 16px",
+              fontSize: 13,
+            }}
+          >
+            {viewDetail.fields.map((field) => (
+              <React.Fragment key={field.label}>
+                <span className="muted">{field.label}</span>
+                <span>{field.value}</span>
+              </React.Fragment>
+            ))}
+          </div>
+        ) : (
+          <p className="muted" style={{ margin: 0 }}>
+            Spare part details unavailable.
+          </p>
+        )}
+      </Modal>
     </>
   );
 };

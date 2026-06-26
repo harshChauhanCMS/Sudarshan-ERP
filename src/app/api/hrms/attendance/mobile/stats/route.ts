@@ -28,6 +28,39 @@ function msToHours(ms: number) {
   return Math.round((ms / 36e5) * 100) / 100;
 }
 
+function sumWorkedMsForPunches(
+  dayPunches: Array<{ punchType: string; punchedAt: Date }>,
+): number {
+  const sorted = [...dayPunches].sort(
+    (a, b) => new Date(a.punchedAt).getTime() - new Date(b.punchedAt).getTime(),
+  );
+  let total = 0;
+  let openIn: Date | null = null;
+
+  for (const punch of sorted) {
+    const at = new Date(punch.punchedAt);
+    if (punch.punchType === "in") {
+      openIn = at;
+    } else if (punch.punchType === "out" && openIn) {
+      total += Math.max(0, at.getTime() - openIn.getTime());
+      openIn = null;
+    }
+  }
+
+  return total;
+}
+
+function statusFromLastPunch(
+  dayPunches: Array<{ punchType: string; punchedAt: Date }>,
+): string {
+  if (!dayPunches.length) return "Absent";
+  const last = [...dayPunches].sort(
+    (a, b) => new Date(b.punchedAt).getTime() - new Date(a.punchedAt).getTime(),
+  )[0];
+  if (last.punchType === "in") return "In";
+  return "Out";
+}
+
 export async function GET(request: Request) {
   const user = await getUserFromRequest(request);
   if (!user) return fail("Unauthorized", 401);
@@ -51,8 +84,9 @@ export async function GET(request: Request) {
     );
 
     const resolvedEmployeeId = String(employee.employeeId);
+    const email = user.email.trim().toLowerCase();
     const punches = await AttendancePunch.find({
-      employeeId: resolvedEmployeeId,
+      $or: [{ employeeId: resolvedEmployeeId }, { userEmail: email }],
       punchedAt: { $gte: monthStart, $lte: monthEnd },
     })
       .sort({ punchedAt: 1 })
@@ -76,11 +110,20 @@ export async function GET(request: Request) {
     }
 
     const todayKey = dayKey(now);
+    const todayPunches = punches.filter((p) => dayKey(new Date(p.punchedAt)) === todayKey);
     const todayAgg = byDay.get(todayKey);
-    const todayWorkedMs =
-      todayAgg?.inAt && todayAgg?.outAt
-        ? Math.max(0, todayAgg.outAt.getTime() - todayAgg.inAt.getTime())
-        : 0;
+    const todayWorkedMs = sumWorkedMsForPunches(
+      todayPunches.map((p) => ({
+        punchType: String(p.punchType),
+        punchedAt: new Date(p.punchedAt),
+      })),
+    );
+    const todayStatus = statusFromLastPunch(
+      todayPunches.map((p) => ({
+        punchType: String(p.punchType),
+        punchedAt: new Date(p.punchedAt),
+      })),
+    );
 
     let daysPresent = 0;
     let totalWorkedHours = 0;
@@ -97,10 +140,13 @@ export async function GET(request: Request) {
     );
 
     for (const row of sortedDays) {
-      const workedMs =
-        row.inAt && row.outAt
-          ? Math.max(0, row.outAt.getTime() - row.inAt.getTime())
-          : 0;
+      const dayPunches = punches.filter((p) => dayKey(new Date(p.punchedAt)) === row.day);
+      const workedMs = sumWorkedMsForPunches(
+        dayPunches.map((p) => ({
+          punchType: String(p.punchType),
+          punchedAt: new Date(p.punchedAt),
+        })),
+      );
       const hours = workedMs ? msToHours(workedMs) : 0;
       if (row.inAt) daysPresent += 1;
       totalWorkedHours += hours;
@@ -111,7 +157,12 @@ export async function GET(request: Request) {
           inAt: row.inAt?.toISOString() ?? null,
           outAt: row.outAt?.toISOString() ?? null,
           workedHours: hours,
-          status: row.inAt && !row.outAt ? "In" : row.inAt ? "Present" : "—",
+          status: statusFromLastPunch(
+            dayPunches.map((p) => ({
+              punchType: String(p.punchType),
+              punchedAt: new Date(p.punchedAt),
+            })),
+          ),
         });
       }
     }
@@ -120,6 +171,37 @@ export async function GET(request: Request) {
       month: "long",
       year: "numeric",
     });
+
+    const latestPunchIn = [...todayPunches]
+      .filter((p) => p.punchType === "in")
+      .sort(
+        (a, b) =>
+          new Date(b.punchedAt).getTime() - new Date(a.punchedAt).getTime(),
+      )[0];
+    const latestPunchOut = [...todayPunches]
+      .filter((p) => p.punchType === "out")
+      .sort(
+        (a, b) =>
+          new Date(b.punchedAt).getTime() - new Date(a.punchedAt).getTime(),
+      )[0];
+    const punchInLoc = latestPunchIn?.location as
+      | {
+          address?: string;
+          city?: string;
+          state?: string;
+          lat?: number;
+          lng?: number;
+        }
+      | undefined;
+    const punchOutLoc = latestPunchOut?.location as
+      | {
+          address?: string;
+          city?: string;
+          state?: string;
+          lat?: number;
+          lng?: number;
+        }
+      | undefined;
 
     return ok({
       employee: {
@@ -135,12 +217,25 @@ export async function GET(request: Request) {
         inAt: todayAgg?.inAt?.toISOString() ?? null,
         outAt: todayAgg?.outAt?.toISOString() ?? null,
         workedHours: todayWorkedMs ? msToHours(todayWorkedMs) : 0,
-        status:
-          todayAgg?.inAt && !todayAgg?.outAt
-            ? "In"
-            : todayAgg?.inAt
-              ? "Present"
-              : "Absent",
+        status: todayStatus,
+        punchInLocation: punchInLoc
+          ? {
+              address: punchInLoc.address,
+              city: punchInLoc.city,
+              state: punchInLoc.state,
+              lat: punchInLoc.lat,
+              lng: punchInLoc.lng,
+            }
+          : null,
+        punchOutLocation: punchOutLoc
+          ? {
+              address: punchOutLoc.address,
+              city: punchOutLoc.city,
+              state: punchOutLoc.state,
+              lat: punchOutLoc.lat,
+              lng: punchOutLoc.lng,
+            }
+          : null,
       },
       month: {
         label: monthLabel,

@@ -225,18 +225,6 @@ export function DispatchPlanForm({
     }
   };
 
-  if (!isEdit && !orders.length) {
-    return (
-      <div className="card dispatch-plan-form-card dispatch-plan-form-card--full">
-        <div className="dispatch-plan-form-card__body">
-          <p style={{ margin: 0, color: "var(--fg-muted)", fontSize: 14 }}>
-            No orders are awaiting dispatch planning right now.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="card dispatch-plan-form-card dispatch-plan-form-card--full">
       <div className="dispatch-plan-form-card__head">

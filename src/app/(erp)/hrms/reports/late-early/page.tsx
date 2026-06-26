@@ -10,7 +10,6 @@ import {
 import { Button, DatePicker, InputNumber, Select, Tag, Progress, message } from "antd";
 import {
   DownloadOutlined,
-  FilterOutlined,
   ClockCircleOutlined,
   TeamOutlined,
   BankOutlined,
@@ -36,7 +35,8 @@ import {
   type LateEarlyKpi,
   type LateEarlyUnitRow,
 } from "@/lib/hrms-late-early-report";
-import FilterSearchField from "@/components/hrms/FilterSearchField";
+import PageFilterDrawer from "@/components/common/PageFilterDrawer";
+import PageFilterToolbar from "@/components/common/PageFilterToolbar";
 import { filterBySearch } from "@/lib/filter-search";
 import { downloadCsv } from "@/lib/download-csv";
 
@@ -153,6 +153,7 @@ export default function LateEarlyReportPage() {
   const [minMinutes, setMinMinutes] = useState(5);
   const [groupBy, setGroupBy] = useState<GroupBy>("employee");
   const [search, setSearch] = useState("");
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [kpi, setKpi] = useState<LateEarlyKpi>(EMPTY_KPI);
   const [employees, setEmployees] = useState<LateEarlyEmployeeRow[]>([]);
@@ -293,7 +294,7 @@ export default function LateEarlyReportPage() {
   );
 
   const tableProps = {
-    bordered: true as const,
+    bordered: false as const,
     size: "middle" as const,
     className: "attendance-report-table",
   };
@@ -526,105 +527,99 @@ export default function LateEarlyReportPage() {
         />
       </div>
 
-      <div className="arf-panel ap-filters-panel">
-        <div className="arf-head">
-          <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
-          <span className="arf-head-title">Filters</span>
-        </div>
+      <PageFilterToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search employee, ID, department, shift…"
+        onFilterClick={() => setFilterDrawerOpen(true)}
+        activeFilterCount={
+          (company !== "all" ? 1 : 0) +
+          (dept !== "all" ? 1 : 0) +
+          (shift !== "all" ? 1 : 0) +
+          (reportType !== "both" ? 1 : 0) +
+          (minMinutes !== 5 ? 1 : 0)
+        }
+      />
 
-        <div className="arf-body">
-          <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
-            <FilterSearchField
-              value={search}
-              onChange={setSearch}
-              placeholder="Search employee, ID, department, shift…"
-            />
-
-            <div className="arf-item">
-              <span className="arf-label">Company / unit</span>
-              <Select
-                className="w-full"
-                value={company}
-                onChange={setCompany}
-                options={unitOptions}
-              />
-            </div>
-            <div className="arf-item">
-              <span className="arf-label">Department</span>
-              <Select
-                className="w-full"
-                value={dept}
-                onChange={setDept}
-                options={[
-                  { value: "all", label: "All departments" },
-                  ...filterDepartments.map((d) => ({ value: d, label: d })),
-                ]}
-              />
-            </div>
-            <div className="arf-item">
-              <span className="arf-label">Shift</span>
-              <Select
-                className="w-full"
-                value={shift}
-                onChange={setShift}
-                options={shiftOptions}
-              />
-            </div>
-            <div className="arf-item">
-              <span className="arf-label">Report type</span>
-              <Select
-                className="w-full"
-                value={reportType}
-                onChange={setReportType}
-                options={[
-                  { value: "both", label: "Late + Early going" },
-                  { value: "late", label: "Late coming only" },
-                  { value: "early", label: "Early going only" },
-                ]}
-              />
-            </div>
-            <div className="arf-item arf-item--compact">
-              <span className="arf-label">From</span>
-              <DatePicker
-                className="w-full"
-                value={range[0]}
-                onChange={(d) => d && setRange([d, range[1]])}
-                allowClear={false}
-              />
-            </div>
-            <div className="arf-item arf-item--compact">
-              <span className="arf-label">To</span>
-              <DatePicker
-                className="w-full"
-                value={range[1]}
-                onChange={(d) => d && setRange([range[0], d])}
-                allowClear={false}
-              />
-            </div>
-            <div className="arf-item arf-item--compact">
-              <span className="arf-label">Min late minutes</span>
-              <InputNumber
-                className="w-full"
-                min={0}
-                value={minMinutes}
-                onChange={(v) => setMinMinutes(v ?? 0)}
-              />
-            </div>
-            <div className="ap-filters-row-break" aria-hidden="true" />
-            <div className="ap-filters-spacer" aria-hidden="true" />
-            <div className="arf-item ap-filters-actions ap-filters-actions--multi">
-              <Button
-                type="primary"
-                icon={<FilterOutlined />}
-                onClick={handleApplyFilters}
-              >
-                Apply filters
-              </Button>
-              <Button onClick={handleClearFilters}>Clear filters</Button>
-            </div>
-          </div>
+      <PageFilterDrawer
+        open={filterDrawerOpen}
+        onClose={() => setFilterDrawerOpen(false)}
+        onApply={handleApplyFilters}
+        onClear={handleClearFilters}
+        loading={loading}
+        width={400}
+      >
+        <div className="arf-item">
+          <span className="arf-label">Company / unit</span>
+          <Select
+            className="w-full"
+            value={company}
+            onChange={setCompany}
+            options={unitOptions}
+          />
         </div>
-      </div>
+        <div className="arf-item">
+          <span className="arf-label">Department</span>
+          <Select
+            className="w-full"
+            value={dept}
+            onChange={setDept}
+            options={[
+              { value: "all", label: "All departments" },
+              ...filterDepartments.map((d) => ({ value: d, label: d })),
+            ]}
+          />
+        </div>
+        <div className="arf-item">
+          <span className="arf-label">Shift</span>
+          <Select
+            className="w-full"
+            value={shift}
+            onChange={setShift}
+            options={shiftOptions}
+          />
+        </div>
+        <div className="arf-item">
+          <span className="arf-label">Report type</span>
+          <Select
+            className="w-full"
+            value={reportType}
+            onChange={setReportType}
+            options={[
+              { value: "both", label: "Late + Early going" },
+              { value: "late", label: "Late coming only" },
+              { value: "early", label: "Early going only" },
+            ]}
+          />
+        </div>
+        <div className="arf-item">
+          <span className="arf-label">From</span>
+          <DatePicker
+            className="w-full"
+            value={range[0]}
+            onChange={(d) => d && setRange([d, range[1]])}
+            allowClear={false}
+          />
+        </div>
+        <div className="arf-item">
+          <span className="arf-label">To</span>
+          <DatePicker
+            className="w-full"
+            value={range[1]}
+            onChange={(d) => d && setRange([range[0], d])}
+            allowClear={false}
+          />
+        </div>
+        <div className="arf-item">
+          <span className="arf-label">Min late minutes</span>
+          <InputNumber
+            className="w-full"
+            min={0}
+            value={minMinutes}
+            onChange={(v) => setMinMinutes(v ?? 0)}
+          />
+        </div>
+      </PageFilterDrawer>
 
       <ReportSection title="Group by">
         <div className="attendance-report-config__block">

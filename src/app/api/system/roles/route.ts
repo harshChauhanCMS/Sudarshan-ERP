@@ -7,6 +7,7 @@ import {
   isAdminOrOwner,
 } from "@/lib/api-auth";
 import { pickAllowedFields, ROLE_WRITABLE_FIELDS } from "@/lib/field-allowlists";
+import { normalizePermissionsMap } from "@/lib/rbac-permissions";
 
 async function seedDefaultRoles() {
   const count = await Role.countDocuments();
@@ -16,8 +17,12 @@ async function seedDefaultRoles() {
 }
 
 export async function GET() {
-  const { error } = await requireSession();
+  const { user, error } = await requireSession();
   if (error) return error;
+  if (!isAdminOrOwner(user.role)) {
+    const permErr = requirePermission(user, "user_management", "view");
+    if (permErr) return permErr;
+  }
 
   try {
     await connectDB();
@@ -52,6 +57,9 @@ export async function POST(req: Request) {
     }
 
     const safe = pickAllowedFields(payload, [...ROLE_WRITABLE_FIELDS, "roleKey"]);
+    if (safe.permissions != null) {
+      safe.permissions = normalizePermissionsMap(safe.permissions);
+    }
     const role = await Role.create({
       ...safe,
       roleKey: String(safe.roleKey).toLowerCase(),

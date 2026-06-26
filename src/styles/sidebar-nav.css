@@ -1,0 +1,442 @@
+/* Sidebar nav + footer — imported from shell.tsx (not cached with old app.css) */
+
+.sidebar .sb-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar .sb-brand-text {
+  order: 1;
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar .sb-brand-marks,
+.sidebar .sb-brand > .sb-brand-mark {
+  order: 2;
+  margin-left: auto;
+}
+
+.sidebar .sb-brand-switch {
+  order: 3;
+  flex-shrink: 0;
+}
+
+.sidebar .sb-collapse-all-btn .sb-collapse-all-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  opacity: 0.72;
+  transition: opacity 0.15s ease;
+}
+
+.sidebar .sb-collapse-all-btn:hover .sb-collapse-all-icon {
+  opacity: 1;
+}
+
+.sidebar button.sb-item {
+  padding: 7px 10px !important;
+  background-color: var(--bg-elev) !important;
+  transition:
+    background-color 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sidebar button.sb-item:hover {
+  background-color: var(--primary-soft) !important;
+  color: var(--primary) !important;
+}
+
+.sidebar button.sb-item.active {
+  background-color: var(--primary-soft) !important;
+  color: var(--primary) !important;
+  font-weight: 600;
+}
+
+.sidebar .sb-item-icon {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 7px !important;
+  background-color: var(--bg-sunken) !important;
+  color: var(--fg-muted) !important;
+  display: grid !important;
+  place-items: center !important;
+  flex-shrink: 0 !important;
+  transform: scale(1) translateZ(0);
+  transition:
+    background-color 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.24s cubic-bezier(0.34, 1.4, 0.64, 1),
+    box-shadow 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sidebar button.sb-item:not(:hover):not(.active) .sb-item-icon svg,
+.sidebar button.sb-item:not(:hover):not(.active) .sb-item-icon .anticon {
+  color: var(--fg-muted);
+}
+
+.sidebar .sb-item-icon--sub {
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px;
+  min-height: 24px;
+}
+
+.sidebar .sb-item-icon svg {
+  display: block;
+  transform: translate(0, 0) scale(1) rotate(0deg);
+  transform-origin: center center;
+}
+
+.sidebar .sb-item-icon .anticon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.sidebar button.sb-item:hover .sb-item-icon svg {
+  animation: sb-icon-hover 0.42s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+}
+
+/* Crown bobs */
+@keyframes sb-icon-crown-bob {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.06);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="crown"] svg {
+  animation: sb-icon-crown-bob 0.5s ease-in-out infinite alternate;
+}
+
+/* Factory chimney pulse */
+@keyframes sb-icon-factory-pulse {
+  0%,
+  100% {
+    transform: translateY(1px) scale(1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.05);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="factory"] svg {
+  animation: sb-icon-factory-pulse 0.48s ease-in-out infinite alternate;
+}
+
+/* Shield guard pulse */
+@keyframes sb-icon-shield-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="shield"] svg {
+  animation: sb-icon-shield-pulse 0.45s ease-in-out infinite alternate;
+}
+
+/* Box / package lift */
+@keyframes sb-icon-lift {
+  0%,
+  100% {
+    transform: translateY(1px) scale(1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.06);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="box"] svg,
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="package"] svg {
+  animation: sb-icon-lift 0.46s ease-in-out infinite alternate;
+}
+
+/* Wrench wiggle */
+@keyframes sb-icon-wrench-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  33% {
+    transform: rotate(-12deg) scale(1.04);
+  }
+  66% {
+    transform: rotate(12deg) scale(1.04);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="wrench"] svg {
+  animation: sb-icon-wrench-wiggle 0.42s ease-in-out infinite alternate;
+}
+
+/* Users wave */
+@keyframes sb-icon-users-wave {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="users"] svg,
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="user"] svg {
+  animation: sb-icon-users-wave 0.44s ease-in-out infinite alternate;
+}
+
+/* Chart bars grow */
+@keyframes sb-icon-chart-rise {
+  0%,
+  100% {
+    transform: translateY(2px) scale(1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.08);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="chart"] svg {
+  animation: sb-icon-chart-rise 0.46s ease-in-out infinite alternate;
+}
+
+/* Map / pin drop bounce */
+@keyframes sb-icon-pin-bounce {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-4px) scale(1.05);
+  }
+  70% {
+    transform: translateY(1px) scale(0.98);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="pin"] svg,
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="map"] svg {
+  animation: sb-icon-pin-bounce 0.52s ease-in-out infinite alternate;
+}
+
+/* Clock tick */
+@keyframes sb-icon-clock-tick {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(14deg) scale(1.05);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="clock"] svg {
+  animation: sb-icon-clock-tick 0.55s ease-in-out infinite alternate;
+  transform-origin: 50% 55%;
+}
+
+/* Calendar flip */
+@keyframes sb-icon-calendar-flip {
+  0%,
+  100% {
+    transform: perspective(40px) rotateX(0deg) scale(1);
+  }
+  50% {
+    transform: perspective(40px) rotateX(18deg) scale(1.05);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="calendar"] svg {
+  animation: sb-icon-calendar-flip 0.5s ease-in-out infinite alternate;
+}
+
+/* Money slide */
+@keyframes sb-icon-money-slide {
+  0%,
+  100% {
+    transform: translateX(0) scale(1);
+  }
+  50% {
+    transform: translateX(3px) scale(1.06);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="money"] svg {
+  animation: sb-icon-money-slide 0.48s ease-in-out infinite alternate;
+}
+
+/* Check draw */
+@keyframes sb-icon-check-draw {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.14);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="check"] svg {
+  animation: sb-icon-check-draw 0.4s ease-in-out infinite alternate;
+}
+
+/* Plus spin */
+@keyframes sb-icon-plus-spin {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  100% {
+    transform: rotate(90deg) scale(1.08);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="plus"] svg {
+  animation: sb-icon-plus-spin 0.35s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+}
+
+/* Invoice / ticket slide */
+@keyframes sb-icon-doc-slide {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  50% {
+    transform: translateX(3px) rotate(4deg);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="invoice"] svg,
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="ticket"] svg,
+.sidebar button.sb-item:hover .sb-item-icon[data-icon="layout"] svg {
+  animation: sb-icon-doc-slide 0.48s ease-in-out infinite alternate;
+}
+
+/* Default pop for any other icon */
+@keyframes sb-icon-hover {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1.1);
+  }
+}
+
+.sidebar button.sb-item:hover .sb-item-icon {
+  background-color: var(--primary) !important;
+  color: var(--primary-fg) !important;
+  transform: scale(1.1);
+  box-shadow: 0 4px 14px rgba(55, 77, 149, 0.32);
+}
+
+.sidebar button.sb-item.active .sb-item-icon {
+  background-color: var(--primary) !important;
+  color: var(--primary-fg) !important;
+  transform: scale(1.04);
+  box-shadow: 0 2px 8px rgba(55, 77, 149, 0.22);
+}
+
+.sidebar button.sb-item.active:hover .sb-item-icon {
+  transform: scale(1.1);
+  box-shadow: 0 4px 14px rgba(55, 77, 149, 0.32);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar button.sb-item,
+  .sidebar .sb-item-icon,
+  .sidebar .sb-item-icon svg,
+  .sidebar .sb-foot-btn {
+    transition: none !important;
+  }
+
+  .sidebar button.sb-item:hover .sb-item-icon,
+  .sidebar button.sb-item.active .sb-item-icon,
+  .sidebar button.sb-item.active:hover .sb-item-icon {
+    transform: none;
+  }
+
+  .sidebar button.sb-item:hover .sb-item-icon svg {
+    animation: none !important;
+    transform: none;
+  }
+}
+
+.sidebar .sb-foot {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px;
+  background-color: var(--bg-elev) !important;
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+}
+
+.sidebar .sb-foot-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar .sb-foot-end {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-shrink: 0 !important;
+  margin-left: auto !important;
+}
+
+.sidebar .sb-foot-avatar {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 8px !important;
+  background-color: var(--primary) !important;
+  color: var(--primary-fg) !important;
+  display: grid !important;
+  place-items: center !important;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.sidebar .sb-foot-btn {
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 7px !important;
+  background-color: var(--bg-sunken) !important;
+  color: var(--fg-muted) !important;
+  display: grid !important;
+  place-items: center !important;
+  cursor: pointer;
+  transform: scale(1);
+  transition:
+    background-color 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.22s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.sidebar .sb-foot-btn:hover {
+  background-color: var(--primary-soft) !important;
+  color: var(--primary) !important;
+  transform: scale(1.08);
+}
+
+.sidebar.collapsed .sb-foot {
+  justify-content: center !important;
+}
+
+.sidebar.collapsed .sb-brand-marks,
+.sidebar.collapsed .sb-brand > .sb-brand-mark {
+  margin-left: 0;
+}

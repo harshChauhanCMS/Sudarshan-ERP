@@ -307,7 +307,6 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
           route={route}
           navigate={handleNavigate}
           onNotifClick={() => navigate("/hrms/notifications")}
-          onMobileClick={() => window.open("/mobile", "_blank")}
           onLogout={handleLogout}
           onMenuClick={() => setMobileSidebarOpen((v) => !v)}
           menuOpen={mobileSidebarOpen}

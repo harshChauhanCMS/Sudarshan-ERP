@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import companyLogo from "@/app/icon.png";
 import { Icon } from "@/components/erp/icons";
 import {
   sendDispatchDriverOtp,
@@ -42,9 +43,11 @@ function DriverAuthShell({
         <div className="driver-auth-brand__glow" />
         <div className="driver-auth-brand__inner">
           <img
-            src="/sudarshan-group-logo.webp"
+            src={companyLogo.src}
             alt="Sudarshan Group"
             className="driver-auth-brand__logo"
+            width={140}
+            height={140}
           />
           <div className="driver-auth-brand__copy">
             <p className="driver-auth-brand__name">Sudarshan Group</p>
@@ -135,9 +138,11 @@ export function DispatchDriverCheckin({
       <div className="driver-auth-card">
         <div className="driver-auth-card__mobile-brand">
           <img
-            src="/sudarshan-group-logo.webp"
+            src={companyLogo.src}
             alt="Sudarshan Group"
             className="driver-auth-card__mobile-logo"
+            width={72}
+            height={72}
           />
         </div>
 

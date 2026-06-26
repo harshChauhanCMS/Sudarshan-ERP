@@ -227,8 +227,12 @@ export async function GET(request: Request) {
         method,
         inAddress:      shortAddressFromLocation(p.inLocation),
         inFullAddress:  p.inLocation?.address || "",
+        inLat:          typeof p.inLocation?.lat === "number" ? p.inLocation.lat : null,
+        inLng:          typeof p.inLocation?.lng === "number" ? p.inLocation.lng : null,
         outAddress:     shortAddressFromLocation(p.outLocation),
         outFullAddress: p.outLocation?.address || "",
+        outLat:         typeof p.outLocation?.lat === "number" ? p.outLocation.lat : null,
+        outLng:         typeof p.outLocation?.lng === "number" ? p.outLocation.lng : null,
         punchLog:       p.punchLog,
       };
     });

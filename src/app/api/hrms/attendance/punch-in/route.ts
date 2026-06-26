@@ -70,12 +70,12 @@ export async function POST(request: Request) {
     const end = new Date(now);
     end.setHours(23, 59, 59, 999);
 
-    const identityQuery = employee?.employeeId
-      ? { employeeId: employee.employeeId }
+    const identityFilter = employee?.employeeId
+      ? { $or: [{ employeeId: employee.employeeId }, { userEmail: email }] }
       : { userEmail: email };
 
     const last = await AttendancePunch.findOne({
-      ...identityQuery,
+      ...identityFilter,
       punchedAt: { $gte: start, $lte: end },
     })
       .sort({ punchedAt: -1 })

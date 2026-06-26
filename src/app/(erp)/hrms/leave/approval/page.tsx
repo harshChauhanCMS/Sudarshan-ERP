@@ -20,7 +20,6 @@ import {
   DownloadOutlined,
   ThunderboltOutlined,
   EyeOutlined,
-  FilterOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
@@ -35,7 +34,7 @@ import { leaveTypeColor } from "@/lib/leave-apply";
 import { hrCannotActionOwnLeave, filterLeavesForHrApproval } from "@/lib/leave-approval-rules";
 import { computeLeaveApprovalKpi } from "@/lib/hrms-leave-kpi";
 import type { PermissionsMap } from "@/lib/permission-types";
-import FilterSearchField from "@/components/hrms/FilterSearchField";
+import PageFilterToolbar from "@/components/common/PageFilterToolbar";
 import { filterBySearch } from "@/lib/filter-search";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -457,26 +456,12 @@ export default function LeaveApprovalPage() {
         />
       </div>
 
-      <div className="arf-panel ap-filters-panel">
-        <div className="arf-head">
-          <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
-          <span className="arf-head-title">Filters</span>
-        </div>
-        <div className="arf-body">
-          <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
-            <FilterSearchField
-              value={search}
-              onChange={setSearch}
-              placeholder="Search employee name, ID, leave type, reason…"
-            />
-            <div className="ap-filters-row-break" aria-hidden="true" />
-            <div className="ap-filters-spacer" aria-hidden="true" />
-            <div className="arf-item ap-filters-actions ap-filters-actions--multi">
-              <Button onClick={() => setSearch("")}>Clear filters</Button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <PageFilterToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search employee name, ID, leave type, reason…"
+        showFilterButton={false}
+      />
 
       {/* Leave table */}
       <div className="attendance-report-section">

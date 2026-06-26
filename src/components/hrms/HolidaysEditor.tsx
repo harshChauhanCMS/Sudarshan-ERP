@@ -21,7 +21,8 @@ import ReportSection from "@/components/hrms/ReportSection";
 import { ViewEditActions } from "@/components/common/TableActionIcons";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 import { downloadHolidayCalendarPdf } from "@/lib/holiday-calendar-pdf";
-import FilterSearchField from "@/components/hrms/FilterSearchField";
+import PageFilterDrawer from "@/components/common/PageFilterDrawer";
+import PageFilterToolbar from "@/components/common/PageFilterToolbar";
 import { filterBySearch } from "@/lib/filter-search";
 
 export type HolidayRecord = {
@@ -60,6 +61,7 @@ export function HolidaysEditor({ companyName = "Sudarshan Group" }: HolidaysEdit
   const [editing, setEditing] = useState<HolidayRecord | null>(null);
   const [year, setYear] = useState(new Date().getFullYear());
   const [search, setSearch] = useState("");
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [form] = Form.useForm<HolidayFormValues>();
 
   const filteredHolidays = useMemo(
@@ -245,44 +247,46 @@ export function HolidaysEditor({ companyName = "Sudarshan Group" }: HolidaysEdit
 
   return (
     <>
-      <div className="arf-panel ap-filters-panel" style={{ marginBottom: 0 }}>
-        <div className="arf-head">
-          <span className="arf-head-title">Filters</span>
+      <PageFilterToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search holiday name, date, type…"
+        onFilterClick={() => setFilterDrawerOpen(true)}
+        activeFilterCount={year !== new Date().getFullYear() ? 1 : 0}
+        trailing={
+          <Space wrap>
+            <Button
+              icon={<FilePdfOutlined />}
+              loading={exportingPdf}
+              onClick={() => void exportPdf()}
+            >
+              Export PDF
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
+              Add holiday
+            </Button>
+          </Space>
+        }
+      />
+
+      <PageFilterDrawer
+        open={filterDrawerOpen}
+        onClose={() => setFilterDrawerOpen(false)}
+        onApply={() => setFilterDrawerOpen(false)}
+        onClear={() => {
+          setYear(new Date().getFullYear());
+        }}
+      >
+        <div className="arf-item">
+          <span className="arf-label">Calendar year</span>
+          <Select
+            className="w-full"
+            value={year}
+            onChange={setYear}
+            options={YEAR_OPTIONS.map((y) => ({ value: y, label: String(y) }))}
+          />
         </div>
-        <div className="arf-body">
-          <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
-            <FilterSearchField
-              value={search}
-              onChange={setSearch}
-              placeholder="Search holiday name, date, type…"
-            />
-            <div className="arf-item" style={{ maxWidth: 160 }}>
-              <span className="arf-label">Calendar year</span>
-              <Select
-                className="w-full"
-                value={year}
-                onChange={setYear}
-                options={YEAR_OPTIONS.map((y) => ({ value: y, label: String(y) }))}
-              />
-            </div>
-            <div className="ap-filters-spacer" aria-hidden="true" />
-            <div className="arf-item ap-filters-actions ap-filters-actions--multi">
-              <Space wrap>
-                <Button
-                  icon={<FilePdfOutlined />}
-                  loading={exportingPdf}
-                  onClick={() => void exportPdf()}
-                >
-                  Export PDF
-                </Button>
-                <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
-                  Add holiday
-                </Button>
-              </Space>
-            </div>
-          </div>
-        </div>
-      </div>
+      </PageFilterDrawer>
 
       <ReportSection
         title="Company holiday calendar"

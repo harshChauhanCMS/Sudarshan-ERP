@@ -4,18 +4,134 @@
 
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button as AntButton } from "antd";
-import { DownloadOutlined, MoreOutlined } from "@ant-design/icons";
+import { DownloadOutlined, AlertOutlined, AppstoreOutlined, CarOutlined, CheckCircleOutlined, ClockCircleOutlined, DollarOutlined, FileExclamationOutlined, ShoppingCartOutlined, TeamOutlined, ThunderboltOutlined, WarningOutlined } from "@ant-design/icons";
 import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS, erpStatusBadge, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
-import { ErpViewAction, TableActionIcon } from "@/components/common/TableActionIcons";
+import { ErpViewAction, TableActionIcon, ViewEditActions } from "@/components/common/TableActionIcons";
+import StatCard, { ErpStatGrid } from "@/components/common/StatCard";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { nextDispatchId, formatDisplayDate } from "@/lib/id-generators";
+import { buildInventoryItemDetailView } from "@/lib/inventory-mobile";
+import { downloadCsv } from "@/lib/download-csv";
 import { DashHead, SectionH } from "./dashboards";
+
+function detailGrid(fields) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(120px, 38%) 1fr",
+        gap: "10px 16px",
+        fontSize: 13,
+      }}
+    >
+      {fields.map((field) => (
+        <React.Fragment key={field.label}>
+          <span className="muted">{field.label}</span>
+          <span>{field.value}</span>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+function vendorDetailFields(v) {
+  return [
+    { label: "Vendor ID", value: v.id },
+    { label: "Name", value: v.name },
+    { label: "City", value: v.city },
+    { label: "Category", value: v.category },
+    { label: "Rating", value: String(v.rating) },
+    { label: "POs YTD", value: String(v.poCount) },
+    { label: "YTD spend", value: fmtINR(v.ytd) },
+    { label: "Contact", value: v.contactPerson || "—" },
+    { label: "Phone", value: v.phone || "—" },
+    { label: "Email", value: v.email || "—" },
+    { label: "GSTIN", value: v.gstin || "—" },
+    { label: "Address", value: v.address || "—" },
+    { label: "Materials supplied", value: v.materialsSupplied || "—" },
+    { label: "Payment terms", value: v.paymentTerms ? `${v.paymentTerms} days` : "—" },
+    { label: "Lead time", value: v.leadTime != null ? `${v.leadTime} days` : "—" },
+    { label: "Status", value: v.status || "active" },
+  ];
+}
+
+function poDetailFields(po) {
+  return [
+    { label: "PO #", value: po.id },
+    { label: "Vendor", value: po.vendor },
+    { label: "Date", value: po.date },
+    { label: "Items", value: String(po.items) },
+    { label: "Total", value: fmtINRFull(po.total) },
+    { label: "Status", value: po.status },
+    { label: "Invoice", value: po.invoice },
+    { label: "Material", value: po.materialName || "—" },
+    { label: "Material code", value: po.materialCode || "—" },
+    { label: "Grade", value: po.grade || "—" },
+    {
+      label: "Quantity",
+      value: po.quantity != null ? `${po.quantity} ${po.unit ?? ""}`.trim() : "—",
+    },
+    { label: "Rate", value: po.rate != null ? fmtINRFull(po.rate) : "—" },
+    { label: "Expected delivery", value: po.expectedDelivery || "—" },
+    { label: "Delivery location", value: po.deliveryLocation || "—" },
+    { label: "Notes", value: po.notes || "—" },
+  ];
+}
+
+function downloadVendorCsv(v) {
+  downloadCsv(
+    `vendor-${v.id}.csv`,
+    ["ID", "Name", "City", "Category", "Rating", "POs YTD", "YTD Spend", "Contact", "Phone", "Email", "GSTIN", "Address", "Materials", "Payment Terms", "Lead Time", "Status"],
+    [{
+      ID: v.id,
+      Name: v.name,
+      City: v.city,
+      Category: v.category,
+      Rating: v.rating,
+      "POs YTD": v.poCount,
+      "YTD Spend": v.ytd,
+      Contact: v.contactPerson ?? "",
+      Phone: v.phone ?? "",
+      Email: v.email ?? "",
+      GSTIN: v.gstin ?? "",
+      Address: v.address ?? "",
+      Materials: v.materialsSupplied ?? "",
+      "Payment Terms": v.paymentTerms ?? "",
+      "Lead Time": v.leadTime ?? "",
+      Status: v.status ?? "active",
+    }],
+  );
+}
+
+function downloadPoCsv(po) {
+  downloadCsv(
+    `purchase-order-${po.id}.csv`,
+    ["PO", "Vendor", "Date", "Items", "Total", "Status", "Invoice", "Material", "Code", "Grade", "Quantity", "Unit", "Rate", "Expected Delivery", "Location", "Notes"],
+    [{
+      PO: po.id,
+      Vendor: po.vendor,
+      Date: po.date,
+      Items: po.items,
+      Total: po.total,
+      Status: po.status,
+      Invoice: po.invoice,
+      Material: po.materialName ?? "",
+      Code: po.materialCode ?? "",
+      Grade: po.grade ?? "",
+      Quantity: po.quantity ?? "",
+      Unit: po.unit ?? "",
+      Rate: po.rate ?? "",
+      "Expected Delivery": po.expectedDelivery ?? "",
+      Location: po.deliveryLocation ?? "",
+      Notes: po.notes ?? "",
+    }],
+  );
+}
 
 /* ============================================================
    MODULE SCREENS — Inventory, Procurement, Dispatch, Users, DS
@@ -28,27 +144,12 @@ import { DashHead, SectionH } from "./dashboards";
 const RawMaterialInventory = () => {
   const router = useRouter();
   const DATA = useDATA();
-  const { update, saving, error } = useEntityMutation();
-  const [adjustOpen, setAdjustOpen] = useState(null);
-  const [adjustQty, setAdjustQty] = useState("0");
+  const [viewItem, setViewItem] = useState(null);
 
-  const saveAdjustment = async () => {
-    if (!adjustOpen) return;
-    const delta = parseFloat(adjustQty) || 0;
-    const newStock = Math.max(0, adjustOpen.stock + delta);
-    const reorder = adjustOpen.reorder;
-    const minStock = adjustOpen.minStock ?? 0;
-    let status = "ok";
-    if (newStock <= 0 || (minStock > 0 && newStock <= minStock)) status = "critical";
-    else if (newStock <= reorder) status = "low";
-    await update("rawMaterials", adjustOpen.code, {
-      stock: newStock,
-      status,
-      value: Math.round((newStock / Math.max(adjustOpen.stock, 1)) * adjustOpen.value),
-    }, "code");
-    setAdjustOpen(null);
-    setAdjustQty("0");
-  };
+  const viewDetail = useMemo(() => {
+    if (!viewItem) return null;
+    return buildInventoryItemDetailView("raw-material", viewItem.code, DATA);
+  }, [viewItem, DATA]);
 
   const totalValue = DATA.RAW_MATERIALS.reduce((s, r) => s + r.value, 0);
   const lowCount = DATA.RAW_MATERIALS.filter(r => r.status === "low").length;
@@ -112,15 +213,13 @@ const RawMaterialInventory = () => {
       {
         title: "Actions",
         key: "actions",
-        width: 110,
+        width: 88,
         align: "center",
         render: (_, r) => (
-          <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "center" }}>
-            <AntButton type="link" size="small" onClick={() => setAdjustOpen(r)}>
-              Adjust
-            </AntButton>
-            <AntButton type="text" size="small" icon={<MoreOutlined />} aria-label="More actions" />
-          </div>
+          <ViewEditActions
+            onView={() => setViewItem(r)}
+            editHref={`/inventory/raw-material/add?code=${encodeURIComponent(r.code)}`}
+          />
         ),
       },
     ],
@@ -135,28 +234,35 @@ const RawMaterialInventory = () => {
         <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/inventory/raw-material/add")}>Add stock</Btn>
       </DashHead>
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="box" size={13} className="ico" />Total SKUs</div>
-          <div className="kpi-value tabular">{DATA.RAW_MATERIALS.length}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>6 minerals · 4 chemicals</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="money" size={13} className="ico" />Inventory value</div>
-          <div className="kpi-value">{fmtINR(totalValue)}</div>
-          <div style={{ fontSize: 11, color: "var(--success)" }}>+4.8% vs last week</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="alert" size={13} className="ico" />Low stock</div>
-          <div className="kpi-value" style={{ color: lowCount > 0 ? "var(--warning)" : "var(--fg)" }}>{lowCount}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Reorder recommended</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="alert" size={13} className="ico" />Critical</div>
-          <div className="kpi-value" style={{ color: "var(--danger)" }}>{critCount}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Affects 2 active orders</div>
-        </div>
-      </div>
+      <ErpStatGrid cols={4}>
+        <StatCard
+          icon={AppstoreOutlined}
+          label="Total SKUs"
+          value={DATA.RAW_MATERIALS.length}
+          hint="6 minerals · 4 chemicals"
+        />
+        <StatCard
+          icon={DollarOutlined}
+          label="Inventory value"
+          value={fmtINR(totalValue)}
+          hint="+4.8% vs last week"
+          hintTone="positive"
+        />
+        <StatCard
+          icon={WarningOutlined}
+          label="Low stock"
+          value={lowCount}
+          hint="Reorder recommended"
+          hintTone={lowCount > 0 ? "warning" : "default"}
+        />
+        <StatCard
+          icon={AlertOutlined}
+          label="Critical"
+          value={critCount}
+          hint="Affects 2 active orders"
+          hintTone="negative"
+        />
+      </ErpStatGrid>
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid var(--border)" }}>
@@ -184,11 +290,58 @@ const RawMaterialInventory = () => {
         </div>
       </div>
 
-      <EntityFormModal open={!!adjustOpen} onClose={() => setAdjustOpen(null)} title={adjustOpen ? `Adjust stock · ${adjustOpen.name}` : ""} sub={adjustOpen ? `Current: ${adjustOpen.stock} ${adjustOpen.unit}` : ""} submitLabel="Save adjustment" saving={saving} error={error} onSubmit={saveAdjustment}>
-        <FormGrid>
-          <FormField label="Adjustment (+/- qty)"><FormInput value={adjustQty} onChange={setAdjustQty} /></FormField>
-        </FormGrid>
-      </EntityFormModal>
+      <Modal
+        open={!!viewItem}
+        onClose={() => setViewItem(null)}
+        title={viewDetail?.name ?? viewItem?.name ?? "Raw material"}
+        sub={viewDetail ? `${viewDetail.code} · ${viewDetail.statusLabel}` : viewItem?.code}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setViewItem(null)}>
+              Close
+            </Btn>
+            {viewItem ? (
+              <Btn
+                variant="primary"
+                size="sm"
+                icon="edit"
+                onClick={() => {
+                  router.push(
+                    `/inventory/raw-material/add?code=${encodeURIComponent(viewItem.code)}`
+                  );
+                  setViewItem(null);
+                }}
+              >
+                Edit
+              </Btn>
+            ) : null}
+          </>
+        }
+      >
+        {viewDetail ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(120px, 38%) 1fr",
+              gap: "10px 16px",
+              fontSize: 13,
+            }}
+          >
+            {viewDetail.fields.map((field) => (
+              <React.Fragment key={field.label}>
+                <span className="muted">{field.label}</span>
+                <span className={field.tone === "danger" ? "danger" : field.tone === "warn" ? "warning" : ""}>
+                  {field.value}
+                </span>
+              </React.Fragment>
+            ))}
+          </div>
+        ) : (
+          <p className="muted" style={{ margin: 0 }}>
+            Material details unavailable.
+          </p>
+        )}
+      </Modal>
     </>
   );
 };
@@ -200,6 +353,8 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
   const router = useRouter();
   const DATA = useDATA();
   const [tab, setTab] = useState(defaultTab);
+  const [viewVendor, setViewVendor] = useState(null);
+  const [viewPo, setViewPo] = useState(null);
   const vendorColumns = useMemo(
     () => [
       {
@@ -272,9 +427,18 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       {
         title: "Actions",
         key: "actions",
-        width: 72,
+        width: 88,
         align: "center",
-        render: () => <ErpViewAction />,
+        render: (_, row) => (
+          <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
+            <ErpViewAction label="View vendor" onClick={() => setViewVendor(row)} />
+            <TableActionIcon
+              icon={<DownloadOutlined />}
+              label="Download vendor"
+              onClick={() => downloadVendorCsv(row)}
+            />
+          </div>
+        ),
       },
     ],
     []
@@ -325,10 +489,14 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         key: "actions",
         width: 88,
         align: "center",
-        render: () => (
+        render: (_, row) => (
           <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
-            <ErpViewAction label="View purchase order" />
-            <TableActionIcon icon={<DownloadOutlined />} label="Download purchase order" />
+            <ErpViewAction label="View purchase order" onClick={() => setViewPo(row)} />
+            <TableActionIcon
+              icon={<DownloadOutlined />}
+              label="Download purchase order"
+              onClick={() => downloadPoCsv(row)}
+            />
           </div>
         ),
       },
@@ -348,28 +516,35 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         )}
       </DashHead>
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="users" size={13} className="ico" />Active vendors</div>
-          <div className="kpi-value tabular">{DATA.VENDORS.length}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>2 added this month</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="cart" size={13} className="ico" />Open POs</div>
-          <div className="kpi-value tabular">{DATA.PURCHASE_ORDERS.filter((p) => p.status !== "received").length}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{DATA.PURCHASE_ORDERS.filter((p) => p.status === "pending").length} pending</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="money" size={13} className="ico" />PO spend · MTD</div>
-          <div className="kpi-value">{fmtINR(DATA.PURCHASE_ORDERS.reduce((s, p) => s + p.total, 0))}</div>
-          <div style={{ fontSize: 11, color: "var(--success)" }}>From database</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="alert" size={13} className="ico" />Invoice mismatches</div>
-          <div className="kpi-value" style={{ color: "var(--danger)" }}>{DATA.INVOICES.filter((i) => i.status === "mismatch").length}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Needs verification</div>
-        </div>
-      </div>
+      <ErpStatGrid cols={4}>
+        <StatCard
+          icon={TeamOutlined}
+          label="Active vendors"
+          value={DATA.VENDORS.length}
+          hint="2 added this month"
+        />
+        <StatCard
+          icon={ShoppingCartOutlined}
+          label="Open POs"
+          value={DATA.PURCHASE_ORDERS.filter((p) => p.status !== "received").length}
+          hint={`${DATA.PURCHASE_ORDERS.filter((p) => p.status === "pending").length} pending`}
+          hintTone="accent"
+        />
+        <StatCard
+          icon={DollarOutlined}
+          label="PO spend · MTD"
+          value={fmtINR(DATA.PURCHASE_ORDERS.reduce((s, p) => s + p.total, 0))}
+          hint="From database"
+          hintTone="positive"
+        />
+        <StatCard
+          icon={FileExclamationOutlined}
+          label="Invoice mismatches"
+          value={DATA.INVOICES.filter((i) => i.status === "mismatch").length}
+          hint="Needs verification"
+          hintTone="negative"
+        />
+      </ErpStatGrid>
 
       <div className="card">
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
@@ -403,6 +578,41 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
           </div>
         )}
       </div>
+
+      <Modal
+        open={!!viewVendor}
+        onClose={() => setViewVendor(null)}
+        title={viewVendor?.name ?? "Vendor"}
+        sub={viewVendor ? `${viewVendor.id} · ${viewVendor.category}` : ""}
+        footer={
+          <Btn variant="ghost" onClick={() => setViewVendor(null)}>
+            Close
+          </Btn>
+        }
+      >
+        {viewVendor ? detailGrid(vendorDetailFields(viewVendor)) : null}
+      </Modal>
+
+      <Modal
+        open={!!viewPo}
+        onClose={() => setViewPo(null)}
+        title={viewPo ? `Purchase order ${viewPo.id}` : "Purchase order"}
+        sub={viewPo ? `${viewPo.vendor} · ${viewPo.date}` : ""}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setViewPo(null)}>
+              Close
+            </Btn>
+            {viewPo ? (
+              <Btn variant="primary" size="sm" icon="download" onClick={() => downloadPoCsv(viewPo)}>
+                Download CSV
+              </Btn>
+            ) : null}
+          </>
+        }
+      >
+        {viewPo ? detailGrid(poDetailFields(viewPo)) : null}
+      </Modal>
     </>
   );
 };
@@ -538,12 +748,36 @@ const DispatchTracking = () => {
         <Btn variant="primary" size="sm" icon="plus" onClick={() => { clearError(); setPlanOpen(true); }}>Plan dispatch</Btn>
       </DashHead>
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="kpi"><div className="kpi-label"><Icon name="truck" size={13} className="ico" />Active vehicles</div><div className="kpi-value tabular">{DATA.DISPATCHES.length}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{inTransit} in transit</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="bolt" size={13} className="ico" />On-time rate</div><div className="kpi-value">94.2<span className="unit">%</span></div><div style={{ fontSize: 11, color: "var(--success)" }}>+1.2pp this month</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="alert" size={13} className="ico" />Delayed</div><div className="kpi-value" style={{ color: "var(--danger)" }}>2</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>1 weather · 1 traffic</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="clock" size={13} className="ico" />Avg transit</div><div className="kpi-value">11.4<span className="unit">hrs</span></div><div style={{ fontSize: 11, color: "var(--success)" }}>−24 min vs Apr</div></div>
-      </div>
+      <ErpStatGrid cols={4}>
+        <StatCard
+          icon={CarOutlined}
+          label="Active vehicles"
+          value={DATA.DISPATCHES.length}
+          hint={`${inTransit} in transit`}
+          hintTone="accent"
+        />
+        <StatCard
+          icon={ThunderboltOutlined}
+          label="On-time rate"
+          value="94.2%"
+          hint="+1.2pp this month"
+          hintTone="positive"
+        />
+        <StatCard
+          icon={AlertOutlined}
+          label="Delayed"
+          value={2}
+          hint="1 weather · 1 traffic"
+          hintTone="negative"
+        />
+        <StatCard
+          icon={ClockCircleOutlined}
+          label="Avg transit"
+          value="11.4 hrs"
+          hint="−24 min vs Apr"
+          hintTone="positive"
+        />
+      </ErpStatGrid>
 
       <div className="grid" style={{ gridTemplateColumns: "1fr 420px", marginBottom: 20 }}>
         <div className="card">

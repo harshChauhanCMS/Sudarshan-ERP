@@ -152,7 +152,7 @@ export function FieldVisitLogPage() {
                         >
                           View
                         </Btn>
-                        {isMine && visit.status === "pending" ? (
+                        {isMine && visit.status === "pending" && !visit.selfInitiated ? (
                           <Btn size="sm" variant="primary" onClick={() => void handleAccept(visit.id)} disabled={saving}>
                             Accept
                           </Btn>

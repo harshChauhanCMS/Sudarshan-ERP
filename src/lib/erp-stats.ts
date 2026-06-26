@@ -119,6 +119,21 @@ export function activeDispatches(dispatches: ErpData["DISPATCHES"]): number {
   return dispatches.filter((d) => d.status !== "delivered").length;
 }
 
+export function dispatchDeliveryCompletion(
+  dispatches: ErpData["DISPATCHES"],
+): { pct: number; completed: number; total: number; active: number } {
+  const total = dispatches.length;
+  if (total === 0) {
+    return { pct: 0, completed: 0, total: 0, active: 0 };
+  }
+  const completed = dispatches.filter((d) => d.status === "delivered").length;
+  const active = total - completed;
+  const pct = Math.round(
+    dispatches.reduce((sum, d) => sum + (Number(d.progress) || 0), 0) / total,
+  );
+  return { pct, completed, total, active };
+}
+
 export function dispatchStatusCounts(dispatches: ErpData["DISPATCHES"]): {
   inTransit: number;
   nearDelivery: number;

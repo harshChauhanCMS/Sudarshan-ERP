@@ -5,6 +5,7 @@ import { resolveSessionEmployee } from "@/lib/resolve-session-employee";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import { enrichLocation } from "@/lib/reverse-geocode";
 import { notifyAttendancePunch } from "@/lib/hrms-punch-notifications";
+import { notifyOnsitePunchLocation } from "@/lib/field-visit-notifications";
 
 type LocationPayload = {
   lat: number; lng: number; accuracy?: number;
@@ -41,15 +42,25 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") return fail("Invalid body", 400);
 
-  const locRes = validateLocation((body as any).location);
-  if ("error" in locRes) return fail(locRes.error, 400);
+  const sourceRaw = (body as any).source;
+  const source =
+    sourceRaw === "mobile" || sourceRaw === "machine" ? sourceRaw : "web";
+
+  const rawLocation = (body as { location?: unknown }).location;
+  if (source === "mobile" && rawLocation == null) {
+    return fail("location is required", 400);
+  }
+
+  let location: Awaited<ReturnType<typeof enrichLocation>> | undefined;
+  if (rawLocation != null) {
+    const locRes = validateLocation(rawLocation);
+    if ("error" in locRes) return fail(locRes.error, 400);
+    location = await enrichLocation(locRes.value);
+  }
 
   const notes = typeof (body as any).notes === "string" ? (body as any).notes.trim() : "";
   const workSite =
     (body as any).workSite === "field" ? "field" : "office";
-  const sourceRaw = (body as any).source;
-  const source =
-    sourceRaw === "mobile" || sourceRaw === "machine" ? sourceRaw : "web";
   const punchNotes = [
     notes,
     workSite === "field" ? "Field" : "",
@@ -69,20 +80,18 @@ export async function POST(request: Request) {
     const end = new Date(now);
     end.setHours(23, 59, 59, 999);
 
-    const identityQuery = employee?.employeeId
-      ? { employeeId: employee.employeeId }
+    const identityFilter = employee?.employeeId
+      ? { $or: [{ employeeId: employee.employeeId }, { userEmail: email }] }
       : { userEmail: email };
 
     const last = await AttendancePunch.findOne({
-      ...identityQuery,
+      ...identityFilter,
       punchedAt: { $gte: start, $lte: end },
     })
       .sort({ punchedAt: -1 })
       .lean();
 
     if (!last || last.punchType !== "in") return fail("No active punch-in found", 409);
-
-    const location = await enrichLocation(locRes.value);
 
     const created = await AttendancePunch.create({
       employeeId: employee?.employeeId,
@@ -91,7 +100,7 @@ export async function POST(request: Request) {
       punchType: "out",
       punchedAt: now,
       source,
-      location,
+      ...(location ? { location } : {}),
       notes: punchNotes || undefined,
     });
 
@@ -104,6 +113,30 @@ export async function POST(request: Request) {
       source,
       punchId: String(created._id),
     });
+
+    const workLocationType = employee?.workLocationType
+      ? String(employee.workLocationType)
+      : workSite === "field"
+        ? "Field"
+        : "Onsite";
+
+    if (
+      (workLocationType === "Onsite" || workLocationType === "Field") &&
+      location?.lat != null &&
+      location?.lng != null
+    ) {
+      void notifyOnsitePunchLocation({
+        employeeId: employee?.employeeId ? String(employee.employeeId) : undefined,
+        employeeName: employee?.fullName ? String(employee.fullName) : email,
+        punchedAt: now,
+        address: location.address,
+        city: location.city,
+        lat: location.lat,
+        lng: location.lng,
+        workLocationType,
+        punchType: "out",
+      });
+    }
 
     return ok({ punch: created }, 201);
   } catch (e) {

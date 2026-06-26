@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { message } from "antd";
 import { Icon } from "@/components/erp/icons";
 import { Btn } from "@/components/erp/ui";
@@ -38,9 +38,44 @@ function stockStatus(stock: number, reorder: number, minStock: number): string {
 
 export default function RawMaterialMasterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editCode = searchParams.get("code")?.trim() ?? "";
   const DATA = useDATA();
-  const { append, saving, error, clearError } = useEntityMutation();
+  const { append, update, saving, error, clearError } = useEntityMutation();
   const form = useFormState(INITIAL);
+
+  const editing = useMemo(
+    () =>
+      editCode
+        ? DATA.RAW_MATERIALS.find(
+            (r) => r.code.toLowerCase() === editCode.toLowerCase()
+          ) ?? null
+        : null,
+    [DATA.RAW_MATERIALS, editCode]
+  );
+
+  useEffect(() => {
+    if (!editCode) return;
+    if (!editing) {
+      message.error(`Material "${editCode}" not found.`);
+      router.replace("/inventory/raw-material");
+      return;
+    }
+    const vendor = DATA.VENDORS.find((v) => v.name === editing.preferredVendor);
+    form.setValues({
+      materialName: editing.name,
+      materialCode: editing.code,
+      grade: editing.grade === "—" ? "" : editing.grade,
+      category: editing.category ?? "",
+      uom: editing.unit,
+      preferredVendor: vendor?.id ?? "",
+      minStock: editing.minStock != null ? String(editing.minStock) : "",
+      reorderLevel: String(editing.reorder),
+      storageLocation: editing.location === "—" ? "" : editing.location,
+      notes: editing.notes ?? "",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once when edit target resolves
+  }, [editCode, editing?.code]);
 
   const recentMaterials = useMemo(
     () => [...DATA.RAW_MATERIALS].slice(-6).reverse(),
@@ -58,7 +93,9 @@ export default function RawMaterialMasterPage() {
     }
     if (
       DATA.RAW_MATERIALS.some(
-        (r) => r.code.toLowerCase() === code.toLowerCase()
+        (r) =>
+          r.code.toLowerCase() === code.toLowerCase() &&
+          r.code.toLowerCase() !== editing?.code.toLowerCase()
       )
     ) {
       return "Material code already exists.";
@@ -93,8 +130,35 @@ export default function RawMaterialMasterPage() {
     const minStock = form.values.minStock.trim()
       ? parseFloat(form.values.minStock)
       : 0;
-    const stock = 0;
     const vendor = DATA.VENDORS.find((v) => v.id === form.values.preferredVendor);
+
+    if (editing) {
+      const stock = editing.stock;
+      await update(
+        "rawMaterials",
+        editing.code,
+        {
+          name: form.values.materialName.trim(),
+          grade: form.values.grade.trim() || "—",
+          unit: form.values.uom,
+          reorder,
+          minStock,
+          location: form.values.storageLocation.trim() || "—",
+          category: form.values.category,
+          preferredVendor: vendor?.name ?? "",
+          notes: form.values.notes.trim(),
+          status: stockStatus(stock, reorder, minStock),
+        },
+        "code"
+      );
+      message.success("Raw material updated.");
+      if (!addAnother) {
+        router.push("/inventory/raw-material");
+      }
+      return;
+    }
+
+    const stock = 0;
 
     await append("rawMaterials", {
       code: form.values.materialCode.trim().toUpperCase(),
@@ -125,8 +189,12 @@ export default function RawMaterialMasterPage() {
   return (
     <>
       <DashHead
-        title="Raw Material Master"
-        sub="Add or edit raw material master records"
+        title={editing ? "Edit Raw Material" : "Raw Material Master"}
+        sub={
+          editing
+            ? `Update master record · ${editing.code}`
+            : "Add or edit raw material master records"
+        }
       >
         <Btn
           variant="secondary"
@@ -183,6 +251,8 @@ export default function RawMaterialMasterPage() {
                         form.setField("materialCode", e.target.value.toUpperCase())
                       }
                       placeholder="e.g. TM-001"
+                      readOnly={!!editing}
+                      disabled={!!editing}
                     />
                     <span className="rm-master-hint rm-master-hint--req">
                       Unique code. Alphanumeric.
@@ -373,18 +443,20 @@ export default function RawMaterialMasterPage() {
                   type="submit"
                   disabled={saving}
                 >
-                  {saving ? "Saving…" : "Save"}
+                  {saving ? "Saving…" : editing ? "Update" : "Save"}
                 </Btn>
-                <Btn
-                  variant="secondary"
-                  size="sm"
-                  icon="plus"
-                  type="button"
-                  disabled={saving}
-                  onClick={() => saveMaterial(true).catch(() => {})}
-                >
-                  Save &amp; Add New
-                </Btn>
+                {!editing ? (
+                  <Btn
+                    variant="secondary"
+                    size="sm"
+                    icon="plus"
+                    type="button"
+                    disabled={saving}
+                    onClick={() => saveMaterial(true).catch(() => {})}
+                  >
+                    Save &amp; Add New
+                  </Btn>
+                ) : null}
                 <Btn
                   variant="secondary"
                   size="sm"

@@ -50,6 +50,41 @@ export async function notifyFieldVisitAssigned(visit: FieldVisitView): Promise<v
   }
 }
 
+export async function notifyFieldVisitSelfCreated(visit: FieldVisitView): Promise<void> {
+  try {
+    await connectDB();
+    const recipients = await ownerEmails();
+    if (!recipients.length) return;
+
+    const lines = [
+      `${visit.assignedEmployeeName} scheduled a field visit`,
+      `Party: ${visit.partyName}`,
+      `Date: ${visit.visitDate}`,
+      `Time: ${formatVisitTime12h(visit.startTime)} – ${formatVisitTime12h(visit.returnTime)}`,
+      `Type: ${visit.visitType}`,
+      `Location: ${visit.locationText || "TBD"}`,
+    ];
+    if (visit.purpose?.trim()) lines.push(`Purpose: ${visit.purpose.trim()}`);
+
+    const message = lines.join(" · ");
+
+    await Notification.insertMany(
+      recipients.map((recipientEmail) => ({
+        recipientEmail,
+        category: "field_sales",
+        type: "info",
+        employeeId: visit.assignedEmployeeId,
+        employeeName: visit.assignedEmployeeName,
+        message,
+        target: "/field-sales/activity-dashboard",
+        read: false,
+      }))
+    );
+  } catch (e) {
+    console.error("notifyFieldVisitSelfCreated failed:", e);
+  }
+}
+
 export async function notifyFieldVisitStatusChange(
   visit: FieldVisitView,
   action: "accepted" | "completed" | "cancelled"
@@ -97,6 +132,7 @@ export async function notifyOnsitePunchLocation(input: {
   lat: number;
   lng: number;
   workLocationType?: string;
+  punchType?: "in" | "out";
 }): Promise<void> {
   try {
     await connectDB();
@@ -110,7 +146,8 @@ export async function notifyOnsitePunchLocation(input: {
     const place = input.address || input.city || `${input.lat.toFixed(4)}, ${input.lng.toFixed(4)}`;
     const workType = input.workLocationType || "Onsite";
     const idPart = input.employeeId ? ` (${input.employeeId})` : "";
-    const message = `${input.employeeName}${idPart} punched in at ${time} · ${workType} · ${place}`;
+    const action = input.punchType === "out" ? "punched out" : "punched in";
+    const message = `${input.employeeName}${idPart} ${action} at ${time} · ${workType} · ${place}`;
 
     await Notification.insertMany(
       recipients.map((recipientEmail) => ({
