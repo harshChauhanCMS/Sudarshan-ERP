@@ -8,7 +8,6 @@ import {
   ThunderboltOutlined,
   CheckOutlined,
   ReloadOutlined,
-  FilterOutlined,
   TeamOutlined,
   CheckCircleOutlined,
   DollarOutlined,
@@ -25,7 +24,8 @@ import CommonTable from "@/components/common/CommonTable";
 import StatCard from "@/components/common/StatCard";
 import ReportSection from "@/components/hrms/ReportSection";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
-import FilterSearchField from "@/components/hrms/FilterSearchField";
+import PageFilterDrawer from "@/components/common/PageFilterDrawer";
+import PageFilterToolbar from "@/components/common/PageFilterToolbar";
 import PayslipModal from "@/components/hrms/PayslipModal";
 
 type SalaryRow = {
@@ -85,6 +85,7 @@ function MonthlySalaryContent() {
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [payslipRow, setPayslipRow] = useState<SalaryRow | null>(null);
   const [month, setMonth] = useState(() =>
     parseCycleParam(searchParams.get("cycle"))
@@ -427,89 +428,80 @@ function MonthlySalaryContent() {
         />
       </div>
 
-      <div className="arf-panel ap-filters-panel">
-        <div className="arf-head">
-          <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
-          <span className="arf-head-title">Filters</span>
+      <PageFilterToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Employee ID, name, department…"
+        onFilterClick={() => setFilterDrawerOpen(true)}
+        activeFilterCount={statusFilter !== "all" ? 1 : 0}
+        trailing={
+          <>
+            <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
+              Refresh
+            </Button>
+            <Button
+              icon={<ThunderboltOutlined />}
+              onClick={generate}
+              loading={generating}
+              style={{
+                background: "#7c3aed",
+                borderColor: "#7c3aed",
+                color: "#fff",
+              }}
+            >
+              Generate
+            </Button>
+            <Button
+              icon={<CheckOutlined />}
+              onClick={bulkApprove}
+              loading={approving}
+              style={{
+                background: "#059669",
+                borderColor: "#059669",
+                color: "#fff",
+              }}
+            >
+              {selectedRowKeys.length > 0
+                ? `Approve (${selectedRowKeys.length})`
+                : "Approve All"}
+            </Button>
+            <Button icon={<DownloadOutlined />} onClick={exportPdf}>
+              Export PDF
+            </Button>
+          </>
+        }
+      />
+
+      <PageFilterDrawer
+        open={filterDrawerOpen}
+        onClose={() => setFilterDrawerOpen(false)}
+        onApply={() => void load()}
+        onClear={handleClearFilters}
+        loading={loading}
+      >
+        <div className="arf-item">
+          <span className="arf-label">Pay month</span>
+          <DatePicker
+            className="w-full"
+            picker="month"
+            value={month}
+            onChange={(v) => {
+              if (v) setMonth(v);
+            }}
+            allowClear={false}
+            format="MMMM YYYY"
+          />
         </div>
-        <div className="arf-body">
-          <div className="arf-controls ap-filters-controls ap-filters-controls--toolbar-inline">
-            <FilterSearchField
-              value={search}
-              onChange={setSearch}
-              placeholder="Employee ID, name, department…"
-            />
-            <div className="arf-item ap-filters-toolbar-field">
-              <span className="arf-label">Pay month</span>
-              <DatePicker
-                className="w-full"
-                picker="month"
-                value={month}
-                onChange={(v) => {
-                  if (v) setMonth(v);
-                }}
-                allowClear={false}
-                format="MMMM YYYY"
-              />
-            </div>
-            <div className="arf-item ap-filters-toolbar-field">
-              <span className="arf-label">Payment status</span>
-              <Select
-                className="w-full"
-                value={statusFilter}
-                options={STATUS_OPTIONS}
-                onChange={setStatusFilter}
-              />
-            </div>
-            <div className="ap-filters-toolbar-actions">
-              <Button
-                type="primary"
-                icon={<FilterOutlined />}
-                onClick={() => void load()}
-                loading={loading}
-              >
-                Apply filters
-              </Button>
-              <Button onClick={handleClearFilters}>Clear filters</Button>
-              <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
-                Refresh
-              </Button>
-              <Button
-                icon={<ThunderboltOutlined />}
-                onClick={generate}
-                loading={generating}
-                style={{
-                  background: "#7c3aed",
-                  borderColor: "#7c3aed",
-                  color: "#fff",
-                }}
-              >
-                Generate
-              </Button>
-              <Button
-                icon={<CheckOutlined />}
-                onClick={bulkApprove}
-                loading={approving}
-                style={{
-                  background: "#059669",
-                  borderColor: "#059669",
-                  color: "#fff",
-                }}
-              >
-                {selectedRowKeys.length > 0
-                  ? `Approve (${selectedRowKeys.length})`
-                  : "Approve All"}
-              </Button>
-              <Button
-                icon={<DownloadOutlined />}
-                onClick={exportPdf}
-              >
-                Export PDF
-              </Button>
-            </div>
-          </div>
+        <div className="arf-item">
+          <span className="arf-label">Payment status</span>
+          <Select
+            className="w-full"
+            value={statusFilter}
+            options={STATUS_OPTIONS}
+            onChange={setStatusFilter}
+          />
         </div>
-      </div>
+      </PageFilterDrawer>
 
       <ReportSection
         title={`Monthly paid employees — ${cycleLabel}`}

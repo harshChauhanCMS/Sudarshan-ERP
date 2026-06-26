@@ -4,7 +4,6 @@ import { Button, Tag, Select, DatePicker, message } from "antd";
 import {
   DownloadOutlined,
   ReloadOutlined,
-  FilterOutlined,
   TeamOutlined,
   DollarOutlined,
   MinusCircleOutlined,
@@ -26,7 +25,8 @@ import {
   formatPayrollInr,
   type PayrollSheetRow,
 } from "@/lib/payroll-sheet";
-import FilterSearchField from "@/components/hrms/FilterSearchField";
+import PageFilterDrawer from "@/components/common/PageFilterDrawer";
+import PageFilterToolbar from "@/components/common/PageFilterToolbar";
 import { filterBySearch } from "@/lib/filter-search";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -41,6 +41,7 @@ export default function PayrollBulkPage() {
   const [month, setMonth] = useState(dayjs());
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [rows, setRows] = useState<PayrollSheetRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -313,57 +314,52 @@ export default function PayrollBulkPage() {
         />
       </div>
 
-      <div className="arf-panel ap-filters-panel">
-        <div className="arf-head">
-          <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
-          <span className="arf-head-title">Filters</span>
+      <PageFilterToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search employee ID, name, department…"
+        onFilterClick={() => setFilterDrawerOpen(true)}
+        activeFilterCount={statusFilter !== "all" ? 1 : 0}
+        trailing={
+          <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+            Refresh
+          </Button>
+        }
+      />
+
+      <PageFilterDrawer
+        open={filterDrawerOpen}
+        onClose={() => setFilterDrawerOpen(false)}
+        onApply={() => void load()}
+        onClear={handleClearFilters}
+        loading={loading}
+      >
+        <div className="arf-item">
+          <span className="arf-label">Month</span>
+          <DatePicker
+            className="w-full"
+            picker="month"
+            value={month}
+            onChange={(d) => d && setMonth(d)}
+            allowClear={false}
+          />
         </div>
-        <div className="arf-body">
-          <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
-            <FilterSearchField
-              value={search}
-              onChange={setSearch}
-              placeholder="Search employee ID, name, department…"
-            />
-            <div className="arf-item">
-              <span className="arf-label">Month</span>
-              <DatePicker
-                className="w-full"
-                picker="month"
-                value={month}
-                onChange={(d) => d && setMonth(d)}
-                allowClear={false}
-              />
-            </div>
-            <div className="arf-item">
-              <span className="arf-label">Status</span>
-              <Select
-                className="w-full"
-                value={statusFilter}
-                onChange={setStatusFilter}
-                options={[
-                  { value: "all", label: "All statuses" },
-                  { value: "pending", label: "Pending" },
-                  { value: "draft", label: "Draft" },
-                  { value: "approved", label: "Approved" },
-                  { value: "disbursed", label: "Disbursed" },
-                ]}
-              />
-            </div>
-            <div className="ap-filters-row-break" aria-hidden="true" />
-            <div className="ap-filters-spacer" aria-hidden="true" />
-            <div className="arf-item ap-filters-actions ap-filters-actions--multi">
-              <Button type="primary" icon={<FilterOutlined />} onClick={() => void load()}>
-                Apply filters
-              </Button>
-              <Button onClick={handleClearFilters}>Clear filters</Button>
-              <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
-                Refresh
-              </Button>
-            </div>
-          </div>
+        <div className="arf-item">
+          <span className="arf-label">Status</span>
+          <Select
+            className="w-full"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { value: "all", label: "All statuses" },
+              { value: "pending", label: "Pending" },
+              { value: "draft", label: "Draft" },
+              { value: "approved", label: "Approved" },
+              { value: "disbursed", label: "Disbursed" },
+            ]}
+          />
         </div>
-      </div>
+      </PageFilterDrawer>
 
       <ReportSection
         title={`Payroll register · ${month.format("MMMM YYYY")}`}

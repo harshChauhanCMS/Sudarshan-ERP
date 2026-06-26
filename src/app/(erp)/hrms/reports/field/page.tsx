@@ -81,7 +81,7 @@ export default function FieldAttendancePage() {
   ];
 
   const tableProps = {
-    bordered: true as const,
+    bordered: false as const,
     size: "middle" as const,
     className: "attendance-report-table",
   };

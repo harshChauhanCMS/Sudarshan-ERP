@@ -75,7 +75,7 @@ export type OwnerDashboardView = {
   lowRmAlerts: OwnerAlertItem[];
   lowPackAlerts: OwnerAlertItem[];
   spareAlerts: OwnerAlertItem[];
-  vendorPriceAlerts: Array<{ name: string; change: string; up: boolean; href?: string }>;
+  vendorPriceAlerts: Array<{ name: string; change: string; pct: number; up: boolean; href?: string }>;
   dispatchDueItems: OwnerDispatchItem[];
   dispatchOverdueItems: OwnerDispatchItem[];
   production: {
@@ -104,8 +104,9 @@ export type OwnerDashboardView = {
     grossMargin: string;
     footnote: string;
     href: string;
+    chartLakhs: { revenue: number; cogs: number; grossProfit: number };
   };
-  topCustomers: Array<{ key: string; rank: number; name: string; meta: string; href?: string }>;
+  topCustomers: Array<{ key: string; rank: number; name: string; meta: string; salesLakhs: number; href?: string }>;
   topMaterials: Array<{ key: string; rank: number; name: string; meta: string; href?: string }>;
   criticalNotifs: Array<ErpData["NOTIFS"][number] & { href?: string }>;
 };
@@ -239,10 +240,10 @@ export async function buildOwnerDashboardView(data: ErpData): Promise<OwnerDashb
     }));
 
   const vendorPriceAlerts = [
-    { name: "Titanium Dioxide — Pigments & Fillers", change: "+8.2%", up: true, href: "/procurement/vendors" },
-    { name: "HDPE Bags — Prime Pack Ltd", change: "+3.5%", up: true, href: "/procurement/vendors" },
-    { name: "Calcium Carbonate — Minerals & Chem", change: "−2.1%", up: false, href: "/procurement/vendors" },
-    { name: "Kaolin Clay — Minerals & Chemicals", change: "+5.0%", up: true, href: "/procurement/vendors" },
+    { name: "Titanium Dioxide — Pigments & Fillers", change: "+8.2%", pct: 8.2, up: true, href: "/procurement/vendors" },
+    { name: "HDPE Bags — Prime Pack Ltd", change: "+3.5%", pct: 3.5, up: true, href: "/procurement/vendors" },
+    { name: "Calcium Carbonate — Minerals & Chem", change: "−2.1%", pct: 2.1, up: false, href: "/procurement/vendors" },
+    { name: "Kaolin Clay — Minerals & Chemicals", change: "+5.0%", pct: 5.0, up: true, href: "/procurement/vendors" },
   ];
 
   const dispatchDueItems: OwnerDispatchItem[] = data.DISPATCHES.filter(
@@ -281,13 +282,17 @@ export async function buildOwnerDashboardView(data: ErpData): Promise<OwnerDashb
   const topCustomers = [...data.CUSTOMERS]
     .sort((a, b) => (Number(b.ytd) || 0) - (Number(a.ytd) || 0))
     .slice(0, 5)
-    .map((c, i) => ({
-      key: c.id,
-      rank: i + 1,
-      name: c.name,
-      meta: formatInr(Math.round((Number(c.ytd) || 0) / 12)),
-      href: "/customers",
-    }));
+    .map((c, i) => {
+      const monthlyRupees = Math.round((Number(c.ytd) || 0) / 12);
+      return {
+        key: c.id,
+        rank: i + 1,
+        name: c.name,
+        meta: formatInr(monthlyRupees),
+        salesLakhs: Math.round((monthlyRupees / 100_000) * 10) / 10,
+        href: "/customers",
+      };
+    });
 
   const topMaterials = SUPPLIED_MATERIAL_CATALOG.slice(0, 5).map((m, i) => ({
     key: m.id,
@@ -464,6 +469,11 @@ export async function buildOwnerDashboardView(data: ErpData): Promise<OwnerDashb
       grossMargin: revenueRupees > 0 ? `${grossMarginPct()}%` : "—",
       footnote: "Estimate. Final P&L at month close. Split by company in Reports.",
       href: "/reports",
+      chartLakhs: {
+        revenue: rev.total,
+        cogs: Math.round((cogs / 100_000) * 10) / 10,
+        grossProfit: Math.round((grossProfit / 100_000) * 10) / 10,
+      },
     },
     topCustomers,
     topMaterials,

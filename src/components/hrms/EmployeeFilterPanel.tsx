@@ -1,8 +1,9 @@
 "use client";
 
-import { Button, Select } from "antd";
-import { FilterOutlined } from "@ant-design/icons";
-import FilterSearchField from "@/components/hrms/FilterSearchField";
+import { useMemo, useState } from "react";
+import { Select } from "antd";
+import PageFilterDrawer from "@/components/common/PageFilterDrawer";
+import PageFilterToolbar from "@/components/common/PageFilterToolbar";
 
 export interface EmployeeFilterValues {
   search: string;
@@ -50,6 +51,8 @@ export default function EmployeeFilterPanel({
   onApply,
   onClear,
 }: Props) {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   const patch = (key: keyof EmployeeFilterValues, value: string) =>
     setFilters({ ...filters, [key]: value });
 
@@ -62,115 +65,98 @@ export default function EmployeeFilterPanel({
     onApply();
   };
 
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.department !== "all") count += 1;
+    if (filters.role !== "all") count += 1;
+    if (filters.shift !== "all") count += 1;
+    if (filters.empType !== "all") count += 1;
+    if (filters.status !== "all") count += 1;
+    return count;
+  }, [filters]);
+
   return (
-    <div className="arf-panel ap-filters-panel">
-      <div className="arf-head">
-        <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
-        <span className="arf-head-title">Filters</span>
-      </div>
+    <>
+      <PageFilterToolbar
+        search={filters.search}
+        onSearchChange={(v) => patch("search", v)}
+        searchPlaceholder="Name, employee ID, phone, department, role…"
+        onFilterClick={() => setDrawerOpen(true)}
+        activeFilterCount={activeFilterCount}
+      />
 
-      <div className="arf-body">
-        <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
-          <FilterSearchField
-            value={filters.search}
-            onChange={(v) => patch("search", v)}
-            placeholder="Name, employee ID, phone, department, role…"
+      <PageFilterDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onApply={onApply}
+        onClear={handleClear}
+        loading={loading}
+      >
+        <div className="arf-item">
+          <span className="arf-label">Department</span>
+          <Select
+            className="w-full"
+            value={filters.department}
+            onChange={(v) => patch("department", v)}
+            options={[
+              { value: "all", label: "All departments" },
+              ...options.departments,
+            ]}
           />
-
-          <div className="arf-item">
-            <span className="arf-label">Department</span>
-            <Select
-              className="w-full"
-              value={filters.department}
-              onChange={(v) => patch("department", v)}
-              options={[
-                { value: "all", label: "All departments" },
-                ...options.departments,
-              ]}
-            />
-          </div>
-
-          <div className="arf-item">
-            <span className="arf-label">Role</span>
-            <Select
-              className="w-full"
-              value={filters.role}
-              onChange={(v) => patch("role", v)}
-              options={[
-                { value: "all", label: "All roles" },
-                ...options.roles,
-              ]}
-            />
-          </div>
-
-          <div className="arf-item">
-            <span className="arf-label">Shift</span>
-            <Select
-              className="w-full"
-              value={filters.shift}
-              onChange={(v) => patch("shift", v)}
-              options={[
-                { value: "all", label: "All shifts" },
-                ...options.shifts,
-              ]}
-            />
-          </div>
-
-          {/* <div className="arf-item">
-            <span className="arf-label">Location / unit</span>
-            <Select
-              className="w-full"
-              value={filters.location}
-              onChange={(v) => patch("location", v)}
-              options={[
-                { value: "all", label: "All locations / units" },
-                ...options.locations,
-              ]}
-            />
-          </div> */}
-
-          <div className="ap-filters-row-break" aria-hidden="true" />
-
-          <div className="arf-item">
-            <span className="arf-label">Employment type</span>
-            <Select
-              className="w-full"
-              value={filters.empType}
-              onChange={(v) => patch("empType", v)}
-              options={[
-                { value: "all", label: "All emp. types" },
-                ...options.empTypes,
-              ]}
-            />
-          </div>
-
-          <div className="arf-item">
-            <span className="arf-label">Status</span>
-            <Select
-              className="w-full"
-              value={filters.status}
-              onChange={(v) => patch("status", v)}
-              options={[
-                { value: "all", label: "All status" },
-                ...options.statuses,
-              ]}
-            />
-          </div>
-
-          <div className="ap-filters-spacer" aria-hidden="true" />
-          <div className="arf-item ap-filters-actions ap-filters-actions--multi">
-            <Button
-              type="primary"
-              icon={<FilterOutlined />}
-              loading={loading}
-              onClick={onApply}
-            >
-              Apply filters
-            </Button>
-            <Button onClick={handleClear}>Clear filters</Button>
-          </div>
         </div>
-      </div>
-    </div>
+
+        <div className="arf-item">
+          <span className="arf-label">Role</span>
+          <Select
+            className="w-full"
+            value={filters.role}
+            onChange={(v) => patch("role", v)}
+            options={[
+              { value: "all", label: "All roles" },
+              ...options.roles,
+            ]}
+          />
+        </div>
+
+        <div className="arf-item">
+          <span className="arf-label">Shift</span>
+          <Select
+            className="w-full"
+            value={filters.shift}
+            onChange={(v) => patch("shift", v)}
+            options={[
+              { value: "all", label: "All shifts" },
+              ...options.shifts,
+            ]}
+          />
+        </div>
+
+        <div className="arf-item">
+          <span className="arf-label">Employment type</span>
+          <Select
+            className="w-full"
+            value={filters.empType}
+            onChange={(v) => patch("empType", v)}
+            options={[
+              { value: "all", label: "All emp. types" },
+              ...options.empTypes,
+            ]}
+          />
+        </div>
+
+        <div className="arf-item">
+          <span className="arf-label">Status</span>
+          <Select
+            className="w-full"
+            value={filters.status}
+            onChange={(v) => patch("status", v)}
+            options={[
+              { value: "all", label: "All status" },
+              ...options.statuses,
+            ]}
+          />
+        </div>
+      </PageFilterDrawer>
+    </>
   );
 }

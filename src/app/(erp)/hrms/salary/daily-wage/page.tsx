@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Table, Button, Select, Tag, message } from "antd";
 import dayjs from "dayjs";
 import {
-  FilterOutlined,
   DownloadOutlined,
   LockOutlined,
   TeamOutlined,
@@ -34,7 +33,8 @@ import {
   SKILL_FILTERS,
   DISBURSEMENT_FILTERS,
 } from "@/lib/daily-wage-dummy";
-import FilterSearchField from "@/components/hrms/FilterSearchField";
+import PageFilterDrawer from "@/components/common/PageFilterDrawer";
+import PageFilterToolbar from "@/components/common/PageFilterToolbar";
 import { filterBySearch } from "@/lib/filter-search";
 import { downloadCsv } from "@/lib/download-csv";
 
@@ -72,6 +72,7 @@ export default function DailyWagePayrollPage() {
   const [contractor, setContractor] = useState("All");
   const [disbursement, setDisbursement] = useState("All");
   const [search, setSearch] = useState("");
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
   const fetchWorkers = useCallback(async (period: string, signal?: AbortSignal) => {
     setLoading(true);
@@ -373,99 +374,93 @@ export default function DailyWagePayrollPage() {
         }
       />
 
-      {/* Filters */}
-      <div className="arf-panel ap-filters-panel">
-        <div className="arf-head">
-          <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
-          <span className="arf-head-title">Filters</span>
-        </div>
+      <PageFilterToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search worker name, ID, trade, contractor…"
+        onFilterClick={() => setFilterDrawerOpen(true)}
+        activeFilterCount={
+          (payFrequency !== "Monthly" ? 1 : 0) +
+          (unit !== "All" ? 1 : 0) +
+          (skill !== "All" ? 1 : 0) +
+          (contractor !== "All" ? 1 : 0) +
+          (disbursement !== "All" ? 1 : 0) +
+          (payPeriod !== currentMonth ? 1 : 0)
+        }
+      />
 
-        <div className="arf-body">
-          <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
-            <FilterSearchField
-              value={search}
-              onChange={setSearch}
-              placeholder="Search worker name, ID, trade, contractor…"
-            />
-            <div className="arf-item">
-              <span className="arf-label">Pay Period</span>
-              <Select
-                className="w-full"
-                value={payPeriod}
-                onChange={setPayPeriod}
-                options={periodOptions}
-              />
-            </div>
-            <div className="arf-item">
-              <span className="arf-label">Pay Frequency</span>
-              <Select
-                className="w-full"
-                value={payFrequency}
-                onChange={setPayFrequency}
-                options={PAY_FREQUENCIES.map((f) => ({ value: f, label: f }))}
-              />
-            </div>
-            <div className="arf-item">
-              <span className="arf-label">Unit / Site</span>
-              <Select
-                className="w-full"
-                value={unit}
-                onChange={setUnit}
-                options={[
-                  { value: "All", label: "All units" },
-                  ...unitOptions.map((u) => ({ value: u, label: u })),
-                ]}
-              />
-            </div>
-            <div className="arf-item">
-              <span className="arf-label">Skill category</span>
-              <Select
-                className="w-full"
-                value={skill}
-                onChange={setSkill}
-                options={SKILL_FILTERS.map((s) => ({ value: s, label: s }))}
-              />
-            </div>
-            <div className="ap-filters-row-break" aria-hidden="true" />
-            <div className="arf-item">
-              <span className="arf-label">Contractor</span>
-              <Select
-                className="w-full"
-                value={contractor}
-                onChange={setContractor}
-                options={[
-                  { value: "All", label: "All contractors" },
-                  ...contractorOptions.map((c) => ({ value: c, label: c })),
-                ]}
-              />
-            </div>
-            <div className="arf-item">
-              <span className="arf-label">Disbursement</span>
-              <Select
-                className="w-full"
-                value={disbursement}
-                onChange={setDisbursement}
-                options={DISBURSEMENT_FILTERS.map((d) => ({
-                  value: d,
-                  label: d,
-                }))}
-              />
-            </div>
-            <div className="ap-filters-spacer" aria-hidden="true" />
-            <div className="arf-item ap-filters-actions ap-filters-actions--multi">
-              <Button
-                type="primary"
-                icon={<FilterOutlined />}
-                loading={loading}
-                onClick={handleApplyFilters}
-              >
-                Apply filters
-              </Button>
-              <Button onClick={handleClearFilters}>Clear filters</Button>
-            </div>
-          </div>
+      <PageFilterDrawer
+        open={filterDrawerOpen}
+        onClose={() => setFilterDrawerOpen(false)}
+        onApply={handleApplyFilters}
+        onClear={handleClearFilters}
+        loading={loading}
+        width={400}
+      >
+        <div className="arf-item">
+          <span className="arf-label">Pay Period</span>
+          <Select
+            className="w-full"
+            value={payPeriod}
+            onChange={setPayPeriod}
+            options={periodOptions}
+          />
         </div>
-      </div>
+        <div className="arf-item">
+          <span className="arf-label">Pay Frequency</span>
+          <Select
+            className="w-full"
+            value={payFrequency}
+            onChange={setPayFrequency}
+            options={PAY_FREQUENCIES.map((f) => ({ value: f, label: f }))}
+          />
+        </div>
+        <div className="arf-item">
+          <span className="arf-label">Unit / Site</span>
+          <Select
+            className="w-full"
+            value={unit}
+            onChange={setUnit}
+            options={[
+              { value: "All", label: "All units" },
+              ...unitOptions.map((u) => ({ value: u, label: u })),
+            ]}
+          />
+        </div>
+        <div className="arf-item">
+          <span className="arf-label">Skill category</span>
+          <Select
+            className="w-full"
+            value={skill}
+            onChange={setSkill}
+            options={SKILL_FILTERS.map((s) => ({ value: s, label: s }))}
+          />
+        </div>
+        <div className="arf-item">
+          <span className="arf-label">Contractor</span>
+          <Select
+            className="w-full"
+            value={contractor}
+            onChange={setContractor}
+            options={[
+              { value: "All", label: "All contractors" },
+              ...contractorOptions.map((c) => ({ value: c, label: c })),
+            ]}
+          />
+        </div>
+        <div className="arf-item">
+          <span className="arf-label">Disbursement</span>
+          <Select
+            className="w-full"
+            value={disbursement}
+            onChange={setDisbursement}
+            options={DISBURSEMENT_FILTERS.map((d) => ({
+              value: d,
+              label: d,
+            }))}
+          />
+        </div>
+      </PageFilterDrawer>
 
       {/* KPI cards */}
       {hasEmployeeData ? (

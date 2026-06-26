@@ -1,10 +1,14 @@
 // @ts-nocheck
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, createElement } from "react";
+import { UserOutlined } from "@ant-design/icons";
 import { isGroupBrandRoute } from "@/lib/group-brand-routes";
 import { filterNavByPermissions } from "@/lib/nav-permissions";
+import openListIcon from "@/app/assets/icons/open-list.png";
+import { NAV_ANT_ICONS } from "@/lib/nav-ant-icons";
 import { Icon } from "./icons";
+import "@/styles/sidebar-nav.css";
 
 /* ============================================================
    SIDEBAR + TOPBAR
@@ -15,7 +19,7 @@ const NAV = [
     id: "dashboards",
     label: "Dashboards",
     items: [
-      { id: "/dashboard/master", label: "Master", icon: "master" },
+      // { id: "/dashboard/master", label: "Master", icon: "master" },
       { id: "/dashboard/admin", label: "Admin", icon: "shield" },
       { id: "/dashboard/owner", label: "Owner", icon: "crown" },
       { id: "/dashboard/production", label: "Production", icon: "factory" },
@@ -115,7 +119,7 @@ const NAV = [
           {
             id: "/hrms/leave/approval",
             label: "Leave approval",
-            icon: "check",
+            icon: "factory",
           },
           { id: "/hrms/leave/admin", label: "Leave admin", icon: "layout" },
         ],
@@ -128,7 +132,7 @@ const NAV = [
           {
             id: "/hrms/reports/attendance",
             label: "Attendance Overview",
-            icon: "chart",
+            icon: "factory",
           },
           {
             id: "/hrms/reports/employee",
@@ -138,7 +142,7 @@ const NAV = [
           {
             id: "/hrms/reports/daily",
             label: "Daily Attendance",
-            icon: "calendar",
+            icon: "factory",
           },
           { id: "/hrms/reports/field", label: "Field Attendance", icon: "pin" },
           {
@@ -177,6 +181,14 @@ const ALL_SECTION_IDS = NAV.map((section) => section.id);
 const ALL_GROUP_IDS = NAV.flatMap((section) =>
   collectNavGroupIds(section.items),
 );
+
+const SB_NAV_ICON_SIZE = 17;
+const SB_NAV_SUB_ICON_SIZE = 15;
+
+const NavItemIcon = ({ name, size }) =>
+  createElement(NAV_ANT_ICONS[name || "user"] ?? UserOutlined, {
+    style: { fontSize: size },
+  });
 
 const Sidebar = ({
   route,
@@ -304,6 +316,7 @@ const Sidebar = ({
     if (isGroup) {
       const groupActive = navItemIsActive(item);
       const isGroupCollapsed = !!collapsedGroups[item.id];
+      const groupIcon = item.icon || "user";
       return (
         <div
           key={item.id}
@@ -318,8 +331,14 @@ const Sidebar = ({
               toggleGroup(item.id);
             }}
           >
-            <span className="sb-item-icon">
-              <Icon name={item.icon || "user"} size={15} />
+            <span
+              className={`sb-item-icon ${depth > 0 ? "sb-item-icon--sub" : ""}`}
+              data-icon={groupIcon}
+            >
+              <NavItemIcon
+                name={groupIcon}
+                size={depth > 0 ? SB_NAV_SUB_ICON_SIZE : SB_NAV_ICON_SIZE}
+              />
             </span>
             <span className="sb-item-label">{item.label}</span>
             <span className="sb-item-right">
@@ -341,6 +360,7 @@ const Sidebar = ({
 
     const isActive = navItemIsActive(item);
     const badges = badgeMap[item.id];
+    const leafIcon = item.icon || "user";
     return (
       <button
         type="button"
@@ -352,8 +372,14 @@ const Sidebar = ({
           goTo(item.id);
         }}
       >
-        <span className="sb-item-icon">
-          <Icon name={item.icon} size={15} />
+        <span
+          className={`sb-item-icon ${depth > 0 ? "sb-item-icon--sub" : ""}`}
+          data-icon={leafIcon}
+        >
+          <NavItemIcon
+            name={leafIcon}
+            size={depth > 0 ? SB_NAV_SUB_ICON_SIZE : SB_NAV_ICON_SIZE}
+          />
         </span>
         <span className="sb-item-label">{item.label}</span>
         {badges?.badge && <span className="sb-item-badge">{badges.badge}</span>}
@@ -388,18 +414,6 @@ const Sidebar = ({
             : `${company.name} — click to switch company`
         }
       >
-        {showGroupBrand ? (
-          <div className="sb-brand-marks">
-            <div className="sb-brand-mark">S</div>
-            <div className="sb-brand-mark sec">M</div>
-          </div>
-        ) : (
-          <div
-            className={`sb-brand-mark ${company.mark === "gold" ? "sec" : ""}`}
-          >
-            {company.mark === "gold" ? "M" : "S"}
-          </div>
-        )}
         <div className="sb-brand-text">
           {showGroupBrand ? (
             <div className="sb-brand-name sb-brand-name--group">
@@ -427,6 +441,18 @@ const Sidebar = ({
             {company.plant}
           </div>
         </div>
+        {showGroupBrand ? (
+          <div className="sb-brand-marks">
+            <div className="sb-brand-mark">S</div>
+            <div className="sb-brand-mark sec">M</div>
+          </div>
+        ) : (
+          <div
+            className={`sb-brand-mark ${company.mark === "gold" ? "sec" : ""}`}
+          >
+            {company.mark === "gold" ? "M" : "S"}
+          </div>
+        )}
         <div className="sb-brand-switch">
           <Icon name="switch" size={14} />
         </div>
@@ -485,7 +511,15 @@ const Sidebar = ({
           title="Collapse all sections"
           aria-label="Collapse all sections"
         >
-          <Icon name="collapseAll" size={14} />
+          <img
+            src={openListIcon.src}
+            alt=""
+            className="sb-collapse-all-icon"
+            width={16}
+            height={16}
+            aria-hidden="true"
+            draggable={false}
+          />
         </button>
       </div>
 
@@ -512,14 +546,20 @@ const Sidebar = ({
       </nav>
 
       <div className="sb-foot">
-        <div className="sb-foot-avatar">{initials || "U"}</div>
         <div className="sb-foot-info">
           <div className="sb-foot-name">{displayName}</div>
           <div className="sb-foot-role">{displayRole}</div>
         </div>
-        <button className="sb-foot-btn" title="Settings" onClick={() => navigate("/profile")}>
-          <Icon name="settings" size={14} />
-        </button>
+        <div className="sb-foot-end">
+          <button
+            className="sb-foot-btn"
+            title="Settings"
+            onClick={() => navigate("/profile")}
+          >
+            <Icon name="settings" size={14} />
+          </button>
+          <div className="sb-foot-avatar">{initials || "U"}</div>
+        </div>
       </div>
     </aside>
   );
@@ -529,90 +569,83 @@ const Sidebar = ({
    TOPBAR
    ============================================================ */
 const BREADCRUMB_MAP = {
-    "/dashboard/master": ["Dashboards", "Master"],
-    "/dashboard/admin": ["Dashboards", "Admin"],
-    "/dashboard/owner": ["Dashboards", "Owner"],
-    "/dashboard/production": ["Dashboards", "Production"],
-    "/dashboard/dispatch": ["Dashboards", "Dispatch"],
-    "/inventory/raw-material": ["Inventory", "Raw Material"],
-    "/inventory/raw-material/add": ["Inventory", "Raw Material", "Add Master"],
-    "/inventory/packaging": ["Inventory", "Packaging"],
-    "/inventory/packaging/add": ["Inventory", "Packaging", "Add Master"],
-    "/inventory/spare-parts": ["Inventory", "Spare Parts"],
-    "/inventory/spare-parts/add": ["Inventory", "Spare Parts", "Add Master"],
-    "/procurement/vendors": ["Procurement", "Vendors"],
-    "/procurement/vendors/add": ["Procurement", "Vendors", "Add Master"],
-    "/procurement/po": ["Procurement", "Purchase Orders"],
-    "/procurement/po/add": ["Procurement", "Purchase Orders", "Create PO"],
-    "/procurement/invoices": ["Procurement", "Invoice Verification"],
-    "/customers": ["Sales", "Customers"],
-    "/customers/add": ["Sales", "Customers", "Add Master"],
-    "/orders": ["Sales", "Orders"],
-    "/orders/add": ["Sales", "Orders", "Create Order"],
-    "/field-sales": [
-      "Field sales and Beat tracking",
-      "Field Activity Dashboard",
-    ],
-    "/field-sales/activity-dashboard": [
-      "Field sales and Beat tracking",
-      "Field Activity Dashboard",
-    ],
-    "/field-sales/visits-beat-tracking": [
-      "Field sales and Beat tracking",
-      "Field Visits & Beat Tracking",
-    ],
-    "/field-sales/visit-log": [
-      "Field sales and Beat tracking",
-      "Field Visit Log (Employee view)",
-    ],
-    "/field-sales/visit-history": [
-      "Field sales and Beat tracking",
-      "Field Visit History",
-    ],
-    "/field-sales/beat-territory": [
-      "Field sales and Beat tracking",
-      "Beat Territory Management",
-    ],
-    "/production": ["Operations", "Production"],
-    "/dispatch": ["Operations", "Dispatch Planning"],
-    "/dispatch/new": ["Operations", "Dispatch Planning", "New dispatch plan"],
-    "/hrms/employees": ["People", "HR Management", "Employees"],
-    "/hrms/employees/add": [
-      "People",
-      "HR Management",
-      "Employees",
-      "Add employee",
-    ],
-    "/hrms/notifications": ["People", "HR Management", "Notifications"],
-    "/hrms/reports": ["People", "Reports"],
-    "/hrms/reports/attendance": ["People", "Reports", "Attendance Overview"],
-    "/hrms/reports/employee": ["People", "Reports", "Employee Report"],
-    "/hrms/reports/daily": ["People", "Reports", "Daily Attendance"],
-    "/hrms/reports/field": ["People", "Reports", "Field Attendance"],
-    "/hrms/reports/late-early": [
-      "People",
-      "Reports",
-      "Late Coming / Early Going",
-    ],
-    "/hrms/leave": ["People", "Leave & Policy", "Leave record"],
-    "/hrms/leave/record": ["People", "Leave & Policy", "Leave record"],
-    "/hrms/leave/apply": ["People", "Leave & Policy", "Apply leave"],
-    "/hrms/leave/approval": ["People", "Leave & Policy", "Leave approval"],
-    "/hrms/leave/admin": ["People", "Leave & Policy", "Leave admin"],
-    "/hrms/leave/policy": ["People", "Leave & Policy", "Leave admin"],
-    "/hrms/holidays": ["People", "Leave & Policy", "Leave admin"],
-    "/hrms/salary": ["People", "HR Management", "Salary"],
-    "/hrms/salary/monthly": ["People", "HR Management", "Monthly salary"],
-    "/hrms/salary/bulk": ["People", "HR Management", "Payroll bulk view"],
-    "/hrms/salary/daily-wage": [
-      "People",
-      "HR Management",
-      "Daily wage payroll",
-    ],
-    "/hrms/payroll": ["People", "Reports", "Payroll"],
-    "/reports": ["System", "Reports"],
-    "/users": ["System", "User Management"],
-    "/design-system": ["System", "Design System"],
+  "/dashboard/master": ["Dashboards", "Master"],
+  "/dashboard/admin": ["Dashboards", "Admin"],
+  "/dashboard/owner": ["Dashboards", "Owner"],
+  "/dashboard/production": ["Dashboards", "Production"],
+  "/dashboard/dispatch": ["Dashboards", "Dispatch"],
+  "/inventory/raw-material": ["Inventory", "Raw Material"],
+  "/inventory/raw-material/add": ["Inventory", "Raw Material", "Add Master"],
+  "/inventory/packaging": ["Inventory", "Packaging"],
+  "/inventory/packaging/add": ["Inventory", "Packaging", "Add Master"],
+  "/inventory/spare-parts": ["Inventory", "Spare Parts"],
+  "/inventory/spare-parts/add": ["Inventory", "Spare Parts", "Add Master"],
+  "/procurement/vendors": ["Procurement", "Vendors"],
+  "/procurement/vendors/add": ["Procurement", "Vendors", "Add Master"],
+  "/procurement/po": ["Procurement", "Purchase Orders"],
+  "/procurement/po/add": ["Procurement", "Purchase Orders", "Create PO"],
+  "/procurement/invoices": ["Procurement", "Invoice Verification"],
+  "/customers": ["Sales", "Customers"],
+  "/customers/add": ["Sales", "Customers", "Add Master"],
+  "/orders": ["Sales", "Orders"],
+  "/orders/add": ["Sales", "Orders", "Create Order"],
+  "/field-sales": ["Field sales and Beat tracking", "Field Activity Dashboard"],
+  "/field-sales/activity-dashboard": [
+    "Field sales and Beat tracking",
+    "Field Activity Dashboard",
+  ],
+  "/field-sales/visits-beat-tracking": [
+    "Field sales and Beat tracking",
+    "Field Visits & Beat Tracking",
+  ],
+  "/field-sales/visit-log": [
+    "Field sales and Beat tracking",
+    "Field Visit Log (Employee view)",
+  ],
+  "/field-sales/visit-history": [
+    "Field sales and Beat tracking",
+    "Field Visit History",
+  ],
+  "/field-sales/beat-territory": [
+    "Field sales and Beat tracking",
+    "Beat Territory Management",
+  ],
+  "/production": ["Operations", "Production"],
+  "/dispatch": ["Operations", "Dispatch Planning"],
+  "/dispatch/new": ["Operations", "Dispatch Planning", "New dispatch plan"],
+  "/hrms/employees": ["People", "HR Management", "Employees"],
+  "/hrms/employees/add": [
+    "People",
+    "HR Management",
+    "Employees",
+    "Add employee",
+  ],
+  "/hrms/notifications": ["People", "HR Management", "Notifications"],
+  "/hrms/reports": ["People", "Reports"],
+  "/hrms/reports/attendance": ["People", "Reports", "Attendance Overview"],
+  "/hrms/reports/employee": ["People", "Reports", "Employee Report"],
+  "/hrms/reports/daily": ["People", "Reports", "Daily Attendance"],
+  "/hrms/reports/field": ["People", "Reports", "Field Attendance"],
+  "/hrms/reports/late-early": [
+    "People",
+    "Reports",
+    "Late Coming / Early Going",
+  ],
+  "/hrms/leave": ["People", "Leave & Policy", "Leave record"],
+  "/hrms/leave/record": ["People", "Leave & Policy", "Leave record"],
+  "/hrms/leave/apply": ["People", "Leave & Policy", "Apply leave"],
+  "/hrms/leave/approval": ["People", "Leave & Policy", "Leave approval"],
+  "/hrms/leave/admin": ["People", "Leave & Policy", "Leave admin"],
+  "/hrms/leave/policy": ["People", "Leave & Policy", "Leave admin"],
+  "/hrms/holidays": ["People", "Leave & Policy", "Leave admin"],
+  "/hrms/salary": ["People", "HR Management", "Salary"],
+  "/hrms/salary/monthly": ["People", "HR Management", "Monthly salary"],
+  "/hrms/salary/bulk": ["People", "HR Management", "Payroll bulk view"],
+  "/hrms/salary/daily-wage": ["People", "HR Management", "Daily wage payroll"],
+  "/hrms/payroll": ["People", "Reports", "Payroll"],
+  "/reports": ["System", "Reports"],
+  "/users": ["System", "User Management"],
+  "/design-system": ["System", "Design System"],
 };
 
 const BREADCRUMB_CATEGORY_HREFS = {
@@ -695,13 +728,12 @@ function breadcrumbTrailFor(route) {
 
     return { label, href };
   });
-};
+}
 
 const Topbar = ({
   route,
   navigate,
   onNotifClick,
-  onMobileClick,
   onLogout,
   onMenuClick,
   menuOpen,
@@ -750,7 +782,9 @@ const Topbar = ({
                 {crumb.label}
               </button>
             ) : (
-              <span className={`crumb ${i === crumbs.length - 1 ? "last" : ""}`}>
+              <span
+                className={`crumb ${i === crumbs.length - 1 ? "last" : ""}`}
+              >
                 {crumb.label}
               </span>
             )}
@@ -759,16 +793,6 @@ const Topbar = ({
       </div>
 
       <div className="tb-actions">
-        <button
-          className="tb-iconbtn"
-          title="Mobile preview"
-          onClick={onMobileClick}
-        >
-          <Icon name="phone" size={15} />
-        </button>
-        <button className="tb-iconbtn" title="Help">
-          <Icon name="help" size={15} />
-        </button>
         <button
           className="tb-iconbtn"
           onClick={onNotifClick}

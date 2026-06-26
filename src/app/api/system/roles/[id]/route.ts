@@ -97,8 +97,9 @@ export async function DELETE(
       return NextResponse.json({ error: `Role "${id}" not found` }, { status: 404 });
     }
 
-    if (role.isSystem) {
-      return NextResponse.json({ error: "System roles cannot be deleted" }, { status: 403 });
+    const protectedKeys = new Set(["owner", "admin"]);
+    if (protectedKeys.has(String(role.roleKey).toLowerCase())) {
+      return NextResponse.json({ error: "Owner and Admin roles cannot be deleted" }, { status: 403 });
     }
 
     await Role.deleteOne({ roleKey: id });

@@ -294,7 +294,7 @@ export default function EmployeeReportPage() {
   ];
 
   const tableProps = {
-    bordered: true as const,
+    bordered: false as const,
     size: "middle" as const,
     className: "attendance-report-table",
   };
@@ -337,7 +337,6 @@ export default function EmployeeReportPage() {
         onClear={r.handleClearFilters}
         search={r.search}
         setSearch={r.setSearch}
-        splitApplyRow
       />
 
       <ReportSection title="Report type & grouping">

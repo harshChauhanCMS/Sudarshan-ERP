@@ -8,8 +8,26 @@ import { Select, DatePicker, Button as AntButton } from "antd";
 import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS, erpStatusBadge, customerStatusBadge, invoiceStatusBadge } from "@/components/common/erpStatusBadges";
 import { ErpViewAction, TableActionIcon } from "@/components/common/TableActionIcons";
-import { EyeOutlined } from "@ant-design/icons";
-import { FilterOutlined, UnorderedListOutlined, LineChartOutlined, FileTextOutlined, TeamOutlined, EnvironmentOutlined } from "@ant-design/icons";
+import {
+  AlertOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  DollarOutlined,
+  EyeOutlined,
+  FileTextOutlined,
+  FilterOutlined,
+  LineChartOutlined,
+  ShoppingCartOutlined,
+  TeamOutlined,
+  ThunderboltOutlined,
+  UnorderedListOutlined,
+  EnvironmentOutlined,
+  WarningOutlined,
+} from "@ant-design/icons";
+import PageFilterDrawer from "@/components/common/PageFilterDrawer";
+import PageFilterToolbar from "@/components/common/PageFilterToolbar";
+import StatCard, { ErpStatGrid, mapDashStatTone } from "@/components/common/StatCard";
+import StatCard, { ErpStatGrid, mapDashStatTone } from "@/components/common/StatCard";
 import dayjs from "dayjs";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
@@ -129,12 +147,35 @@ const Customers = () => {
         <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/customers/add")}>Add customer</Btn>
       </DashHead>
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="kpi"><div className="kpi-label"><Icon name="users" size={13} className="ico" />Total customers</div><div className="kpi-value tabular">{DATA.CUSTOMERS.length}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{activeCount} active</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="cart" size={13} className="ico" />With orders</div><div className="kpi-value tabular">{DATA.CUSTOMERS.filter((c) => c.orders > 0).length}</div><div style={{ fontSize: 11, color: "var(--success)" }}>From database</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="money" size={13} className="ico" />Receivables</div><div className="kpi-value">{fmtINR(receivables)}</div><div style={{ fontSize: 11, color: "var(--warning)" }}>Est. 18% of YTD</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="alert" size={13} className="ico" />Credit holds</div><div className="kpi-value" style={{ color: holdCount ? "var(--danger)" : undefined }}>{holdCount}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Review required</div></div>
-      </div>
+      <ErpStatGrid cols={4}>
+        <StatCard
+          icon={TeamOutlined}
+          label="Total customers"
+          value={DATA.CUSTOMERS.length}
+          hint={`${activeCount} active`}
+        />
+        <StatCard
+          icon={ShoppingCartOutlined}
+          label="With orders"
+          value={DATA.CUSTOMERS.filter((c) => c.orders > 0).length}
+          hint="From database"
+          hintTone="positive"
+        />
+        <StatCard
+          icon={DollarOutlined}
+          label="Receivables"
+          value={fmtINR(receivables)}
+          hint="Est. 18% of YTD"
+          hintTone="warning"
+        />
+        <StatCard
+          icon={AlertOutlined}
+          label="Credit holds"
+          value={holdCount}
+          hint="Review required"
+          hintTone={holdCount ? "negative" : "default"}
+        />
+      </ErpStatGrid>
 
       <div className="card">
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center" }}>
@@ -279,12 +320,35 @@ const CustomerOrders = () => {
         <p style={{ color: "var(--fg-muted)", fontSize: 14, margin: "0 0 1rem" }}>Loading orders…</p>
       ) : null}
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="kpi"><div className="kpi-label"><Icon name="ticket" size={13} className="ico" />Open orders</div><div className="kpi-value tabular">{openOrders}</div><div style={{ fontSize: 11, color: "var(--success)" }}>{ORDERS_EXT.length} total</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="money" size={13} className="ico" />Order book value</div><div className="kpi-value">{fmtINR(bookValue)}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>From database</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="bolt" size={13} className="ico" />Delivered</div><div className="kpi-value tabular">{ORDERS_EXT.filter((o) => o.status === "delivered").length}</div><div style={{ fontSize: 11, color: "var(--success)" }}>Completed</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="alert" size={13} className="ico" />At-risk orders</div><div className="kpi-value" style={{ color: atRisk ? "var(--warning)" : undefined }}>{atRisk}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Progress under 50%</div></div>
-      </div>
+      <ErpStatGrid cols={4}>
+        <StatCard
+          icon={FileTextOutlined}
+          label="Open orders"
+          value={openOrders}
+          hint={`${ORDERS_EXT.length} total`}
+          hintTone="positive"
+        />
+        <StatCard
+          icon={DollarOutlined}
+          label="Order book value"
+          value={fmtINR(bookValue)}
+          hint="From database"
+        />
+        <StatCard
+          icon={ThunderboltOutlined}
+          label="Delivered"
+          value={ORDERS_EXT.filter((o) => o.status === "delivered").length}
+          hint="Completed"
+          hintTone="positive"
+        />
+        <StatCard
+          icon={WarningOutlined}
+          label="At-risk orders"
+          value={atRisk}
+          hint="Progress under 50%"
+          hintTone={atRisk ? "warning" : "default"}
+        />
+      </ErpStatGrid>
 
       <div className="card">
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center" }}>
@@ -343,10 +407,10 @@ const CustomerOrders = () => {
    FIELD SALES / BEAT TRACKING — Activity dashboard
    ============================================================ */
 const FIELD_ACTIVITY_KPIS = [
-  { label: "Employees in field", value: "5", hint: "Currently out on visit", tone: "teal" },
-  { label: "Visits completed today", value: "12", hint: "09 Mar 2025", tone: "green" },
-  { label: "Pending visit reports", value: "3", hint: "Awaiting notes/closure", tone: "amber" },
-  { label: "Average visit duration", value: "2h 45m", hint: "Last 7 days", tone: "teal" },
+  { label: "Employees in field", value: "5", hint: "Currently out on visit", tone: "teal", icon: TeamOutlined },
+  { label: "Visits completed today", value: "12", hint: "09 Mar 2025", tone: "green", icon: CheckCircleOutlined },
+  { label: "Pending visit reports", value: "3", hint: "Awaiting notes/closure", tone: "amber", icon: FileTextOutlined },
+  { label: "Average visit duration", value: "2h 45m", hint: "Last 7 days", tone: "teal", icon: ClockCircleOutlined },
 ];
 
 const FIELD_LIVE_STATUS = [
@@ -468,18 +532,18 @@ const FieldSales = () => {
       </DashHead>
 
       <div className="field-activity-page">
-        <div className="field-activity-kpi-grid">
+        <ErpStatGrid cols={4}>
           {FIELD_ACTIVITY_KPIS.map((kpi) => (
-            <div
+            <StatCard
               key={kpi.label}
-              className={`field-activity-kpi field-activity-kpi--${kpi.tone}`}
-            >
-              <div className="field-activity-kpi__label">{kpi.label}</div>
-              <div className="field-activity-kpi__value">{kpi.value}</div>
-              <div className="field-activity-kpi__hint">{kpi.hint}</div>
-            </div>
+              icon={kpi.icon}
+              label={kpi.label}
+              value={kpi.value}
+              hint={kpi.hint}
+              hintTone={mapDashStatTone(kpi.tone)}
+            />
           ))}
-        </div>
+        </ErpStatGrid>
 
         <div className="field-activity-map-row">
           <div className="field-activity-map-main">
@@ -908,12 +972,34 @@ const InvoiceVerify = () => {
         <Btn variant="primary" size="sm" icon="bolt">Auto-match queue</Btn>
       </DashHead>
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="kpi"><div className="kpi-label"><Icon name="invoice" size={13} className="ico" />Pending verification</div><div className="kpi-value tabular">{INVOICES.length}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Total this month</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="check" size={13} className="ico" />Auto-matched</div><div className="kpi-value tabular" style={{ color: "var(--success)" }}>{matched.length}</div><div style={{ fontSize: 11, color: "var(--success)" }}>{passRate}% pass rate</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="alert" size={13} className="ico" />Mismatched</div><div className="kpi-value tabular" style={{ color: "var(--danger)" }}>{mismatched.length}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Avg diff ₹{avgDiff.toLocaleString("en-IN")}</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="money" size={13} className="ico" />Total amount</div><div className="kpi-value">{fmtINR(INVOICES.reduce((s, i) => s + i.invAmt, 0))}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>To verify</div></div>
-      </div>
+      <ErpStatGrid cols={4}>
+        <StatCard
+          icon={FileTextOutlined}
+          label="Pending verification"
+          value={INVOICES.length}
+          hint="Total this month"
+        />
+        <StatCard
+          icon={CheckCircleOutlined}
+          label="Auto-matched"
+          value={matched.length}
+          hint={`${passRate}% pass rate`}
+          hintTone="positive"
+        />
+        <StatCard
+          icon={AlertOutlined}
+          label="Mismatched"
+          value={mismatched.length}
+          hint={`Avg diff ₹${avgDiff.toLocaleString("en-IN")}`}
+          hintTone="negative"
+        />
+        <StatCard
+          icon={DollarOutlined}
+          label="Total amount"
+          value={fmtINR(INVOICES.reduce((s, i) => s + i.invAmt, 0))}
+          hint="To verify"
+        />
+      </ErpStatGrid>
 
       <div className="card">
         <div className="card-head">
@@ -1487,6 +1573,8 @@ const FieldVisitHistory = () => {
   const [selectedId, setSelectedId] = useState(FIELD_VISIT_HISTORY_ROWS[0].id);
   const [dateFrom, setDateFrom] = useState(dayjs("2025-03-01"));
   const [dateTo, setDateTo] = useState(dayjs("2025-03-09"));
+  const [search, setSearch] = useState("");
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
   const selected = FIELD_VISIT_HISTORY_ROWS.find((r) => r.id === selectedId) ?? FIELD_VISIT_HISTORY_ROWS[0];
 
@@ -1559,91 +1647,88 @@ const FieldVisitHistory = () => {
       />
 
       <div className="field-visit-history-page">
-        <div className="arf-panel ap-filters-panel field-visit-history-filters">
-          <div className="arf-head">
-            <FilterOutlined style={{ color: "var(--primary)", fontSize: 12 }} />
-            <span className="arf-head-title">Filters</span>
+        <PageFilterToolbar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search employee, customer, area…"
+          onFilterClick={() => setFilterDrawerOpen(true)}
+          activeFilterCount={2}
+        />
+
+        <PageFilterDrawer
+          open={filterDrawerOpen}
+          onClose={() => setFilterDrawerOpen(false)}
+          onApply={() => setFilterDrawerOpen(false)}
+        >
+          <div className="arf-item">
+            <span className="arf-label">Employee</span>
+            <Select
+              className="w-full"
+              defaultValue="all"
+              options={[
+                { value: "all", label: "All employees" },
+                { value: "rajesh", label: "Rajesh Mehta" },
+                { value: "mohammed", label: "Mohammed Irfan" },
+                { value: "sneha", label: "Sneha Reddy" },
+              ]}
+            />
           </div>
-          <div className="arf-body">
-            <div className="arf-controls ap-filters-controls ap-filters-controls--split-apply">
-              <div className="arf-item">
-                <span className="arf-label">Employee</span>
-                <Select
-                  className="w-full"
-                  defaultValue="all"
-                  options={[
-                    { value: "all", label: "All employees" },
-                    { value: "rajesh", label: "Rajesh Mehta" },
-                    { value: "mohammed", label: "Mohammed Irfan" },
-                    { value: "sneha", label: "Sneha Reddy" },
-                  ]}
-                />
-              </div>
-              <div className="arf-item">
-                <span className="arf-label">Company</span>
-                <Select
-                  className="w-full"
-                  defaultValue="all"
-                  options={[
-                    { value: "all", label: "All companies" },
-                    { value: "smi", label: "Sudarshan Minerals (Udaipur)" },
-                    { value: "smic", label: "Sudarshan Microns" },
-                  ]}
-                />
-              </div>
-              <div className="arf-item">
-                <span className="arf-label">Territory</span>
-                <Select
-                  className="w-full"
-                  defaultValue="all"
-                  options={[
-                    { value: "all", label: "All territories" },
-                    { value: "rajasthan", label: "Rajasthan" },
-                    { value: "gujarat", label: "Gujarat" },
-                  ]}
-                />
-              </div>
-              <div className="arf-item">
-                <span className="arf-label">Visit type</span>
-                <Select
-                  className="w-full"
-                  defaultValue="all"
-                  options={[
-                    { value: "all", label: "All visit types" },
-                    { value: "customer", label: "Customer" },
-                    { value: "vendor", label: "Vendor" },
-                    { value: "market", label: "Market" },
-                  ]}
-                />
-              </div>
-              <div className="ap-filters-row-break" aria-hidden="true" />
-              <div className="arf-item">
-                <span className="arf-label">From</span>
-                <DatePicker
-                  className="w-full"
-                  format="DD/MM/YYYY"
-                  value={dateFrom}
-                  onChange={(d) => d && setDateFrom(d)}
-                />
-              </div>
-              <div className="arf-item">
-                <span className="arf-label">To</span>
-                <DatePicker
-                  className="w-full"
-                  format="DD/MM/YYYY"
-                  value={dateTo}
-                  onChange={(d) => d && setDateTo(d)}
-                />
-              </div>
-              <div className="ap-filters-spacer" aria-hidden="true" />
-              <div className="arf-item ap-filters-actions">
-                <AntButton type="primary" icon={<FilterOutlined />}>
-                  Apply filters
-                </AntButton>
-              </div>
-            </div>
+          <div className="arf-item">
+            <span className="arf-label">Company</span>
+            <Select
+              className="w-full"
+              defaultValue="all"
+              options={[
+                { value: "all", label: "All companies" },
+                { value: "smi", label: "Sudarshan Minerals (Udaipur)" },
+                { value: "smic", label: "Sudarshan Microns" },
+              ]}
+            />
           </div>
-        </div>
+          <div className="arf-item">
+            <span className="arf-label">Territory</span>
+            <Select
+              className="w-full"
+              defaultValue="all"
+              options={[
+                { value: "all", label: "All territories" },
+                { value: "rajasthan", label: "Rajasthan" },
+                { value: "gujarat", label: "Gujarat" },
+              ]}
+            />
+          </div>
+          <div className="arf-item">
+            <span className="arf-label">Visit type</span>
+            <Select
+              className="w-full"
+              defaultValue="all"
+              options={[
+                { value: "all", label: "All visit types" },
+                { value: "customer", label: "Customer" },
+                { value: "vendor", label: "Vendor" },
+                { value: "market", label: "Market" },
+              ]}
+            />
+          </div>
+          <div className="arf-item">
+            <span className="arf-label">From</span>
+            <DatePicker
+              className="w-full"
+              format="DD/MM/YYYY"
+              value={dateFrom}
+              onChange={(d) => d && setDateFrom(d)}
+            />
+          </div>
+          <div className="arf-item">
+            <span className="arf-label">To</span>
+            <DatePicker
+              className="w-full"
+              format="DD/MM/YYYY"
+              value={dateTo}
+              onChange={(d) => d && setDateTo(d)}
+            />
+          </div>
+        </PageFilterDrawer>
 
         <div className="field-beat-card field-visit-history-table-card">
           <div className="field-visit-history-table-head">
@@ -1707,9 +1792,9 @@ const FieldVisitHistory = () => {
    BEAT TERRITORY MANAGEMENT
    ============================================================ */
 const BEAT_TERRITORY_KPIS = [
-  { label: "Weekly target (total)", value: "32", hint: "visits across 4 field staff", tone: "teal" },
-  { label: "Completed this week", value: "18", hint: "as of 09 Mar", tone: "green" },
-  { label: "On track", value: "3 / 4", hint: "employees meeting target", tone: "green" },
+  { label: "Weekly target (total)", value: "32", hint: "visits across 4 field staff", tone: "teal", icon: ThunderboltOutlined },
+  { label: "Completed this week", value: "18", hint: "as of 09 Mar", tone: "green", icon: CheckCircleOutlined },
+  { label: "On track", value: "3 / 4", hint: "employees meeting target", tone: "green", icon: TeamOutlined },
 ];
 
 const BEAT_EMPLOYEE_CARDS = [
@@ -1807,15 +1892,18 @@ const FieldBeatTerritory = () => {
     />
 
     <div className="field-beat-territory-page">
-      <div className="field-activity-kpi-grid">
+      <ErpStatGrid cols="auto">
         {BEAT_TERRITORY_KPIS.map((kpi) => (
-          <div key={kpi.label} className={`field-activity-kpi field-activity-kpi--${kpi.tone}`}>
-            <div className="field-activity-kpi__label">{kpi.label}</div>
-            <div className="field-activity-kpi__value">{kpi.value}</div>
-            <div className="field-activity-kpi__hint">{kpi.hint}</div>
-          </div>
+          <StatCard
+            key={kpi.label}
+            icon={kpi.icon}
+            label={kpi.label}
+            value={kpi.value}
+            hint={kpi.hint}
+            hintTone={mapDashStatTone(kpi.tone)}
+          />
         ))}
-      </div>
+      </ErpStatGrid>
 
       <div className="field-beat-territory-section">
         <div className="field-beat-territory-section__head">

@@ -5,10 +5,11 @@
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button as AntButton } from "antd";
-import { DownloadOutlined, MoreOutlined } from "@ant-design/icons";
+import { DownloadOutlined, MoreOutlined, AlertOutlined, AppstoreOutlined, CarOutlined, CheckCircleOutlined, ClockCircleOutlined, DollarOutlined, FileExclamationOutlined, ShoppingCartOutlined, TeamOutlined, ThunderboltOutlined, WarningOutlined } from "@ant-design/icons";
 import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS, erpStatusBadge, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
 import { ErpViewAction, TableActionIcon } from "@/components/common/TableActionIcons";
+import StatCard, { ErpStatGrid } from "@/components/common/StatCard";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
@@ -135,28 +136,35 @@ const RawMaterialInventory = () => {
         <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/inventory/raw-material/add")}>Add stock</Btn>
       </DashHead>
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="box" size={13} className="ico" />Total SKUs</div>
-          <div className="kpi-value tabular">{DATA.RAW_MATERIALS.length}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>6 minerals · 4 chemicals</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="money" size={13} className="ico" />Inventory value</div>
-          <div className="kpi-value">{fmtINR(totalValue)}</div>
-          <div style={{ fontSize: 11, color: "var(--success)" }}>+4.8% vs last week</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="alert" size={13} className="ico" />Low stock</div>
-          <div className="kpi-value" style={{ color: lowCount > 0 ? "var(--warning)" : "var(--fg)" }}>{lowCount}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Reorder recommended</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="alert" size={13} className="ico" />Critical</div>
-          <div className="kpi-value" style={{ color: "var(--danger)" }}>{critCount}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Affects 2 active orders</div>
-        </div>
-      </div>
+      <ErpStatGrid cols={4}>
+        <StatCard
+          icon={AppstoreOutlined}
+          label="Total SKUs"
+          value={DATA.RAW_MATERIALS.length}
+          hint="6 minerals · 4 chemicals"
+        />
+        <StatCard
+          icon={DollarOutlined}
+          label="Inventory value"
+          value={fmtINR(totalValue)}
+          hint="+4.8% vs last week"
+          hintTone="positive"
+        />
+        <StatCard
+          icon={WarningOutlined}
+          label="Low stock"
+          value={lowCount}
+          hint="Reorder recommended"
+          hintTone={lowCount > 0 ? "warning" : "default"}
+        />
+        <StatCard
+          icon={AlertOutlined}
+          label="Critical"
+          value={critCount}
+          hint="Affects 2 active orders"
+          hintTone="negative"
+        />
+      </ErpStatGrid>
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid var(--border)" }}>
@@ -348,28 +356,35 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         )}
       </DashHead>
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="users" size={13} className="ico" />Active vendors</div>
-          <div className="kpi-value tabular">{DATA.VENDORS.length}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>2 added this month</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="cart" size={13} className="ico" />Open POs</div>
-          <div className="kpi-value tabular">{DATA.PURCHASE_ORDERS.filter((p) => p.status !== "received").length}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{DATA.PURCHASE_ORDERS.filter((p) => p.status === "pending").length} pending</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="money" size={13} className="ico" />PO spend · MTD</div>
-          <div className="kpi-value">{fmtINR(DATA.PURCHASE_ORDERS.reduce((s, p) => s + p.total, 0))}</div>
-          <div style={{ fontSize: 11, color: "var(--success)" }}>From database</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label"><Icon name="alert" size={13} className="ico" />Invoice mismatches</div>
-          <div className="kpi-value" style={{ color: "var(--danger)" }}>{DATA.INVOICES.filter((i) => i.status === "mismatch").length}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Needs verification</div>
-        </div>
-      </div>
+      <ErpStatGrid cols={4}>
+        <StatCard
+          icon={TeamOutlined}
+          label="Active vendors"
+          value={DATA.VENDORS.length}
+          hint="2 added this month"
+        />
+        <StatCard
+          icon={ShoppingCartOutlined}
+          label="Open POs"
+          value={DATA.PURCHASE_ORDERS.filter((p) => p.status !== "received").length}
+          hint={`${DATA.PURCHASE_ORDERS.filter((p) => p.status === "pending").length} pending`}
+          hintTone="accent"
+        />
+        <StatCard
+          icon={DollarOutlined}
+          label="PO spend · MTD"
+          value={fmtINR(DATA.PURCHASE_ORDERS.reduce((s, p) => s + p.total, 0))}
+          hint="From database"
+          hintTone="positive"
+        />
+        <StatCard
+          icon={FileExclamationOutlined}
+          label="Invoice mismatches"
+          value={DATA.INVOICES.filter((i) => i.status === "mismatch").length}
+          hint="Needs verification"
+          hintTone="negative"
+        />
+      </ErpStatGrid>
 
       <div className="card">
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
@@ -538,12 +553,36 @@ const DispatchTracking = () => {
         <Btn variant="primary" size="sm" icon="plus" onClick={() => { clearError(); setPlanOpen(true); }}>Plan dispatch</Btn>
       </DashHead>
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="kpi"><div className="kpi-label"><Icon name="truck" size={13} className="ico" />Active vehicles</div><div className="kpi-value tabular">{DATA.DISPATCHES.length}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{inTransit} in transit</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="bolt" size={13} className="ico" />On-time rate</div><div className="kpi-value">94.2<span className="unit">%</span></div><div style={{ fontSize: 11, color: "var(--success)" }}>+1.2pp this month</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="alert" size={13} className="ico" />Delayed</div><div className="kpi-value" style={{ color: "var(--danger)" }}>2</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>1 weather · 1 traffic</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="clock" size={13} className="ico" />Avg transit</div><div className="kpi-value">11.4<span className="unit">hrs</span></div><div style={{ fontSize: 11, color: "var(--success)" }}>−24 min vs Apr</div></div>
-      </div>
+      <ErpStatGrid cols={4}>
+        <StatCard
+          icon={CarOutlined}
+          label="Active vehicles"
+          value={DATA.DISPATCHES.length}
+          hint={`${inTransit} in transit`}
+          hintTone="accent"
+        />
+        <StatCard
+          icon={ThunderboltOutlined}
+          label="On-time rate"
+          value="94.2%"
+          hint="+1.2pp this month"
+          hintTone="positive"
+        />
+        <StatCard
+          icon={AlertOutlined}
+          label="Delayed"
+          value={2}
+          hint="1 weather · 1 traffic"
+          hintTone="negative"
+        />
+        <StatCard
+          icon={ClockCircleOutlined}
+          label="Avg transit"
+          value="11.4 hrs"
+          hint="−24 min vs Apr"
+          hintTone="positive"
+        />
+      </ErpStatGrid>
 
       <div className="grid" style={{ gridTemplateColumns: "1fr 420px", marginBottom: 20 }}>
         <div className="card">

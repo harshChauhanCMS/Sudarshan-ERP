@@ -21,10 +21,11 @@ import { DashHead, SectionH } from "./dashboards";
    EMPLOYEES (HR master)
    ============================================================ */
 import { Button as AntButton, Badge as AntBadge, Avatar as AntAvatar } from "antd";
-import { TeamOutlined, UserAddOutlined, ExportOutlined, WarningOutlined, RightOutlined, CalendarOutlined, DownloadOutlined, PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, EnvironmentOutlined, ThunderboltOutlined, MailOutlined, FilterOutlined, AlertOutlined, MoneyCollectOutlined, FileTextOutlined, CheckOutlined, CloseOutlined, MoreOutlined } from "@ant-design/icons";
+import { TeamOutlined, UserAddOutlined, ExportOutlined, WarningOutlined, RightOutlined, CalendarOutlined, DownloadOutlined, PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, EnvironmentOutlined, ThunderboltOutlined, MailOutlined, FilterOutlined, AlertOutlined, MoneyCollectOutlined, FileTextOutlined, CheckOutlined, CloseOutlined, MoreOutlined, AppstoreOutlined, ShoppingOutlined } from "@ant-design/icons";
 import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
 import { ErpViewAction } from "@/components/common/TableActionIcons";
+import StatCard, { ErpStatGrid } from "@/components/common/StatCard";
 
 
 const Employees = () => {
@@ -71,24 +72,34 @@ const Employees = () => {
         <AntButton type="primary" size="small" icon={<UserAddOutlined />} onClick={() => setOpen(true)}>Add employee</AntButton>
       </DashHead>
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="kpi" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <div><div className="kpi-label"><TeamOutlined style={{ marginRight: 6 }} />Total headcount</div><div style={{ fontSize: 11, color: "var(--fg-muted)", marginTop: 4 }}>From database</div></div>
-          <div className="kpi-value tabular">{DATA.EMPLOYEES.length}</div>
-        </div>
-        <div className="kpi" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <div><div className="kpi-label"><UserAddOutlined style={{ marginRight: 6 }} />New hires (MTD)</div><div style={{ fontSize: 11, color: "var(--success)", marginTop: 4 }}>2 onboarding</div></div>
-          <div className="kpi-value tabular">4</div>
-        </div>
-        <div className="kpi" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <div><div className="kpi-label"><ExportOutlined style={{ marginRight: 6 }} />Exits (MTD)</div><div style={{ fontSize: 11, color: "var(--fg-muted)", marginTop: 4 }}>0.3% attrition</div></div>
-          <div className="kpi-value tabular">1</div>
-        </div>
-        <div className="kpi" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <div><div className="kpi-label"><WarningOutlined style={{ marginRight: 6 }} />Pending actions</div><div style={{ fontSize: 11, color: "var(--fg-muted)", marginTop: 4 }}>3 approvals + 3 docs</div></div>
-          <div className="kpi-value tabular" style={{ color: "var(--warning)" }}>6</div>
-        </div>
-      </div>
+      <ErpStatGrid cols={4}>
+        <StatCard
+          icon={TeamOutlined}
+          label="Total headcount"
+          value={DATA.EMPLOYEES.length}
+          hint="From database"
+        />
+        <StatCard
+          icon={UserAddOutlined}
+          label="New hires (MTD)"
+          value={4}
+          hint="2 onboarding"
+          hintTone="positive"
+        />
+        <StatCard
+          icon={ExportOutlined}
+          label="Exits (MTD)"
+          value={1}
+          hint="0.3% attrition"
+        />
+        <StatCard
+          icon={WarningOutlined}
+          label="Pending actions"
+          value={6}
+          hint="3 approvals + 3 docs"
+          hintTone="warning"
+        />
+      </ErpStatGrid>
 
       <div className="card">
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex" }}>
@@ -192,13 +203,42 @@ const Attendance = () => {
         <AntButton type="primary" size="small" icon={<PlusOutlined />} onClick={() => setApplyLeave(true)}>Apply leave</AntButton>
       </DashHead>
 
-      <div className="grid grid-5" style={{ marginBottom: 20 }}>
-        <div className="kpi"><div className="kpi-label"><CheckCircleOutlined style={{ marginRight: 6 }} />Present today</div><div className="kpi-value tabular" style={{ color: "var(--success)" }}>{DATA.ATTENDANCE_TODAY.present}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{Math.round(DATA.ATTENDANCE_TODAY.present / DATA.ATTENDANCE_TODAY.total * 100)}% attendance</div></div>
-        <div className="kpi"><div className="kpi-label"><ClockCircleOutlined style={{ marginRight: 6 }} />Late comers</div><div className="kpi-value tabular" style={{ color: "var(--warning)" }}>{DATA.ATTENDANCE_TODAY.late}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>3.9%</div></div>
-        <div className="kpi"><div className="kpi-label"><CalendarOutlined style={{ marginRight: 6 }} />On leave</div><div className="kpi-value tabular">{DATA.ATTENDANCE_TODAY.leave}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>11 sick · 7 planned</div></div>
-        <div className="kpi"><div className="kpi-label"><CloseCircleOutlined style={{ marginRight: 6 }} />Absent</div><div className="kpi-value tabular" style={{ color: "var(--danger)" }}>{DATA.ATTENDANCE_TODAY.absent}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Unscheduled</div></div>
-        <div className="kpi"><div className="kpi-label"><EnvironmentOutlined style={{ marginRight: 6 }} />On field</div><div className="kpi-value tabular">{DATA.ATTENDANCE_TODAY.onField}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Sales reps</div></div>
-      </div>
+      <ErpStatGrid cols={5}>
+        <StatCard
+          icon={CheckCircleOutlined}
+          label="Present today"
+          value={DATA.ATTENDANCE_TODAY.present}
+          hint={`${Math.round(DATA.ATTENDANCE_TODAY.present / DATA.ATTENDANCE_TODAY.total * 100)}% attendance`}
+          hintTone="positive"
+        />
+        <StatCard
+          icon={ClockCircleOutlined}
+          label="Late comers"
+          value={DATA.ATTENDANCE_TODAY.late}
+          hint="3.9%"
+          hintTone="warning"
+        />
+        <StatCard
+          icon={CalendarOutlined}
+          label="On leave"
+          value={DATA.ATTENDANCE_TODAY.leave}
+          hint="11 sick · 7 planned"
+        />
+        <StatCard
+          icon={CloseCircleOutlined}
+          label="Absent"
+          value={DATA.ATTENDANCE_TODAY.absent}
+          hint="Unscheduled"
+          hintTone="negative"
+        />
+        <StatCard
+          icon={EnvironmentOutlined}
+          label="On field"
+          value={DATA.ATTENDANCE_TODAY.onField}
+          hint="Sales reps"
+          hintTone="accent"
+        />
+      </ErpStatGrid>
 
       <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", marginBottom: 20 }}>
         <div className="card">
@@ -335,12 +375,33 @@ const Payroll = () => {
         <AntButton type="primary" size="small" icon={<ThunderboltOutlined />} onClick={() => { clearError(); setRunOpen(true); }}>Run payroll</AntButton>
       </DashHead>
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="kpi"><div className="kpi-label"><TeamOutlined style={{ marginRight: 6 }} />Headcount on payroll</div><div className="kpi-value tabular">306</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>+ 48 daily wage</div></div>
-        <div className="kpi"><div className="kpi-label"><MoneyCollectOutlined style={{ marginRight: 6 }} />Gross payout</div><div className="kpi-value">{fmtINR(total * 1.25)}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>May estimate</div></div>
-        <div className="kpi"><div className="kpi-label"><FileTextOutlined style={{ marginRight: 6 }} />Statutory dues</div><div className="kpi-value">{fmtINR(total * 0.2)}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>PF + ESI + TDS</div></div>
-        <div className="kpi"><div className="kpi-label"><CheckCircleOutlined style={{ marginRight: 6 }} />Status</div><div className="kpi-value" style={{ color: "var(--warning)", fontSize: 18 }}>Draft</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Run by May 28</div></div>
-      </div>
+      <ErpStatGrid cols={4}>
+        <StatCard
+          icon={TeamOutlined}
+          label="Headcount on payroll"
+          value={306}
+          hint="+ 48 daily wage"
+        />
+        <StatCard
+          icon={MoneyCollectOutlined}
+          label="Gross payout"
+          value={fmtINR(total * 1.25)}
+          hint="May estimate"
+        />
+        <StatCard
+          icon={FileTextOutlined}
+          label="Statutory dues"
+          value={fmtINR(total * 0.2)}
+          hint="PF + ESI + TDS"
+        />
+        <StatCard
+          icon={CheckCircleOutlined}
+          label="Status"
+          value="Draft"
+          hint="Run by May 28"
+          hintTone="warning"
+        />
+      </ErpStatGrid>
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-head">
@@ -1141,12 +1202,34 @@ const PackagingInventory = () => {
         <Btn variant="primary" size="sm" icon="plus" onClick={() => { clearError(); router.push("/inventory/packaging/add"); }}>Add packaging</Btn>
       </DashHead>
 
-      <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <div className="kpi"><div className="kpi-label"><Icon name="package" size={13} className="ico" />Total SKUs</div><div className="kpi-value tabular">{DATA.PACKAGING.length}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>4 bag · 2 fabric</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="bag" size={13} className="ico" />Total bags in stock</div><div className="kpi-value tabular">39,820</div><div style={{ fontSize: 11, color: "var(--success)" }}>+4.2% this week</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="alert" size={13} className="ico" />Low stock SKUs</div><div className="kpi-value" style={{ color: "var(--warning)" }}>{DATA.PACKAGING.filter(p => p.status === "low").length}</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>Reorder needed</div></div>
-        <div className="kpi"><div className="kpi-label"><Icon name="bolt" size={13} className="ico" />Coverage (days)</div><div className="kpi-value tabular">21</div><div style={{ fontSize: 11, color: "var(--fg-muted)" }}>At current run rate</div></div>
-      </div>
+      <ErpStatGrid cols={4}>
+        <StatCard
+          icon={AppstoreOutlined}
+          label="Total SKUs"
+          value={DATA.PACKAGING.length}
+          hint="4 bag · 2 fabric"
+        />
+        <StatCard
+          icon={ShoppingOutlined}
+          label="Total bags in stock"
+          value="39,820"
+          hint="+4.2% this week"
+          hintTone="positive"
+        />
+        <StatCard
+          icon={AlertOutlined}
+          label="Low stock SKUs"
+          value={DATA.PACKAGING.filter((p) => p.status === "low").length}
+          hint="Reorder needed"
+          hintTone="warning"
+        />
+        <StatCard
+          icon={ThunderboltOutlined}
+          label="Coverage (days)"
+          value={21}
+          hint="At current run rate"
+        />
+      </ErpStatGrid>
 
       <div className="card">
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center" }}>
