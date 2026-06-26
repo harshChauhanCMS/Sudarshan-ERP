@@ -794,6 +794,15 @@ const Topbar = ({
 
       <div className="tb-actions">
         <button
+          type="button"
+          className="tb-brand-pill"
+          onClick={goHome}
+          title="Sudarshan ERP home"
+          aria-label="Sudarshan ERP home"
+        >
+          <span className="tb-brand-pill__text">Sudarshan ERP</span>
+        </button>
+        <button
           className="tb-iconbtn"
           onClick={onNotifClick}
           title="Notifications"

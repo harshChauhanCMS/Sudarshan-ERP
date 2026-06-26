@@ -183,7 +183,10 @@
   box-shadow:
     0 4px 12px rgba(15, 23, 42, 0.12),
     0 1px 3px rgba(15, 23, 42, 0.08);
-  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
   z-index: 2;
 }
 
@@ -222,7 +225,9 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--fg) 22%, transparent);
   cursor: pointer;
-  transition: width 0.2s ease, background 0.2s ease;
+  transition:
+    width 0.2s ease,
+    background 0.2s ease;
 }
 
 .dash-banner-carousel__dot.is-active {
@@ -276,5 +281,67 @@
 
 .disp-dash .dash-banner-carousel__avatar {
   transform: scale(1.45);
+  transform-origin: center bottom;
+}
+
+/* Owner dashboard — same avatar treatment as dispatch */
+.owner-dash .dash-banner-carousel__viewport {
+  padding-top: 3rem;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.owner-dash .dash-banner-carousel__slide {
+  position: relative;
+  overflow: visible;
+  min-height: 112px;
+  padding-top: 0.85rem;
+  padding-bottom: 1rem;
+}
+
+.owner-dash .dash-banner-carousel__avatar-wrap {
+  position: absolute;
+  right: 3.5rem;
+  bottom: 0;
+  width: 140px;
+  height: 120px;
+  overflow: visible;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.owner-dash .dash-banner-carousel__avatar {
+  transform: scale(1.2);
+  transform-origin: center bottom;
+}
+
+/* Admin dashboard — same avatar treatment as owner */
+.admin-dash .dash-banner-carousel__viewport {
+  padding-top: 3rem;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.admin-dash .dash-banner-carousel__slide {
+  position: relative;
+  overflow: visible;
+  min-height: 112px;
+  padding-top: 0.85rem;
+  padding-bottom: 1rem;
+}
+
+.admin-dash .dash-banner-carousel__avatar-wrap {
+  position: absolute;
+  right: 3.5rem;
+  bottom: 0;
+  width: 140px;
+  height: 120px;
+  overflow: visible;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.admin-dash .dash-banner-carousel__avatar {
+  transform: scale(1.2);
   transform-origin: center bottom;
 }

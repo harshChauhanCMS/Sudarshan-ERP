@@ -53,7 +53,7 @@ import {
   fieldVisitsTodayCount,
   dispatchesForPlant,
 } from "@/lib/erp-stats";
-import { DASHBOARD_AVATARS, OWNER_BANNER_AVATARS, bannerAvatarSrc } from "@/lib/dashboard-banner-avatars";
+import { DASHBOARD_AVATARS, OWNER_BANNER_AVATARS, ADMIN_BANNER_AVATARS, bannerAvatarSrc } from "@/lib/dashboard-banner-avatars";
 import {
   Btn,
   Badge,
@@ -320,7 +320,7 @@ const ADMIN_BANNER_SLIDES = [
     text: "Run Minerals and Microns from a single admin workspace — users, alerts, procurement, inventory, and live operations together.",
     name: "Operations team",
     role: "Admin dashboard",
-    avatarSrc: DASHBOARD_AVATARS.vikramSingh,
+    avatarSrc: ADMIN_BANNER_AVATARS.platform,
     avatarColor: 1,
     href: "/dashboard/admin",
     actionLabel: "Explore dashboard",
@@ -333,7 +333,7 @@ const ADMIN_BANNER_SLIDES = [
     text: "Create purchase orders, verify vendor invoices, and resolve mismatches before they reach month-end closing.",
     name: "Accounts team",
     role: "Procurement module",
-    avatarSrc: DASHBOARD_AVATARS.priyaSharma,
+    avatarSrc: ADMIN_BANNER_AVATARS.procurement,
     avatarColor: 2,
     href: "/procurement/invoices",
     actionLabel: "Open procurement",
@@ -346,7 +346,7 @@ const ADMIN_BANNER_SLIDES = [
     text: "Monitor reorder levels, low-stock alerts, and warehouse movement for both manufacturing plants in real time.",
     name: "Stores team",
     role: "Inventory module",
-    avatarSrc: DASHBOARD_AVATARS.rajeshMehta,
+    avatarSrc: ADMIN_BANNER_AVATARS.inventory,
     avatarColor: 3,
     href: "/inventory/raw-material",
     actionLabel: "View inventory",
@@ -359,7 +359,7 @@ const ADMIN_BANNER_SLIDES = [
     text: "Mark attendance, track field visits with GPS from mobile, and coordinate dispatches from order booking to delivery.",
     name: "HR & dispatch",
     role: "HRMS & logistics",
-    avatarSrc: DASHBOARD_AVATARS.anitaVerma,
+    avatarSrc: ADMIN_BANNER_AVATARS.people,
     avatarColor: 4,
     href: "/hrms/attendance",
     actionLabel: "People & dispatch",
@@ -847,6 +847,26 @@ const MasterDashboard = ({ navigate }) => {
 /* ============================================================
    ADMIN DASHBOARD — operational
    ============================================================ */
+const ADMIN_ORDERS_WEEK_COLORS = [
+  "#2563eb",
+  "#7c3aed",
+  "#db2777",
+  "#ea580c",
+  "#16a34a",
+  "#0d9488",
+  "#ca8a04",
+];
+
+const ADMIN_ORDERS_WEEK_GRADIENTS = [
+  { from: "#60a5fa", to: "#1d4ed8" },
+  { from: "#a78bfa", to: "#6d28d9" },
+  { from: "#f472b6", to: "#be185d" },
+  { from: "#fb923c", to: "#c2410c" },
+  { from: "#4ade80", to: "#15803d" },
+  { from: "#2dd4bf", to: "#0f766e" },
+  { from: "#facc15", to: "#a16207" },
+];
+
 const AdminEyebrow = ({ children }) => (
   <div className="admin-eyebrow">{children}</div>
 );
@@ -1459,14 +1479,35 @@ const AdminDashboard = ({ navigate }) => {
             className="admin-widget-footnote"
             style={{ marginTop: 0, marginBottom: 12 }}
           >
-            Daily order count
+            Daily order count · each day in a distinct color
           </p>
-          <BarChart
-            data={ordersWeekData}
-            keys={["orders"]}
-            colors={["var(--primary)"]}
-            h={120}
-          />
+          <div className="owner-chart-panel admin-orders-week-chart">
+            <div className="owner-chart-panel__canvas">
+              <BarChart
+                data={ordersWeekData}
+                keys={["orders"]}
+                colors={ADMIN_ORDERS_WEEK_COLORS}
+                groupColors={ADMIN_ORDERS_WEEK_COLORS}
+                groupGradients={ADMIN_ORDERS_WEEK_GRADIENTS}
+                showValues
+                h={148}
+                tooltipFormatter={({ label, value }) =>
+                  `${label}: ${value} order${value === 1 ? "" : "s"}`
+                }
+              />
+            </div>
+            <div className="owner-chart-legend owner-chart-legend--bar">
+              {ordersWeekData.map((d, i) => (
+                <span key={d.day} className="owner-chart-legend__item">
+                  <span
+                    className="owner-chart-legend__dot"
+                    style={{ background: ADMIN_ORDERS_WEEK_COLORS[i] }}
+                  />
+                  {d.day}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2026,7 +2067,11 @@ const OwnerDashboard = ({ navigate }) => {
               groupColors={OWNER_CHART_THEMES.dispatch.colors}
               labelKey="label"
               tooltipFormatter={ownerChartTooltip.dispatch}
-              h={155}
+              showValues
+              axisFontSize={13}
+              valueFontSize={18}
+              labelFontSize={13}
+              h={190}
             />
           </OwnerChartPanel>
         </OwnerWidget>
@@ -3248,6 +3293,14 @@ const DISPATCH_CHART_THEMES = {
   },
 };
 
+const DISPATCH_OPS_CHART_PROPS = {
+  showValues: true,
+  axisFontSize: 13,
+  valueFontSize: 18,
+  labelFontSize: 13,
+  h: 190,
+};
+
 const dispChartLegend = (theme, labels) =>
   labels.map((label, i) => ({
     label,
@@ -3831,7 +3884,7 @@ const DispatchDashboard = ({ navigate }) => {
               groupColors={DISPATCH_CHART_THEMES.dueToday.colors}
               labelKey="plant"
               tooltipFormatter={dispChartTooltip.count}
-              h={150}
+              {...DISPATCH_OPS_CHART_PROPS}
             />
           </OwnerChartPanel>
         </DispWidget>
@@ -3852,7 +3905,7 @@ const DispatchDashboard = ({ navigate }) => {
               groupColors={DISPATCH_CHART_THEMES.overdue.colors}
               labelKey="plant"
               tooltipFormatter={dispChartTooltip.count}
-              h={120}
+              {...DISPATCH_OPS_CHART_PROPS}
             />
           </OwnerChartPanel>
           <ul className="disp-dash-list disp-dash-list--compact">
@@ -3890,7 +3943,7 @@ const DispatchDashboard = ({ navigate }) => {
               groupColors={DISPATCH_CHART_THEMES.company.colors}
               labelKey="plant"
               tooltipFormatter={dispChartTooltip.count}
-              h={155}
+              {...DISPATCH_OPS_CHART_PROPS}
             />
           </OwnerChartPanel>
         </DispWidget>

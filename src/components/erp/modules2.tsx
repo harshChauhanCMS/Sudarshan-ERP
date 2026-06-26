@@ -27,7 +27,6 @@ import {
 import PageFilterDrawer from "@/components/common/PageFilterDrawer";
 import PageFilterToolbar from "@/components/common/PageFilterToolbar";
 import StatCard, { ErpStatGrid, mapDashStatTone } from "@/components/common/StatCard";
-import StatCard, { ErpStatGrid, mapDashStatTone } from "@/components/common/StatCard";
 import dayjs from "dayjs";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
@@ -51,6 +50,56 @@ import { DashHead, SectionH } from "./dashboards";
    ============================================================ */
 
 
+function detailGrid(fields) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(120px, 38%) 1fr",
+        gap: "10px 16px",
+        fontSize: 13,
+      }}
+    >
+      {fields.map((field) => (
+        <React.Fragment key={field.label}>
+          <span className="muted">{field.label}</span>
+          <span>{field.value}</span>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+function customerDetailFields(c) {
+  const openAr = Math.round(c.ytd * 0.18);
+  return [
+    { label: "Customer ID", value: c.id },
+    { label: "Name", value: c.name },
+    { label: "City", value: c.city || "—" },
+    { label: "Status", value: c.status || "active" },
+    { label: "Terms", value: c.terms || "—" },
+    { label: "Orders", value: String(c.orders ?? 0) },
+    { label: "YTD revenue", value: fmtINR(c.ytd) },
+    { label: "Open AR", value: fmtINR(openAr) },
+    { label: "Contact", value: c.contact || "—" },
+    { label: "Phone", value: c.phone || "—" },
+    { label: "Email", value: c.email || "—" },
+    { label: "GSTIN", value: c.gstin || "—" },
+    { label: "PAN", value: c.pan || "—" },
+    { label: "Industry", value: c.industryType || "—" },
+    {
+      label: "Credit limit",
+      value: c.creditLimit != null ? fmtINR(c.creditLimit) : "—",
+    },
+    { label: "Assigned to", value: c.assignedTo || "—" },
+    { label: "Billing address", value: c.billingAddress || "—" },
+    { label: "Dispatch address", value: c.dispatchAddress || "—" },
+    { label: "Preferred grades", value: c.preferredGrades || "—" },
+    { label: "Payment terms", value: c.paymentTerms || c.terms || "—" },
+    { label: "Notes", value: c.notes || "—" },
+  ];
+}
+
 /* ============================================================
    CUSTOMERS
    ============================================================ */
@@ -58,6 +107,7 @@ const Customers = () => {
   const router = useRouter();
   const DATA = useDATA();
   const [tab, setTab] = useState("all");
+  const [viewCustomer, setViewCustomer] = useState(null);
 
   const activeCount = DATA.CUSTOMERS.filter((c) => (c.status ?? "active") === "active").length;
   const holdCount = DATA.CUSTOMERS.filter((c) => c.status === "hold").length;
@@ -134,7 +184,9 @@ const Customers = () => {
         key: "actions",
         width: 72,
         align: "center",
-        render: () => <ErpViewAction />,
+        render: (_, row) => (
+          <ErpViewAction label="View customer" onClick={() => setViewCustomer(row)} />
+        ),
       },
     ],
     []
@@ -206,6 +258,20 @@ const Customers = () => {
           />
         </div>
       </div>
+
+      <Modal
+        open={!!viewCustomer}
+        onClose={() => setViewCustomer(null)}
+        title={viewCustomer?.name ?? "Customer"}
+        sub={viewCustomer ? `${viewCustomer.id} · ${viewCustomer.city}` : ""}
+        footer={
+          <Btn variant="ghost" onClick={() => setViewCustomer(null)}>
+            Close
+          </Btn>
+        }
+      >
+        {viewCustomer ? detailGrid(customerDetailFields(viewCustomer)) : null}
+      </Modal>
     </>
   );
 };

@@ -24,8 +24,9 @@ import { Button as AntButton, Badge as AntBadge, Avatar as AntAvatar } from "ant
 import { TeamOutlined, UserAddOutlined, ExportOutlined, WarningOutlined, RightOutlined, CalendarOutlined, DownloadOutlined, PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, EnvironmentOutlined, ThunderboltOutlined, MailOutlined, FilterOutlined, AlertOutlined, MoneyCollectOutlined, FileTextOutlined, CheckOutlined, CloseOutlined, MoreOutlined, AppstoreOutlined, ShoppingOutlined } from "@ant-design/icons";
 import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
-import { ErpViewAction } from "@/components/common/TableActionIcons";
+import { ErpViewAction, ViewEditActions } from "@/components/common/TableActionIcons";
 import StatCard, { ErpStatGrid } from "@/components/common/StatCard";
+import { buildInventoryItemDetailView } from "@/lib/inventory-mobile";
 
 
 const Employees = () => {
@@ -1104,8 +1105,14 @@ const PackagingInventory = () => {
   const DATA = useDATA();
   const { update, saving, error, clearError } = useEntityMutation();
   const [calcOpen, setCalcOpen] = useState(false);
+  const [viewItem, setViewItem] = useState(null);
   const [orderQty, setOrderQty] = useState(24);
   const [bagSize, setBagSize] = useState(1000);
+
+  const viewDetail = useMemo(() => {
+    if (!viewItem) return null;
+    return buildInventoryItemDetailView("packaging", viewItem.code, DATA);
+  }, [viewItem, DATA]);
   const bagsNeeded = Math.ceil(orderQty * 1000 / bagSize);
   const generateStockRequest = async () => {
     const codeMap = { 1000: "PK-FIBC-25", 500: "PK-FIBC-12", 50: "PK-PPW-50", 25: "PK-PPW-25", 20: "PK-BOPP-20" };
@@ -1181,13 +1188,13 @@ const PackagingInventory = () => {
       {
         title: "Actions",
         key: "actions",
-        width: 110,
+        width: 88,
         align: "center",
-        render: () => (
-          <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "center" }}>
-            <AntButton type="link" size="small">Adjust</AntButton>
-            <AntButton type="text" size="small" icon={<MoreOutlined />} aria-label="More actions" />
-          </div>
+        render: (_, p) => (
+          <ViewEditActions
+            onView={() => setViewItem(p)}
+            editHref={`/inventory/packaging/add?code=${encodeURIComponent(p.code)}`}
+          />
         ),
       },
     ],
@@ -1322,6 +1329,57 @@ const PackagingInventory = () => {
             </div>
           );
         })}
+      </Modal>
+
+      <Modal
+        open={!!viewItem}
+        onClose={() => setViewItem(null)}
+        title={viewDetail?.name ?? viewItem?.name ?? "Packaging"}
+        sub={viewDetail ? `${viewDetail.code} · ${viewDetail.statusLabel}` : viewItem?.code}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setViewItem(null)}>
+              Close
+            </Btn>
+            {viewItem ? (
+              <Btn
+                variant="primary"
+                size="sm"
+                icon="edit"
+                onClick={() => {
+                  router.push(
+                    `/inventory/packaging/add?code=${encodeURIComponent(viewItem.code)}`
+                  );
+                  setViewItem(null);
+                }}
+              >
+                Edit
+              </Btn>
+            ) : null}
+          </>
+        }
+      >
+        {viewDetail ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(120px, 38%) 1fr",
+              gap: "10px 16px",
+              fontSize: 13,
+            }}
+          >
+            {viewDetail.fields.map((field) => (
+              <React.Fragment key={field.label}>
+                <span className="muted">{field.label}</span>
+                <span>{field.value}</span>
+              </React.Fragment>
+            ))}
+          </div>
+        ) : (
+          <p className="muted" style={{ margin: 0 }}>
+            Packaging details unavailable.
+          </p>
+        )}
       </Modal>
     </>
   );

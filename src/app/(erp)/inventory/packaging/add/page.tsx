@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { message } from "antd";
 import { Icon } from "@/components/erp/icons";
 import { Btn, fmtNum } from "@/components/erp/ui";
@@ -108,9 +108,47 @@ function PreviewCard({
 
 export default function PackagingMasterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editCode = searchParams.get("code")?.trim() ?? "";
   const DATA = useDATA();
-  const { append, saving, error, clearError } = useEntityMutation();
+  const { append, update, saving, error, clearError } = useEntityMutation();
   const form = useFormState(INITIAL);
+
+  const editing = useMemo(
+    () =>
+      editCode
+        ? DATA.PACKAGING.find(
+            (p) => p.code.toLowerCase() === editCode.toLowerCase()
+          ) ?? null
+        : null,
+    [DATA.PACKAGING, editCode]
+  );
+
+  useEffect(() => {
+    if (!editCode) return;
+    if (!editing) {
+      message.error(`Packaging "${editCode}" not found.`);
+      router.replace("/inventory/packaging");
+      return;
+    }
+    const supplier = DATA.VENDORS.find((v) => v.name === editing.supplier);
+    const typeName = editing.name.includes(" · ")
+      ? editing.name.split(" · ")[0]
+      : editing.name;
+    form.setValues({
+      packagingType: typeName,
+      bagCode: editing.code,
+      capacity: editing.capacity != null ? String(editing.capacity) : "",
+      unit: editing.unit,
+      gradeCompatibility: editing.gradeCompatibility ?? "",
+      supplier: supplier?.id ?? "",
+      materialType: editing.materialType ?? "",
+      minStock: editing.minStock != null ? String(editing.minStock) : "",
+      reorderQty: String(editing.reorder),
+      notes: editing.notes ?? "",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once when edit target resolves
+  }, [editCode, editing?.code]);
 
   const packagingVendors = useMemo(() => {
     const packaging = DATA.VENDORS.filter((v) => v.category === "Packaging");
@@ -156,7 +194,11 @@ export default function PackagingMasterPage() {
       return "Bag code must be alphanumeric (hyphens allowed).";
     }
     if (
-      DATA.PACKAGING.some((p) => p.code.toLowerCase() === code.toLowerCase())
+      DATA.PACKAGING.some(
+        (p) =>
+          p.code.toLowerCase() === code.toLowerCase() &&
+          p.code.toLowerCase() !== editing?.code.toLowerCase()
+      )
     ) {
       return "Bag code already exists.";
     }
@@ -209,8 +251,33 @@ export default function PackagingMasterPage() {
     const reorder = form.values.reorderQty.trim()
       ? parseFloat(form.values.reorderQty)
       : 0;
-    const stock = 0;
+    const stock = editing?.stock ?? 0;
     const supplier = DATA.VENDORS.find((v) => v.id === form.values.supplier);
+
+    if (editing) {
+      await update(
+        "packaging",
+        editing.code,
+        {
+          name: buildName(form.values.packagingType, capacity ?? null),
+          unit: form.values.unit,
+          reorder,
+          minStock,
+          capacity,
+          gradeCompatibility: form.values.gradeCompatibility.trim(),
+          supplier: supplier?.name ?? "",
+          materialType: form.values.materialType,
+          notes: form.values.notes.trim(),
+          status: stockStatus(stock, reorder, minStock),
+        },
+        "code"
+      );
+      message.success("Packaging master updated.");
+      if (!addAnother) {
+        router.push("/inventory/packaging");
+      }
+      return;
+    }
 
     await append("packaging", {
       code,
@@ -240,8 +307,12 @@ export default function PackagingMasterPage() {
   return (
     <div className="pkg-master">
       <DashHead
-        title="Packaging Master"
-        sub="Create or edit packaging bag master records"
+        title={editing ? "Edit Packaging" : "Packaging Master"}
+        sub={
+          editing
+            ? `Update packaging master · ${editing.code}`
+            : "Create or edit packaging bag master records"
+        }
       >
         <Btn
           variant="secondary"
@@ -296,6 +367,8 @@ export default function PackagingMasterPage() {
                         form.setField("bagCode", e.target.value.toUpperCase())
                       }
                       placeholder="e.g. PB-001 (auto if blank)"
+                      readOnly={!!editing}
+                      disabled={!!editing}
                     />
                   </div>
                 </div>
@@ -454,18 +527,20 @@ export default function PackagingMasterPage() {
                   type="submit"
                   disabled={saving}
                 >
-                  {saving ? "Saving…" : "Save"}
+                  {saving ? "Saving…" : editing ? "Update" : "Save"}
                 </Btn>
-                <Btn
-                  variant="secondary"
-                  size="sm"
-                  icon="plus"
-                  type="button"
-                  disabled={saving}
-                  onClick={() => savePackaging(true).catch(() => {})}
-                >
-                  Save &amp; add new
-                </Btn>
+                {!editing ? (
+                  <Btn
+                    variant="secondary"
+                    size="sm"
+                    icon="plus"
+                    type="button"
+                    disabled={saving}
+                    onClick={() => savePackaging(true).catch(() => {})}
+                  >
+                    Save &amp; add new
+                  </Btn>
+                ) : null}
                 <Btn
                   variant="secondary"
                   size="sm"

@@ -281,11 +281,14 @@ const BarChart = ({
   valueFormatter = (v) => String(Math.round(v * 10) / 10),
   tooltipFormatter,
   barRadius = 4,
+  axisFontSize = 10,
+  valueFontSize = 12,
+  labelFontSize = 10,
 }) => {
   const uid = useId().replace(/:/g, "");
   const [hover, setHover] = useState(null);
   const w = 600;
-  const padL = 36, padR = 12, padT = showValues ? 22 : 14, padB = 26;
+  const padL = 36, padR = 12, padT = showValues ? Math.max(30, valueFontSize + 16) : 14, padB = Math.max(28, labelFontSize + 16);
   const innerW = w - padL - padR;
   const innerH = h - padT - padB;
   const groups = data.length;
@@ -331,7 +334,7 @@ const BarChart = ({
           return (
             <g key={i}>
               <line x1={padL} y1={yy} x2={w - padR} y2={yy} stroke="var(--border)" strokeDasharray="3 4" strokeOpacity="0.7" />
-              <text x={padL - 8} y={yy + 3.5} fill="var(--fg-subtle)" fontSize="10" textAnchor="end" fontFamily="var(--font-mono)">
+              <text x={padL - 8} y={yy + 3.5} fill="var(--fg-subtle)" fontSize={axisFontSize} textAnchor="end" fontFamily="var(--font-mono)">
                 {Math.round(v * 10) / 10}
               </text>
             </g>
@@ -385,13 +388,13 @@ const BarChart = ({
                       className={`erp-bar-chart__bar${isHovered ? " erp-bar-chart__bar--hover" : ""}`}
                       pointerEvents="none"
                     />
-                    {showValues && val > 0 ? (
+                    {showValues ? (
                       <text
                         x={bx + barWidth / 2}
-                        y={yy - 6}
+                        y={yy - 8}
                         fill="var(--fg)"
-                        fontSize="10"
-                        fontWeight="600"
+                        fontSize={valueFontSize}
+                        fontWeight="700"
                         textAnchor="middle"
                         fontFamily="var(--font-mono)"
                         pointerEvents="none"
@@ -406,9 +409,9 @@ const BarChart = ({
                 x={groupCenter}
                 y={h - 8}
                 fill="var(--fg-subtle)"
-                fontSize="10"
+                fontSize={labelFontSize}
                 textAnchor="middle"
-                fontWeight="500"
+                fontWeight="600"
                 pointerEvents="none"
               >
                 {d[labelKey]}

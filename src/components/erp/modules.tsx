@@ -4,11 +4,10 @@
 
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button as AntButton } from "antd";
-import { DownloadOutlined, MoreOutlined, AlertOutlined, AppstoreOutlined, CarOutlined, CheckCircleOutlined, ClockCircleOutlined, DollarOutlined, FileExclamationOutlined, ShoppingCartOutlined, TeamOutlined, ThunderboltOutlined, WarningOutlined } from "@ant-design/icons";
+import { DownloadOutlined, AlertOutlined, AppstoreOutlined, CarOutlined, CheckCircleOutlined, ClockCircleOutlined, DollarOutlined, FileExclamationOutlined, ShoppingCartOutlined, TeamOutlined, ThunderboltOutlined, WarningOutlined } from "@ant-design/icons";
 import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS, erpStatusBadge, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
-import { ErpViewAction, TableActionIcon } from "@/components/common/TableActionIcons";
+import { ErpViewAction, TableActionIcon, ViewEditActions } from "@/components/common/TableActionIcons";
 import StatCard, { ErpStatGrid } from "@/components/common/StatCard";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
@@ -16,7 +15,123 @@ import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fm
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { nextDispatchId, formatDisplayDate } from "@/lib/id-generators";
+import { buildInventoryItemDetailView } from "@/lib/inventory-mobile";
+import { downloadCsv } from "@/lib/download-csv";
 import { DashHead, SectionH } from "./dashboards";
+
+function detailGrid(fields) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(120px, 38%) 1fr",
+        gap: "10px 16px",
+        fontSize: 13,
+      }}
+    >
+      {fields.map((field) => (
+        <React.Fragment key={field.label}>
+          <span className="muted">{field.label}</span>
+          <span>{field.value}</span>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+function vendorDetailFields(v) {
+  return [
+    { label: "Vendor ID", value: v.id },
+    { label: "Name", value: v.name },
+    { label: "City", value: v.city },
+    { label: "Category", value: v.category },
+    { label: "Rating", value: String(v.rating) },
+    { label: "POs YTD", value: String(v.poCount) },
+    { label: "YTD spend", value: fmtINR(v.ytd) },
+    { label: "Contact", value: v.contactPerson || "—" },
+    { label: "Phone", value: v.phone || "—" },
+    { label: "Email", value: v.email || "—" },
+    { label: "GSTIN", value: v.gstin || "—" },
+    { label: "Address", value: v.address || "—" },
+    { label: "Materials supplied", value: v.materialsSupplied || "—" },
+    { label: "Payment terms", value: v.paymentTerms ? `${v.paymentTerms} days` : "—" },
+    { label: "Lead time", value: v.leadTime != null ? `${v.leadTime} days` : "—" },
+    { label: "Status", value: v.status || "active" },
+  ];
+}
+
+function poDetailFields(po) {
+  return [
+    { label: "PO #", value: po.id },
+    { label: "Vendor", value: po.vendor },
+    { label: "Date", value: po.date },
+    { label: "Items", value: String(po.items) },
+    { label: "Total", value: fmtINRFull(po.total) },
+    { label: "Status", value: po.status },
+    { label: "Invoice", value: po.invoice },
+    { label: "Material", value: po.materialName || "—" },
+    { label: "Material code", value: po.materialCode || "—" },
+    { label: "Grade", value: po.grade || "—" },
+    {
+      label: "Quantity",
+      value: po.quantity != null ? `${po.quantity} ${po.unit ?? ""}`.trim() : "—",
+    },
+    { label: "Rate", value: po.rate != null ? fmtINRFull(po.rate) : "—" },
+    { label: "Expected delivery", value: po.expectedDelivery || "—" },
+    { label: "Delivery location", value: po.deliveryLocation || "—" },
+    { label: "Notes", value: po.notes || "—" },
+  ];
+}
+
+function downloadVendorCsv(v) {
+  downloadCsv(
+    `vendor-${v.id}.csv`,
+    ["ID", "Name", "City", "Category", "Rating", "POs YTD", "YTD Spend", "Contact", "Phone", "Email", "GSTIN", "Address", "Materials", "Payment Terms", "Lead Time", "Status"],
+    [{
+      ID: v.id,
+      Name: v.name,
+      City: v.city,
+      Category: v.category,
+      Rating: v.rating,
+      "POs YTD": v.poCount,
+      "YTD Spend": v.ytd,
+      Contact: v.contactPerson ?? "",
+      Phone: v.phone ?? "",
+      Email: v.email ?? "",
+      GSTIN: v.gstin ?? "",
+      Address: v.address ?? "",
+      Materials: v.materialsSupplied ?? "",
+      "Payment Terms": v.paymentTerms ?? "",
+      "Lead Time": v.leadTime ?? "",
+      Status: v.status ?? "active",
+    }],
+  );
+}
+
+function downloadPoCsv(po) {
+  downloadCsv(
+    `purchase-order-${po.id}.csv`,
+    ["PO", "Vendor", "Date", "Items", "Total", "Status", "Invoice", "Material", "Code", "Grade", "Quantity", "Unit", "Rate", "Expected Delivery", "Location", "Notes"],
+    [{
+      PO: po.id,
+      Vendor: po.vendor,
+      Date: po.date,
+      Items: po.items,
+      Total: po.total,
+      Status: po.status,
+      Invoice: po.invoice,
+      Material: po.materialName ?? "",
+      Code: po.materialCode ?? "",
+      Grade: po.grade ?? "",
+      Quantity: po.quantity ?? "",
+      Unit: po.unit ?? "",
+      Rate: po.rate ?? "",
+      "Expected Delivery": po.expectedDelivery ?? "",
+      Location: po.deliveryLocation ?? "",
+      Notes: po.notes ?? "",
+    }],
+  );
+}
 
 /* ============================================================
    MODULE SCREENS — Inventory, Procurement, Dispatch, Users, DS
@@ -29,27 +144,12 @@ import { DashHead, SectionH } from "./dashboards";
 const RawMaterialInventory = () => {
   const router = useRouter();
   const DATA = useDATA();
-  const { update, saving, error } = useEntityMutation();
-  const [adjustOpen, setAdjustOpen] = useState(null);
-  const [adjustQty, setAdjustQty] = useState("0");
+  const [viewItem, setViewItem] = useState(null);
 
-  const saveAdjustment = async () => {
-    if (!adjustOpen) return;
-    const delta = parseFloat(adjustQty) || 0;
-    const newStock = Math.max(0, adjustOpen.stock + delta);
-    const reorder = adjustOpen.reorder;
-    const minStock = adjustOpen.minStock ?? 0;
-    let status = "ok";
-    if (newStock <= 0 || (minStock > 0 && newStock <= minStock)) status = "critical";
-    else if (newStock <= reorder) status = "low";
-    await update("rawMaterials", adjustOpen.code, {
-      stock: newStock,
-      status,
-      value: Math.round((newStock / Math.max(adjustOpen.stock, 1)) * adjustOpen.value),
-    }, "code");
-    setAdjustOpen(null);
-    setAdjustQty("0");
-  };
+  const viewDetail = useMemo(() => {
+    if (!viewItem) return null;
+    return buildInventoryItemDetailView("raw-material", viewItem.code, DATA);
+  }, [viewItem, DATA]);
 
   const totalValue = DATA.RAW_MATERIALS.reduce((s, r) => s + r.value, 0);
   const lowCount = DATA.RAW_MATERIALS.filter(r => r.status === "low").length;
@@ -113,15 +213,13 @@ const RawMaterialInventory = () => {
       {
         title: "Actions",
         key: "actions",
-        width: 110,
+        width: 88,
         align: "center",
         render: (_, r) => (
-          <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "center" }}>
-            <AntButton type="link" size="small" onClick={() => setAdjustOpen(r)}>
-              Adjust
-            </AntButton>
-            <AntButton type="text" size="small" icon={<MoreOutlined />} aria-label="More actions" />
-          </div>
+          <ViewEditActions
+            onView={() => setViewItem(r)}
+            editHref={`/inventory/raw-material/add?code=${encodeURIComponent(r.code)}`}
+          />
         ),
       },
     ],
@@ -192,11 +290,58 @@ const RawMaterialInventory = () => {
         </div>
       </div>
 
-      <EntityFormModal open={!!adjustOpen} onClose={() => setAdjustOpen(null)} title={adjustOpen ? `Adjust stock · ${adjustOpen.name}` : ""} sub={adjustOpen ? `Current: ${adjustOpen.stock} ${adjustOpen.unit}` : ""} submitLabel="Save adjustment" saving={saving} error={error} onSubmit={saveAdjustment}>
-        <FormGrid>
-          <FormField label="Adjustment (+/- qty)"><FormInput value={adjustQty} onChange={setAdjustQty} /></FormField>
-        </FormGrid>
-      </EntityFormModal>
+      <Modal
+        open={!!viewItem}
+        onClose={() => setViewItem(null)}
+        title={viewDetail?.name ?? viewItem?.name ?? "Raw material"}
+        sub={viewDetail ? `${viewDetail.code} · ${viewDetail.statusLabel}` : viewItem?.code}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setViewItem(null)}>
+              Close
+            </Btn>
+            {viewItem ? (
+              <Btn
+                variant="primary"
+                size="sm"
+                icon="edit"
+                onClick={() => {
+                  router.push(
+                    `/inventory/raw-material/add?code=${encodeURIComponent(viewItem.code)}`
+                  );
+                  setViewItem(null);
+                }}
+              >
+                Edit
+              </Btn>
+            ) : null}
+          </>
+        }
+      >
+        {viewDetail ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(120px, 38%) 1fr",
+              gap: "10px 16px",
+              fontSize: 13,
+            }}
+          >
+            {viewDetail.fields.map((field) => (
+              <React.Fragment key={field.label}>
+                <span className="muted">{field.label}</span>
+                <span className={field.tone === "danger" ? "danger" : field.tone === "warn" ? "warning" : ""}>
+                  {field.value}
+                </span>
+              </React.Fragment>
+            ))}
+          </div>
+        ) : (
+          <p className="muted" style={{ margin: 0 }}>
+            Material details unavailable.
+          </p>
+        )}
+      </Modal>
     </>
   );
 };
@@ -208,6 +353,8 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
   const router = useRouter();
   const DATA = useDATA();
   const [tab, setTab] = useState(defaultTab);
+  const [viewVendor, setViewVendor] = useState(null);
+  const [viewPo, setViewPo] = useState(null);
   const vendorColumns = useMemo(
     () => [
       {
@@ -280,9 +427,18 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       {
         title: "Actions",
         key: "actions",
-        width: 72,
+        width: 88,
         align: "center",
-        render: () => <ErpViewAction />,
+        render: (_, row) => (
+          <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
+            <ErpViewAction label="View vendor" onClick={() => setViewVendor(row)} />
+            <TableActionIcon
+              icon={<DownloadOutlined />}
+              label="Download vendor"
+              onClick={() => downloadVendorCsv(row)}
+            />
+          </div>
+        ),
       },
     ],
     []
@@ -333,10 +489,14 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         key: "actions",
         width: 88,
         align: "center",
-        render: () => (
+        render: (_, row) => (
           <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
-            <ErpViewAction label="View purchase order" />
-            <TableActionIcon icon={<DownloadOutlined />} label="Download purchase order" />
+            <ErpViewAction label="View purchase order" onClick={() => setViewPo(row)} />
+            <TableActionIcon
+              icon={<DownloadOutlined />}
+              label="Download purchase order"
+              onClick={() => downloadPoCsv(row)}
+            />
           </div>
         ),
       },
@@ -418,6 +578,41 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
           </div>
         )}
       </div>
+
+      <Modal
+        open={!!viewVendor}
+        onClose={() => setViewVendor(null)}
+        title={viewVendor?.name ?? "Vendor"}
+        sub={viewVendor ? `${viewVendor.id} · ${viewVendor.category}` : ""}
+        footer={
+          <Btn variant="ghost" onClick={() => setViewVendor(null)}>
+            Close
+          </Btn>
+        }
+      >
+        {viewVendor ? detailGrid(vendorDetailFields(viewVendor)) : null}
+      </Modal>
+
+      <Modal
+        open={!!viewPo}
+        onClose={() => setViewPo(null)}
+        title={viewPo ? `Purchase order ${viewPo.id}` : "Purchase order"}
+        sub={viewPo ? `${viewPo.vendor} · ${viewPo.date}` : ""}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setViewPo(null)}>
+              Close
+            </Btn>
+            {viewPo ? (
+              <Btn variant="primary" size="sm" icon="download" onClick={() => downloadPoCsv(viewPo)}>
+                Download CSV
+              </Btn>
+            ) : null}
+          </>
+        }
+      >
+        {viewPo ? detailGrid(poDetailFields(viewPo)) : null}
+      </Modal>
     </>
   );
 };
