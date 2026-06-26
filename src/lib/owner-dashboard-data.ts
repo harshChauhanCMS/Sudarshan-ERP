@@ -139,7 +139,10 @@ function statCardHref(label: string): string | undefined {
   return map[label];
 }
 
-export async function buildOwnerDashboardView(data: ErpData): Promise<OwnerDashboardView> {
+export async function buildOwnerDashboardView(
+  data: ErpData,
+  referenceDate: Date = new Date(),
+): Promise<OwnerDashboardView> {
   const rev = revenueLakhsFromSeries(data.REVENUE_DATA);
   const revenueRupees = revenueMtdRupees(data.REVENUE_DATA);
   const grossProfit = grossProfitRupees(revenueRupees);
@@ -423,7 +426,10 @@ export async function buildOwnerDashboardView(data: ErpData): Promise<OwnerDashb
   ];
 
   return {
-    periodLabel: "May 2026",
+    periodLabel: referenceDate.toLocaleDateString("en-IN", {
+      month: "long",
+      year: "numeric",
+    }),
     subtitle:
       "High-level view across both companies — alerts, dispatch, production, field & risks",
     companyTiles,

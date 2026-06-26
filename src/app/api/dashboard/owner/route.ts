@@ -26,7 +26,23 @@ export async function GET(request: Request) {
 
   try {
     const erpData = await loadErpData();
-    const view = await buildOwnerDashboardView(erpData);
+    const { searchParams } = new URL(request.url);
+    const yearParam = searchParams.get("year");
+    const monthParam = searchParams.get("month");
+    let referenceDate = new Date();
+    if (yearParam && monthParam) {
+      const year = Number(yearParam);
+      const month = Number(monthParam);
+      if (
+        Number.isFinite(year) &&
+        Number.isFinite(month) &&
+        month >= 1 &&
+        month <= 12
+      ) {
+        referenceDate = new Date(year, month - 1, 1);
+      }
+    }
+    const view = await buildOwnerDashboardView(erpData, referenceDate);
     return ok(view);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to load owner dashboard";
