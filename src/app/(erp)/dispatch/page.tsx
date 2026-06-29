@@ -55,7 +55,7 @@ export default function DispatchPlanningPage() {
 
       <DashboardBannerCarousel
         slides={DISPATCH_BANNER_SLIDES}
-        navigate={(href) => router.push(href)}
+        navigate={(href: string) => router.push(href)}
       />
 
       {loading ? (
