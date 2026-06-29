@@ -1,4 +1,4 @@
-import type { PurchaseOrder, RawMaterial, SparePart } from "./entity-types";
+import type { PurchaseOrder, RawMaterial, SparePart, Packaging } from "./entity-types";
 
 const COMPANIES = [
   {
@@ -40,7 +40,7 @@ const RAW_MATERIALS: RawMaterial[] = [
   { code: "CH-STP-010", name: "STPP",                      grade: "Tech 94%",           stock: 28.0, unit: "MT", reorder: 18, value: 1932000, location: "Plant B · Bay 3",  status: "ok",     trend: 1.3 },
 ];
 
-const PACKAGING = [
+const PACKAGING: Packaging[] = [
   { code: "PK-FIBC-25", name: "FIBC Bag · 1000 kg · 4-loop", stock: 4280, unit: "pcs", reorder: 1500, status: "ok",   trend: 4.1 },
   { code: "PK-FIBC-12", name: "FIBC Bag · 500 kg · UN-rated",stock: 920,  unit: "pcs", reorder: 1200, status: "low",  trend: -8.2 },
   { code: "PK-PPW-50",  name: "PP Woven Bag · 50 kg",        stock: 18400,unit: "pcs", reorder: 6000, status: "ok",   trend: 2.4 },

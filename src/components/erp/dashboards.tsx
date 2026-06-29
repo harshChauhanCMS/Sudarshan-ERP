@@ -164,7 +164,17 @@ const OwnerHoverCalendar = ({ value, onChange, children }) => (
   </Popover>
 );
 
-const DashHead = ({ title, sub, children, dateBadge }) => (
+const DashHead = ({
+  title,
+  sub,
+  children,
+  dateBadge,
+}: {
+  title: string;
+  sub: string;
+  children?: React.ReactNode;
+  dateBadge?: React.ReactNode;
+}) => (
   <div className="page-head">
     <div>
       <h1 className="page-title">
@@ -199,7 +209,15 @@ const BannerAvatar = ({ name, avatarSrc, avatarColor }) => {
   return <Avatar name={name} color={avatarColor ?? 1} size="lg" />;
 };
 
-const DashboardBannerCarousel = ({ slides, navigate, intervalMs = 6000 }) => {
+const DashboardBannerCarousel = ({
+  slides,
+  navigate,
+  intervalMs = 6000,
+}: {
+  slides: Array<{ id: string; href?: string; [key: string]: unknown }>;
+  navigate?: (href: string) => void;
+  intervalMs?: number;
+}) => {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const count = slides.length;
