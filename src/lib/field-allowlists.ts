@@ -84,6 +84,14 @@ export const SALARY_PATCH_FIELDS = [
   "status",
 ] as const;
 
+export const LEAVE_PATCH_FIELDS = [
+  "leaveType",
+  "fromDate",
+  "toDate",
+  "days",
+  "reason",
+] as const;
+
 export const ROLE_WRITABLE_FIELDS = [
   "label",
   "description",

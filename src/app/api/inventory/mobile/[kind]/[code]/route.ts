@@ -5,10 +5,12 @@ import { EMPTY_ERP_DATA } from "@/lib/empty-erp-data";
 import { useMockDataEnabled } from "@/lib/bootstrap-meta";
 import {
   buildInventoryItemDetailView,
+  buildPackagingView,
   isInventoryKind,
 } from "@/lib/inventory-mobile";
 import { isDbConfigured } from "@/lib/mongodb";
 import { canAccessDashboard } from "@/lib/nav-permissions";
+import { getPackagingByCode } from "@/lib/packaging-service";
 import { SEED_DATA } from "@/lib/seed-data";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +38,13 @@ export async function GET(
   }
 
   try {
+    if (kind === "packaging") {
+      if (!isDbConfigured()) return fail("Item not found", 404);
+      const item = await getPackagingByCode(decodeURIComponent(code).trim());
+      if (!item) return fail("Item not found", 404);
+      return ok(buildPackagingView(item));
+    }
+
     const erpData = await loadErpData();
     const view = buildInventoryItemDetailView(kind, code, erpData);
     if (!view) return fail("Item not found", 404);

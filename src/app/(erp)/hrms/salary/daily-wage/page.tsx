@@ -33,8 +33,7 @@ import {
   SKILL_FILTERS,
   DISBURSEMENT_FILTERS,
 } from "@/lib/daily-wage-dummy";
-import PageFilterDrawer from "@/components/common/PageFilterDrawer";
-import PageFilterToolbar from "@/components/common/PageFilterToolbar";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
 import { filterBySearch } from "@/lib/filter-search";
 import { downloadCsv } from "@/lib/download-csv";
 
@@ -72,7 +71,7 @@ export default function DailyWagePayrollPage() {
   const [contractor, setContractor] = useState("All");
   const [disbursement, setDisbursement] = useState("All");
   const [search, setSearch] = useState("");
-  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
 
   const fetchWorkers = useCallback(async (period: string, signal?: AbortSignal) => {
     setLoading(true);
@@ -374,11 +373,10 @@ export default function DailyWagePayrollPage() {
         }
       />
 
-      <PageFilterToolbar
+      <PageFilterPanel
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search worker name, ID, trade, contractor…"
-        onFilterClick={() => setFilterDrawerOpen(true)}
         activeFilterCount={
           (payFrequency !== "Monthly" ? 1 : 0) +
           (unit !== "All" ? 1 : 0) +
@@ -387,15 +385,10 @@ export default function DailyWagePayrollPage() {
           (disbursement !== "All" ? 1 : 0) +
           (payPeriod !== currentMonth ? 1 : 0)
         }
-      />
-
-      <PageFilterDrawer
-        open={filterDrawerOpen}
-        onClose={() => setFilterDrawerOpen(false)}
         onApply={handleApplyFilters}
         onClear={handleClearFilters}
         loading={loading}
-        width={400}
+        drawerWidth={400}
       >
         <div className="arf-item">
           <span className="arf-label">Pay Period</span>
@@ -460,7 +453,7 @@ export default function DailyWagePayrollPage() {
             }))}
           />
         </div>
-      </PageFilterDrawer>
+      </PageFilterPanel>
 
       {/* KPI cards */}
       {hasEmployeeData ? (

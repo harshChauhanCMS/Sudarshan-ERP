@@ -7,6 +7,7 @@ import { Icon } from "@/components/erp/icons";
 import { Btn, fmtINRFull, fmtNum } from "@/components/erp/ui";
 import { DashHead } from "@/components/erp/dashboards";
 import { useDATA } from "@/components/erp/data";
+import { usePackaging } from "@/hooks/use-packaging";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { useFormState } from "@/components/forms";
 import { nextPoId, formatDisplayDate } from "@/lib/id-generators";
@@ -77,6 +78,7 @@ function buildInitial(poNumber: string) {
 export default function CreatePurchaseOrderPage() {
   const router = useRouter();
   const DATA = useDATA();
+  const { items: packagingItems } = usePackaging();
   const { append, saving, error, clearError } = useEntityMutation();
 
   const defaultPoNumber = useMemo(
@@ -99,7 +101,7 @@ export default function CreatePurchaseOrderPage() {
         unit: r.unit,
         kind: "RM",
       })),
-      ...DATA.PACKAGING.map((p) => ({
+      ...packagingItems.map((p) => ({
         code: p.code,
         name: p.name,
         grade: "—",
@@ -114,7 +116,7 @@ export default function CreatePurchaseOrderPage() {
         kind: "SP",
       })),
     ],
-    [DATA.RAW_MATERIALS, DATA.PACKAGING, DATA.SPARE_PARTS]
+    [DATA.RAW_MATERIALS, packagingItems, DATA.SPARE_PARTS]
   );
 
   const selectedMaterial = useMemo(

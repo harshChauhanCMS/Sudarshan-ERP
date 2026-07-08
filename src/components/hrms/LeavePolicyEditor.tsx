@@ -5,6 +5,7 @@ import { PlusOutlined, EditOutlined } from "@ant-design/icons";
 import { useEffect, useState } from "react";
 import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
 
 const LEAVE_TYPE_LABEL: Record<string, string> = {
   casual: "Casual", sick: "Sick", privilege: "Privilege", unpaid: "Unpaid",
@@ -15,6 +16,9 @@ export function LeavePolicyEditor() {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [search, setSearch] = useState("");
+  const [leaveTypeFilter, setLeaveTypeFilter] = useState("all");
+  const [carryForwardFilter, setCarryForwardFilter] = useState("all");
   const [form] = Form.useForm();
 
   const load = async () => {
@@ -91,6 +95,21 @@ export function LeavePolicyEditor() {
     },
   ];
 
+  const filteredPolicies = policies.filter((p) => {
+    if (leaveTypeFilter !== "all" && p.leaveType !== leaveTypeFilter) return false;
+    if (carryForwardFilter !== "all") {
+      const boolVal = carryForwardFilter === "yes";
+      if (p.carryForwardAllowed !== boolVal) return false;
+    }
+    if (search) {
+      const term = search.toLowerCase();
+      if (!p.label?.toLowerCase().includes(term) && !p.leaveType?.toLowerCase().includes(term)) {
+        return false;
+      }
+    }
+    return true;
+  });
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -101,8 +120,48 @@ export function LeavePolicyEditor() {
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Add Policy</Button>
       </div>
 
+      <PageFilterPanel
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search policy name or type…"
+        activeFilterCount={(leaveTypeFilter !== "all" ? 1 : 0) + (carryForwardFilter !== "all" ? 1 : 0)}
+        onApply={() => {}}
+        onClear={() => {
+          setSearch("");
+          setLeaveTypeFilter("all");
+          setCarryForwardFilter("all");
+        }}
+        drawerWidth={320}
+      >
+        <div className="arf-item">
+          <span className="arf-label">Leave Type</span>
+          <Select
+            className="w-full"
+            value={leaveTypeFilter}
+            onChange={setLeaveTypeFilter}
+            options={[
+              { value: "all", label: "All types" },
+              ...Object.entries(LEAVE_TYPE_LABEL).map(([k, v]) => ({ value: k, label: v }))
+            ]}
+          />
+        </div>
+        <div className="arf-item">
+          <span className="arf-label">Carry Forward</span>
+          <Select
+            className="w-full"
+            value={carryForwardFilter}
+            onChange={setCarryForwardFilter}
+            options={[
+              { value: "all", label: "All" },
+              { value: "yes", label: "Yes" },
+              { value: "no", label: "No" },
+            ]}
+          />
+        </div>
+      </PageFilterPanel>
+
       <div style={{ background: "#fff", border: "1px solid #e4e4e7", borderRadius: 12, overflow: "hidden" }}>
-        <CommonTable loading={loading} {...ERP_TABLE_PROPS} dataSource={policies} columns={columns as any} rowKey="_id" pagination={false} size="middle" style={{ padding: 4 }} />
+        <CommonTable loading={loading} {...ERP_TABLE_PROPS} dataSource={filteredPolicies} columns={columns as any} rowKey="_id" pagination={false} size="middle" style={{ padding: 4 }} />
       </div>
 
       <Modal title={editing ? "Edit Policy" : "New Leave Policy"} open={open} onCancel={() => { setOpen(false); form.resetFields(); }} footer={null} width={480}>

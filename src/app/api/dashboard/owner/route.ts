@@ -29,17 +29,22 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const yearParam = searchParams.get("year");
     const monthParam = searchParams.get("month");
+    const dayParam = searchParams.get("day");
     let referenceDate = new Date();
     if (yearParam && monthParam) {
       const year = Number(yearParam);
       const month = Number(monthParam);
+      const day = dayParam ? Number(dayParam) : 1;
       if (
         Number.isFinite(year) &&
         Number.isFinite(month) &&
         month >= 1 &&
-        month <= 12
+        month <= 12 &&
+        Number.isFinite(day) &&
+        day >= 1 &&
+        day <= 31
       ) {
-        referenceDate = new Date(year, month - 1, 1);
+        referenceDate = new Date(year, month - 1, day);
       }
     }
     const view = await buildOwnerDashboardView(erpData, referenceDate);

@@ -10,8 +10,8 @@ import { HRMS_BACK } from "@/lib/hrms-nav";
 import CommonTable, { type CommonTableColumn } from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
 import EmployeeSelect from "@/components/erp/EmployeeSelect";
-import PageFilterDrawer from "@/components/common/PageFilterDrawer";
-import PageFilterToolbar from "@/components/common/PageFilterToolbar";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
+import { ViewEditActions } from "@/components/common/TableActionIcons";
 import { leaveTypeColor } from "@/lib/leave-apply";
 import { filterBySearch } from "@/lib/filter-search";
 
@@ -112,7 +112,7 @@ export default function LeaveRecordPage() {
   const [year, setYear] = useState(String(dayjs().year()));
   const [typeFilter, setTypeFilter] = useState("All");
   const [search, setSearch] = useState("");
-  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
   const [leaves, setLeaves] = useState<Record<string, unknown>[]>([]);
   const [employees, setEmployees] = useState<
     { employeeId: string; fullName: string; department?: string; designation?: string }[]
@@ -244,6 +244,20 @@ export default function LeaveRecordPage() {
         <Tag color={STATUS_COLOR[s]}>{s}</Tag>
       ),
     },
+    {
+      title: "Actions",
+      key: "actions",
+      width: 90,
+      fixed: "right" as const,
+      render: (_, r) => (
+        <ViewEditActions
+          viewHref={`/hrms/leave/record/${encodeURIComponent(r.id)}`}
+          editHref={`/hrms/leave/record/${encodeURIComponent(r.id)}?edit=1`}
+          viewLabel="View leave"
+          editLabel="Edit / change status"
+        />
+      ),
+    },
   ];
 
   return (
@@ -255,20 +269,14 @@ export default function LeaveRecordPage() {
         actions={<Button icon={<DownloadOutlined />}>Export</Button>}
       />
 
-      <PageFilterToolbar
+      <PageFilterPanel
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search leave type, reason, approver…"
-        onFilterClick={() => setFilterDrawerOpen(true)}
         activeFilterCount={
           (employee ? 1 : 0) + (year !== String(dayjs().year()) ? 1 : 0)
         }
-      />
-
-      <PageFilterDrawer
-        open={filterDrawerOpen}
-        onClose={() => setFilterDrawerOpen(false)}
-        onApply={() => setFilterDrawerOpen(false)}
+        onApply={() => {}}
         onClear={handleClearFilters}
       >
         <div className="arf-item">
@@ -284,7 +292,7 @@ export default function LeaveRecordPage() {
             options={yearOptions}
           />
         </div>
-      </PageFilterDrawer>
+      </PageFilterPanel>
 
       {selectedEmployee ? (
         <div className="lv-emp-card">
@@ -321,6 +329,7 @@ export default function LeaveRecordPage() {
           columns={historyColumns}
           dataSource={filteredHistory}
           rowKey="id"
+          scroll={{ x: 1100 }}
           pagination={{ pageSize: 15, showTotal: (n) => `${n} records` }}
           locale={{
             emptyText: (

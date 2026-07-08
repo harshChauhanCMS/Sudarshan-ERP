@@ -12,7 +12,7 @@ import {
   Spin,
   message,
 } from "antd";
-import { EditOutlined, SaveOutlined } from "@ant-design/icons";
+import { EditOutlined, EyeOutlined, SaveOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
 import RepHeader from "@/components/hrms/RepHeader";
@@ -20,6 +20,8 @@ import { HRMS_BACK } from "@/lib/hrms-nav";
 import {
   formatPayrollInr,
   monthDaysInCycle,
+  SALARY_STATUS_LABEL,
+  SALARY_STATUS_COLOR,
   type PayrollSheetRow,
 } from "@/lib/payroll-sheet";
 
@@ -57,13 +59,6 @@ type SheetMeta = {
   designation?: string;
   cycle: string;
   status: string;
-};
-
-const STATUS_COLOR: Record<string, string> = {
-  pending: "default",
-  draft: "orange",
-  approved: "green",
-  disbursed: "blue",
 };
 
 function ReadonlyField({ label, value }: { label: string; value: string }) {
@@ -257,6 +252,18 @@ function EditSalaryContent({
         subtitle={`${meta.employeeName} · ${meta.employeeId} · ${cycleLabel}`}
         actions={
           <>
+            {!pending ? (
+              <Button
+                icon={<EyeOutlined />}
+                onClick={() =>
+                  router.push(
+                    `/hrms/salary/bulk/${encodeURIComponent(sheetId)}/slip?cycle=${encodeURIComponent(cycle)}`,
+                  )
+                }
+              >
+                View salary slip
+              </Button>
+            ) : null}
             {!editMode && sheetEditable ? (
               <Button
                 type="primary"
@@ -302,7 +309,7 @@ function EditSalaryContent({
             <Alert
               type="info"
               showIcon
-              message={`This salary sheet is ${meta.status} and cannot be edited.`}
+              message={`This salary sheet is ${SALARY_STATUS_LABEL[meta.status] || meta.status} and cannot be edited.`}
             />
           )}
 
@@ -312,15 +319,14 @@ function EditSalaryContent({
                 <span>Employee & pay cycle</span>
               </div>
               <Tag
-                color={STATUS_COLOR[meta.status] || "default"}
+                color={SALARY_STATUS_COLOR[meta.status] || "default"}
                 style={{
                   borderRadius: 20,
                   border: 0,
                   fontWeight: 600,
-                  textTransform: "capitalize",
                 }}
               >
-                {meta.status}
+                {SALARY_STATUS_LABEL[meta.status] || meta.status}
               </Tag>
             </div>
 

@@ -33,7 +33,9 @@ export function computeLeaveApprovalKpi(
   }).length;
 
   const approvedMonth = leaves.filter((l) => {
-    if (l.status !== "approved") return false;
+    // "completed" leaves were approved too — they just auto-transitioned
+    // once their end date passed (see syncCompletedLeaveStatuses).
+    if (l.status !== "approved" && l.status !== "completed") return false;
     const approvedAt = dayjs(String(l.hrApprovedAt ?? l.updatedAt ?? l.fromDate ?? ""));
     return approvedAt.isValid() && !approvedAt.isBefore(monthStart);
   });

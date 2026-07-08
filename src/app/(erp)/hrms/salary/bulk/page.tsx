@@ -4,6 +4,7 @@ import { Button, Tag, Select, DatePicker, message } from "antd";
 import {
   DownloadOutlined,
   ReloadOutlined,
+  ThunderboltOutlined,
   TeamOutlined,
   DollarOutlined,
   MinusCircleOutlined,
@@ -15,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import RepHeader from "@/components/hrms/RepHeader";
 import CommonTable from "@/components/common/CommonTable";
-import { TableActionIcon } from "@/components/common/TableActionIcons";
+import { ViewEditActions } from "@/components/common/TableActionIcons";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 import { HRMS_BACK } from "@/lib/hrms-nav";
 import ReportSection from "@/components/hrms/ReportSection";
@@ -23,27 +24,23 @@ import StatCard from "@/components/common/StatCard";
 import {
   getPayrollSheetKpi,
   formatPayrollInr,
+  SALARY_STATUS_LABEL,
+  SALARY_STATUS_COLOR,
   type PayrollSheetRow,
 } from "@/lib/payroll-sheet";
-import PageFilterDrawer from "@/components/common/PageFilterDrawer";
-import PageFilterToolbar from "@/components/common/PageFilterToolbar";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
 import { filterBySearch } from "@/lib/filter-search";
-
-const STATUS_COLOR: Record<string, string> = {
-  pending: "default",
-  draft: "orange",
-  approved: "green",
-  disbursed: "blue",
-};
 
 export default function PayrollBulkPage() {
   const router = useRouter();
   const [month, setMonth] = useState(dayjs());
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
-  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
   const [rows, setRows] = useState<PayrollSheetRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
 
   const cycleKey = month.format("YYYY-MM");
 
@@ -58,6 +55,7 @@ export default function PayrollBulkPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed to load payroll sheet");
       setRows(json.data || []);
+      setSelectedRowKeys([]);
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Failed to load payroll sheet");
       setRows([]);
@@ -69,6 +67,38 @@ export default function PayrollBulkPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const generate = async () => {
+    const selectedEmployeeIds = rows
+      .filter((r) => selectedRowKeys.includes(r.id))
+      .map((r) => r.employeeId);
+
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/hrms/salary/generate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          from: month.startOf("month").format("YYYY-MM-DD"),
+          to: month.endOf("month").format("YYYY-MM-DD"),
+          ...(selectedEmployeeIds.length > 0
+            ? { employeeIds: selectedEmployeeIds }
+            : {}),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed");
+      message.success(
+        `Generated ${json.data.generated} salary slips for ${month.format("MMMM YYYY")}`,
+      );
+      setSelectedRowKeys([]);
+      void load();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Generate failed");
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const filtered = useMemo(() => {
     return filterBySearch(rows, search, (r) => [
@@ -230,13 +260,13 @@ export default function PayrollBulkPage() {
       title: "Status",
       dataIndex: "status",
       key: "status",
-      width: 100,
+      width: 140,
       render: (v: string) => (
         <Tag
-          color={STATUS_COLOR[v] || "default"}
-          style={{ borderRadius: 20, border: 0, fontWeight: 600, textTransform: "capitalize" }}
+          color={SALARY_STATUS_COLOR[v] || "default"}
+          style={{ borderRadius: 20, border: 0, fontWeight: 600 }}
         >
-          {v}
+          {SALARY_STATUS_LABEL[v] || v}
         </Tag>
       ),
     },
@@ -254,9 +284,12 @@ export default function PayrollBulkPage() {
       width: 100,
       fixed: "right" as const,
       render: (_: unknown, record: PayrollSheetRow) => (
-        <TableActionIcon
-          label="Edit salary"
-          onClick={() => {
+        <ViewEditActions
+          showView={record.status !== "pending"}
+          viewLabel="View salary slip"
+          viewHref={`/hrms/salary/bulk/${encodeURIComponent(record.id)}/slip?cycle=${encodeURIComponent(cycleKey)}`}
+          editLabel="Edit salary"
+          onEdit={() => {
             router.push(
               `/hrms/salary/bulk/${encodeURIComponent(record.id)}?cycle=${encodeURIComponent(cycleKey)}`,
             );
@@ -314,22 +347,28 @@ export default function PayrollBulkPage() {
         />
       </div>
 
-      <PageFilterToolbar
+      <PageFilterPanel
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search employee ID, name, department…"
-        onFilterClick={() => setFilterDrawerOpen(true)}
         activeFilterCount={statusFilter !== "all" ? 1 : 0}
         trailing={
-          <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
-            Refresh
-          </Button>
+          <>
+            <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+              Refresh
+            </Button>
+            <Button
+              icon={<ThunderboltOutlined />}
+              onClick={() => void generate()}
+              loading={generating}
+              style={{ background: "#7c3aed", borderColor: "#7c3aed", color: "#fff" }}
+            >
+              {selectedRowKeys.length > 0
+                ? `Generate (${selectedRowKeys.length})`
+                : "Generate All"}
+            </Button>
+          </>
         }
-      />
-
-      <PageFilterDrawer
-        open={filterDrawerOpen}
-        onClose={() => setFilterDrawerOpen(false)}
         onApply={() => void load()}
         onClear={handleClearFilters}
         loading={loading}
@@ -359,7 +398,7 @@ export default function PayrollBulkPage() {
             ]}
           />
         </div>
-      </PageFilterDrawer>
+      </PageFilterPanel>
 
       <ReportSection
         title={`Payroll register · ${month.format("MMMM YYYY")}`}
@@ -373,6 +412,10 @@ export default function PayrollBulkPage() {
           rowKey="id"
           size="middle"
           loading={loading}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys as string[]),
+          }}
           locale={{
             emptyText: loading
               ? "Loading…"

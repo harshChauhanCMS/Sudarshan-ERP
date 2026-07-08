@@ -104,14 +104,15 @@ async function getMonthlyCycleRows(
 
   const [punches, leaves] = await Promise.all([
     AttendancePunch.find({
-      inAt: { $gte: fromD, $lt: toD },
+      punchType: "in",
+      punchedAt: { $gte: fromD, $lt: toD },
     })
       .select("employeeId")
       .lean(),
     LeaveRequest.find({
-      status: "approved",
-      startDate: { $lt: toD },
-      endDate: { $gte: fromD },
+      status: { $in: ["approved", "completed"] },
+      fromDate: { $lt: toD },
+      toDate: { $gte: fromD },
     })
       .select("employeeId")
       .lean(),

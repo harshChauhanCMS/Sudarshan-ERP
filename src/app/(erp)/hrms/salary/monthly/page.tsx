@@ -24,8 +24,7 @@ import CommonTable from "@/components/common/CommonTable";
 import StatCard from "@/components/common/StatCard";
 import ReportSection from "@/components/hrms/ReportSection";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
-import PageFilterDrawer from "@/components/common/PageFilterDrawer";
-import PageFilterToolbar from "@/components/common/PageFilterToolbar";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
 import PayslipModal from "@/components/hrms/PayslipModal";
 
 type SalaryRow = {
@@ -85,7 +84,7 @@ function MonthlySalaryContent() {
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
   const [payslipRow, setPayslipRow] = useState<SalaryRow | null>(null);
   const [month, setMonth] = useState(() =>
     parseCycleParam(searchParams.get("cycle"))
@@ -353,7 +352,7 @@ function MonthlySalaryContent() {
       title: "Status",
       dataIndex: "status",
       key: "status",
-      width: 110,
+      width: 140,
       render: (v: string) => (
         <Tag
           color={STATUS_COLOR[v] || "default"}
@@ -364,7 +363,13 @@ function MonthlySalaryContent() {
             textTransform: "capitalize",
           }}
         >
-          {v === "disbursed" ? "Paid" : v === "pending" ? "Pending" : v}
+          {v === "disbursed"
+            ? "Paid"
+            : v === "pending"
+              ? "Pending"
+              : v === "draft"
+                ? "Salary Generated"
+                : v}
         </Tag>
       ),
     },
@@ -428,11 +433,10 @@ function MonthlySalaryContent() {
         />
       </div>
 
-      <PageFilterToolbar
+      <PageFilterPanel
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Employee ID, name, department…"
-        onFilterClick={() => setFilterDrawerOpen(true)}
         activeFilterCount={statusFilter !== "all" ? 1 : 0}
         trailing={
           <>
@@ -470,11 +474,6 @@ function MonthlySalaryContent() {
             </Button>
           </>
         }
-      />
-
-      <PageFilterDrawer
-        open={filterDrawerOpen}
-        onClose={() => setFilterDrawerOpen(false)}
         onApply={() => void load()}
         onClear={handleClearFilters}
         loading={loading}
@@ -501,7 +500,7 @@ function MonthlySalaryContent() {
             onChange={setStatusFilter}
           />
         </div>
-      </PageFilterDrawer>
+      </PageFilterPanel>
 
       <ReportSection
         title={`Monthly paid employees — ${cycleLabel}`}

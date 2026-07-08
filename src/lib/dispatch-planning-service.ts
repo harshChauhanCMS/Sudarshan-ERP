@@ -16,6 +16,8 @@ import { isDbConfigured } from "@/lib/mongodb";
 import { type ErpData } from "@/lib/seed-data";
 import { EMPTY_ERP_DATA } from "@/lib/empty-erp-data";
 import { nextDispatchId } from "@/lib/id-generators";
+import { listPackaging } from "@/lib/packaging-service";
+import type { Packaging } from "@/lib/entity-types";
 
 function isDispatchNumber(id: string): boolean {
   return /^DSP-\d+/i.test(id.trim());
@@ -90,8 +92,8 @@ function defaultSourceLocation(data: ErpData): string {
   return `${co.name} — ${plant}, Loading Bay 2`;
 }
 
-function packagingHealth(data: ErpData): { ok: boolean; note: string } {
-  const low = data.PACKAGING.filter((p) => p.status === "low" || p.status === "critical");
+function packagingHealth(packaging: Packaging[]): { ok: boolean; note: string } {
+  const low = packaging.filter((p) => p.status === "low" || p.status === "critical");
   if (low.length === 0) {
     return { ok: true, note: "Ready — packaging stock available." };
   }
@@ -132,9 +134,12 @@ function isAwaitingOrder(order: Order, dispatches: Dispatch[]): boolean {
   return order.status === "scheduled" || order.status === "in-production";
 }
 
-export function buildAwaitingOrders(data: ErpData): AwaitingOrderView[] {
+export function buildAwaitingOrders(
+  data: ErpData,
+  packagingItems: Packaging[],
+): AwaitingOrderView[] {
   const sourceLocation = defaultSourceLocation(data);
-  const packaging = packagingHealth(data);
+  const packaging = packagingHealth(packagingItems);
 
   const dispatches = getDispatches(data);
 
@@ -171,45 +176,93 @@ export function buildAwaitingOrders(data: ErpData): AwaitingOrderView[] {
     .sort((a, b) => a.requested.localeCompare(b.requested));
 }
 
-export function buildPlanningStats(orders: AwaitingOrderView[]): PlanningStats {
+/**
+ * `Dispatch.planStatus` is written once when a plan is created/edited and never
+ * touched again — so a dispatch that later gets a vehicle/driver assigned (or
+ * becomes overdue) keeps showing its stale original status. Recompute it live
+ * from the dispatch's current vehicle/driver/order state instead of trusting
+ * the stored value, for every dispatch still active (not delivered/cancelled).
+ */
+function resolveLivePlanStatus(
+  dispatch: Dispatch,
+  order: Order | undefined,
+  packagingOk: boolean
+): PlanStatus {
+  const proxyOrder: Order =
+    order ?? ({ id: dispatch.orderId ?? "", due: "", progress: 100 } as Order);
+  return derivePlanStatus(proxyOrder, dispatch, packagingOk);
+}
+
+export function buildPlanningStats(
+  awaitingOrders: AwaitingOrderView[],
+  plannedDispatches: PlannedDispatchView[]
+): PlanningStats {
+  // Active planned dispatches count toward the same buckets as awaiting
+  // orders — otherwise once every order has a plan, this row is stuck at
+  // zero forever regardless of what's actually happening on the ground.
+  const activePlanned = plannedDispatches.filter(
+    (d) => d.status !== "delivered" && d.status !== "cancelled"
+  );
+  const count = (status: PlanStatus) =>
+    awaitingOrders.filter((o) => o.status === status).length +
+    activePlanned.filter((d) => d.planStatus === status).length;
   return {
-    ready: orders.filter((o) => o.status === "ready").length,
-    pack: orders.filter((o) => o.status === "pack").length,
-    vehicle: orders.filter((o) => o.status === "vehicle").length,
-    delayed: orders.filter((o) => o.status === "delayed").length,
+    ready: count("ready"),
+    pack: count("pack"),
+    vehicle: count("vehicle"),
+    delayed: count("delayed"),
   };
 }
 
-export function buildPlannedDispatches(dispatches: Dispatch[]): PlannedDispatchView[] {
+export function buildPlannedDispatches(
+  dispatches: Dispatch[],
+  orders: Order[],
+  packagingOk: boolean
+): PlannedDispatchView[] {
   return [...dispatches]
-    .map((d) => ({
-      id: d.id,
-      orderId: d.orderId ?? "—",
-      customer: d.customer,
-      product: d.product ?? "—",
-      route: d.route,
-      loaded: d.loaded,
-      eta: d.eta,
-      vehicle: d.vehicle,
-      driver: d.driver,
-      planStatus:
-        (d.planStatus as PlanStatus) ??
-        (d.vehicle && d.vehicle !== "—" ? "ready" : "vehicle"),
-      status: d.status,
-      plannedAt: d.plannedAt ?? d.lastUpdate,
-    }))
+    .map((d) => {
+      const isActive = d.status !== "delivered" && d.status !== "cancelled";
+      const order =
+        d.orderId && !isDispatchNumber(d.orderId)
+          ? orders.find((o) => o.id === d.orderId)
+          : undefined;
+      const planStatus: PlanStatus = isActive
+        ? resolveLivePlanStatus(d, order, packagingOk)
+        : ((d.planStatus as PlanStatus) ??
+          (d.vehicle && d.vehicle !== "—" ? "ready" : "vehicle"));
+      return {
+        id: d.id,
+        orderId: d.orderId ?? "—",
+        customer: d.customer,
+        product: d.product ?? "—",
+        route: d.route,
+        loaded: d.loaded,
+        eta: d.eta,
+        vehicle: d.vehicle,
+        driver: d.driver,
+        planStatus,
+        status: d.status,
+        plannedAt: d.plannedAt ?? d.lastUpdate,
+      };
+    })
     .sort((a, b) => b.plannedAt.localeCompare(a.plannedAt));
 }
 
 export async function getDispatchPlanningOverview() {
   const { data, source, dbConfigured } = await loadErpSnapshot();
-  const awaitingOrders = buildAwaitingOrders(data);
-  const plannedDispatches = buildPlannedDispatches(getDispatches(data));
+  const packagingItems = dbConfigured ? await listPackaging() : data.PACKAGING;
+  const packaging = packagingHealth(packagingItems);
+  const awaitingOrders = buildAwaitingOrders(data, packagingItems);
+  const plannedDispatches = buildPlannedDispatches(
+    getDispatches(data),
+    data.ORDERS as Order[],
+    packaging.ok
+  );
   const hasData = awaitingOrders.length > 0 || plannedDispatches.length > 0;
 
   return {
     awaitingOrders,
-    stats: buildPlanningStats(awaitingOrders),
+    stats: buildPlanningStats(awaitingOrders, plannedDispatches),
     plannedDispatches,
     companyLabel: (() => {
       const co = data.COMPANIES[0];

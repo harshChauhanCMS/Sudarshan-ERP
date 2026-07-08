@@ -4,8 +4,7 @@ import { useMemo, useState } from "react";
 import { DatePicker, Select } from "antd";
 import type dayjs from "dayjs";
 import EmployeeSelect from "@/components/erp/EmployeeSelect";
-import PageFilterDrawer from "@/components/common/PageFilterDrawer";
-import PageFilterToolbar from "@/components/common/PageFilterToolbar";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
 
 export type PeriodOption = { value: string; label: string };
 
@@ -66,7 +65,6 @@ export default function AttendanceFilterPanel({
   setSearch,
   searchPlaceholder,
 }: Props) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const handleClear = () => {
     if (onClear) {
@@ -88,28 +86,21 @@ export default function AttendanceFilterPanel({
   }, [dept, unit, shift, period, showShift, showEmployee, employeeId]);
 
   return (
-    <>
-      <PageFilterToolbar
-        {...(setSearch
-          ? {
-              search,
-              onSearchChange: setSearch,
-              searchPlaceholder:
-                searchPlaceholder ?? "Search employee name, ID, department…",
-            }
-          : {})}
-        onFilterClick={() => setDrawerOpen(true)}
-        activeFilterCount={activeFilterCount}
-      />
-
-      <PageFilterDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onApply={onApply}
-        onClear={handleClear}
-        loading={loading}
-      >
-        <div className="arf-item">
+    <PageFilterPanel
+      {...(setSearch
+        ? {
+            search,
+            onSearchChange: setSearch,
+            searchPlaceholder:
+              searchPlaceholder ?? "Search employee name, ID, department…",
+          }
+        : {})}
+      activeFilterCount={activeFilterCount}
+      onApply={onApply}
+      onClear={handleClear}
+      loading={loading}
+    >
+      <div className="arf-item">
           <label htmlFor="arf-period" className="arf-label">
             Time period
           </label>
@@ -223,7 +214,6 @@ export default function AttendanceFilterPanel({
             />
           </div>
         ) : null}
-      </PageFilterDrawer>
-    </>
+    </PageFilterPanel>
   );
 }

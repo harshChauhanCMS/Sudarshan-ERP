@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Select } from "antd";
-import PageFilterDrawer from "@/components/common/PageFilterDrawer";
-import PageFilterToolbar from "@/components/common/PageFilterToolbar";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
 
 export interface EmployeeFilterValues {
   search: string;
@@ -51,7 +50,7 @@ export default function EmployeeFilterPanel({
   onApply,
   onClear,
 }: Props) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
+
 
   const patch = (key: keyof EmployeeFilterValues, value: string) =>
     setFilters({ ...filters, [key]: value });
@@ -76,23 +75,16 @@ export default function EmployeeFilterPanel({
   }, [filters]);
 
   return (
-    <>
-      <PageFilterToolbar
-        search={filters.search}
-        onSearchChange={(v) => patch("search", v)}
-        searchPlaceholder="Name, employee ID, phone, department, role…"
-        onFilterClick={() => setDrawerOpen(true)}
-        activeFilterCount={activeFilterCount}
-      />
-
-      <PageFilterDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onApply={onApply}
-        onClear={handleClear}
-        loading={loading}
-      >
-        <div className="arf-item">
+    <PageFilterPanel
+      search={filters.search}
+      onSearchChange={(v) => patch("search", v)}
+      searchPlaceholder="Name, employee ID, phone, department, role…"
+      activeFilterCount={activeFilterCount}
+      onApply={onApply}
+      onClear={handleClear}
+      loading={loading}
+    >
+      <div className="arf-item">
           <span className="arf-label">Department</span>
           <Select
             className="w-full"
@@ -156,7 +148,6 @@ export default function EmployeeFilterPanel({
             ]}
           />
         </div>
-      </PageFilterDrawer>
-    </>
+    </PageFilterPanel>
   );
 }

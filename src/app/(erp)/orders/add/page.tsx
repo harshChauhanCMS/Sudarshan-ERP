@@ -7,6 +7,7 @@ import { Icon } from "@/components/erp/icons";
 import { Btn, fmtNum } from "@/components/erp/ui";
 import { DashHead } from "@/components/erp/dashboards";
 import { useDATA } from "@/components/erp/data";
+import { usePackaging } from "@/hooks/use-packaging";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { useFormState } from "@/components/forms";
 import { nextOrderId, formatDueDate } from "@/lib/id-generators";
@@ -40,12 +41,6 @@ function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function addDaysIso(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
 function bagSizeFromName(name: string): number {
   const match = name.match(/(\d+(?:\.\d+)?)\s*kg/i);
   if (match) return parseFloat(match[1]);
@@ -70,17 +65,17 @@ function buildInitial(orderNumber: string) {
     orderDate: todayIsoDate(),
     customer: "",
     material: "",
-    grade: "paint",
-    quantity: "12",
+    grade: "",
+    quantity: "",
     unit: "MT",
     packaging: "",
-    bagSize: "25",
-    bagsPerTon: "40",
+    bagSize: "",
+    bagsPerTon: "",
     palletised: "no",
-    bagsPerPallet: "40",
-    dispatchDate: addDaysIso(6),
-    priority: "high",
-    assignedUnit: "PLANT-A",
+    bagsPerPallet: "",
+    dispatchDate: "",
+    priority: "",
+    assignedUnit: "",
     specialInstructions: "",
   };
 }
@@ -88,6 +83,7 @@ function buildInitial(orderNumber: string) {
 export default function CreateCustomerOrderPage() {
   const router = useRouter();
   const DATA = useDATA();
+  const { items: packagingItems } = usePackaging();
   const { append, saving, error, clearError } = useEntityMutation();
 
   const defaultOrderNumber = useMemo(
@@ -103,14 +99,14 @@ export default function CreateCustomerOrderPage() {
 
   const packagingOptions = useMemo(
     () => [
-      ...DATA.PACKAGING.map((p) => ({
+      ...packagingItems.map((p) => ({
         code: p.code,
         name: p.name,
         bagSize: bagSizeFromName(p.name),
       })),
       ...EXTRA_PACKAGING,
     ],
-    [DATA.PACKAGING]
+    [packagingItems]
   );
 
   const selectedMaterial = useMemo(
@@ -192,6 +188,7 @@ export default function CreateCustomerOrderPage() {
 
     if (!form.values.packaging) return "Packaging / bag type is required.";
     if (!form.values.dispatchDate) return "Requested dispatch date is required.";
+    if (!form.values.priority) return "Priority is required.";
     if (!form.values.assignedUnit) return "Assigned unit / plant is required.";
 
     if (form.values.specialInstructions.length > 500) {
@@ -597,6 +594,7 @@ export default function CreateCustomerOrderPage() {
                       value={form.values.priority}
                       onChange={(e) => form.setField("priority", e.target.value)}
                     >
+                      <option value="">Select priority</option>
                       <option value="normal">Normal</option>
                       <option value="high">High</option>
                       <option value="urgent">Urgent</option>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Button, Tag, message } from "antd";
+import { Button, Tag, message, Select } from "antd";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
 import { FilePdfOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import {
@@ -78,6 +79,34 @@ export default function EmployeeAttendanceReportView({
   const { loading, rows, chartData, summary, employee } =
     useEmployeeAttendanceReport(employeeId, from, to);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) => {
+      if (statusFilter !== "all") {
+        if (statusFilter === "Present" && !r.present) return false;
+        if (statusFilter === "Absent" && !r.absent) return false;
+        if (statusFilter === "Late" && !r.late) return false;
+        if (statusFilter === "On leave" && !r.onLeave) return false;
+      }
+      if (search) {
+        const term = search.toLowerCase();
+        const dateStr = dayjs(r.day).format("YYYY-MM-DD");
+        
+        let statusStr = "";
+        if (r.present) statusStr += " present";
+        if (r.absent) statusStr += " absent";
+        if (r.late) statusStr += " late";
+        if (r.onLeave) statusStr += " on leave";
+
+        if (!dateStr.includes(term) && !statusStr.includes(term)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [rows, search, statusFilter]);
 
   const columns: CommonTableColumn<EmployeeDailyReportRow>[] = useMemo(
     () => [
@@ -196,24 +225,52 @@ export default function EmployeeAttendanceReportView({
         meta={`${rangeLabel} · ${rows.length} day records`}
         flush
       >
-        <div className="employee-attendance-report__toolbar">
-          <Button
-            type="primary"
-            icon={<FilePdfOutlined />}
-            loading={exportingPdf}
-            disabled={!employee || rows.length === 0}
-            onClick={() => void exportPdf()}
-          >
-            Export PDF
-          </Button>
-        </div>
+        <PageFilterPanel
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search date or status…"
+          activeFilterCount={statusFilter !== "all" ? 1 : 0}
+          onApply={() => {}}
+          onClear={() => {
+            setSearch("");
+            setStatusFilter("all");
+          }}
+          drawerWidth={320}
+          trailing={
+            <Button
+              type="primary"
+              icon={<FilePdfOutlined />}
+              loading={exportingPdf}
+              disabled={!employee || rows.length === 0}
+              onClick={() => void exportPdf()}
+            >
+              Export PDF
+            </Button>
+          }
+        >
+          <div className="arf-item">
+            <span className="arf-label">Status</span>
+            <Select
+              className="w-full"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: "all", label: "All statuses" },
+                { value: "Present", label: "Present" },
+                { value: "Absent", label: "Absent" },
+                { value: "Late", label: "Late" },
+                { value: "On leave", label: "On leave" },
+              ]}
+            />
+          </div>
+        </PageFilterPanel>
         <CommonTable
           bordered
           size="middle"
           className="attendance-report-table"
           loading={loading}
           columns={columns}
-          dataSource={rows}
+          dataSource={filteredRows}
           rowKey="day"
           pagination={{ pageSize: 15, showSizeChanger: true }}
           scroll={{ x: 820 }}

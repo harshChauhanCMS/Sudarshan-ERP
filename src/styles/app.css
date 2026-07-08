@@ -803,6 +803,7 @@ button.sb-section-label {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 10px 14px;
   margin-bottom: 16px;
   flex-wrap: wrap;
 }

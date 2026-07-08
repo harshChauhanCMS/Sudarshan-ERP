@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { message } from "antd";
 import { Icon } from "@/components/erp/icons";
 import { Btn } from "@/components/erp/ui";
 import { DashHead } from "@/components/erp/dashboards";
-import { useDATA } from "@/components/erp/data";
-import { useEntityMutation } from "@/hooks/use-entity-mutation";
+import { useSpareParts } from "@/hooks/use-spare-parts";
+import { useEntityList } from "@/hooks/use-entity-list";
 import { useFormState } from "@/components/forms";
-import { nextSpareCode } from "@/lib/id-generators";
+import type { Vendor } from "@/lib/entity-types";
 
 const INITIAL = {
   partName: "",
@@ -93,47 +93,54 @@ const CATEGORY_OPTIONS = [
   { value: "Pump", label: "Other" },
 ];
 
-function stockStatus(
-  stock: number,
-  reorder: number,
-  isCritical: boolean
-): string {
-  if (stock === 0) return "critical";
-  if (isCritical && stock <= reorder) return "critical";
-  if (stock <= reorder) return "low";
-  return "ok";
-}
-
-function isCriticalPart(criticality: string): boolean {
-  return criticality === "critical" || criticality === "high";
+async function saveSparePartApi(payload: Record<string, unknown>, code?: string) {
+  const res = await fetch(
+    code
+      ? `/api/inventory/spare-parts/${encodeURIComponent(code)}`
+      : "/api/inventory/spare-parts",
+    {
+      method: code ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return json.data;
 }
 
 export default function SparePartsMasterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editCode = searchParams.get("code")?.trim() ?? "";
-  const DATA = useDATA();
-  const { append, update, saving, error, clearError } = useEntityMutation();
+  const { items: vendors } = useEntityList<Vendor>("vendors");
+  const {
+    items: sparePartItems,
+    loading: sparePartsLoading,
+    reload: reloadSpareParts,
+  } = useSpareParts();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const form = useFormState(INITIAL);
 
   const editing = useMemo(
     () =>
       editCode
-        ? DATA.SPARE_PARTS.find(
+        ? sparePartItems.find(
             (p) => p.code.toLowerCase() === editCode.toLowerCase()
           ) ?? null
         : null,
-    [DATA.SPARE_PARTS, editCode]
+    [sparePartItems, editCode]
   );
 
   useEffect(() => {
-    if (!editCode) return;
+    if (!editCode || sparePartsLoading) return;
     if (!editing) {
       message.error(`Spare part "${editCode}" not found.`);
       router.replace("/inventory/spare-parts");
       return;
     }
-    const vendor = DATA.VENDORS.find((v) => v.name === editing.vendor);
+    const vendor = vendors.find((v) => v.name === editing.vendor);
     form.setValues({
       partName: editing.name,
       partCode: editing.code,
@@ -149,9 +156,9 @@ export default function SparePartsMasterPage() {
       notes: editing.notes ?? "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once when edit target resolves
-  }, [editCode, editing?.code]);
+  }, [editCode, editing?.code, sparePartsLoading]);
 
-  const spareVendors = useMemo(() => [...DATA.VENDORS], [DATA.VENDORS]);
+  const spareVendors = useMemo(() => [...vendors], [vendors]);
 
   const selectedMachine = useMemo(
     () => MACHINES.find((m) => m.id === form.values.machineName),
@@ -160,7 +167,7 @@ export default function SparePartsMasterPage() {
 
   const machineStats = useMemo(() => {
     if (!selectedMachine) return null;
-    const linked = DATA.SPARE_PARTS.filter(
+    const linked = sparePartItems.filter(
       (p) => p.machineName === selectedMachine.id
     );
     const criticalCount = linked.filter((p) => p.critical).length;
@@ -168,27 +175,27 @@ export default function SparePartsMasterPage() {
       linked: linked.length,
       critical: criticalCount,
     };
-  }, [selectedMachine, DATA.SPARE_PARTS]);
+  }, [selectedMachine, sparePartItems]);
 
   const validate = (): string | null => {
     const name = form.values.partName.trim();
     if (!name) return "Part name is required.";
     if (name.length > 120) return "Part name must be at most 120 characters.";
 
-    let code = form.values.partCode.trim().toUpperCase();
-    if (!code) {
-      code = nextSpareCode(DATA.SPARE_PARTS);
-    } else if (!/^[A-Za-z0-9-]+$/.test(code)) {
-      return "Part code must be alphanumeric (hyphens allowed).";
-    }
-    if (
-      DATA.SPARE_PARTS.some(
-        (p) =>
-          p.code.toLowerCase() === code.toLowerCase() &&
-          p.code.toLowerCase() !== editing?.code.toLowerCase()
-      )
-    ) {
-      return "Part code already exists.";
+    const code = form.values.partCode.trim().toUpperCase();
+    if (code) {
+      if (!/^[A-Za-z0-9-]+$/.test(code)) {
+        return "Part code must be alphanumeric (hyphens allowed).";
+      }
+      if (
+        sparePartItems.some(
+          (p) =>
+            p.code.toLowerCase() === code.toLowerCase() &&
+            p.code.toLowerCase() !== editing?.code.toLowerCase()
+        )
+      ) {
+        return "Part code already exists.";
+      }
     }
 
     if (!form.values.category) return "Category is required.";
@@ -215,83 +222,79 @@ export default function SparePartsMasterPage() {
   };
 
   const saveSparePart = async (addAnother: boolean) => {
-    clearError();
+    setError(null);
     const validationError = validate();
     if (validationError) {
       message.error(validationError);
       throw new Error(validationError);
     }
 
-    const code =
-      form.values.partCode.trim().toUpperCase() ||
-      nextSpareCode(DATA.SPARE_PARTS);
     const reorder = form.values.minStock.trim()
       ? parseFloat(form.values.minStock)
       : 0;
     const rate = form.values.standardRate.trim()
       ? parseFloat(form.values.standardRate)
       : 0;
-    const vendor = DATA.VENDORS.find((v) => v.id === form.values.vendor);
-    const critical = isCriticalPart(form.values.criticality);
+    const vendor = vendors.find((v) => v.id === form.values.vendor);
     const machine = MACHINES.find((m) => m.id === form.values.machineName);
 
-    if (editing) {
-      const stock = editing.stock;
-      await update(
-        "spareParts",
-        editing.code,
-        {
-          name: form.values.partName.trim(),
-          vendor: vendor?.name ?? "",
-          category: form.values.category,
-          unit: form.values.unit,
-          reorder,
-          value: stock * (rate || editing.standardRate || 0),
-          location: form.values.storageLocation.trim() || "—",
-          status: stockStatus(stock, reorder, critical),
-          critical,
-          machineName: machine?.id ?? "",
-          standardRate: rate,
-          criticality: form.values.criticality,
-          notes: form.values.notes.trim(),
-        },
-        "code"
-      );
-      message.success("Spare part updated.");
-      if (!addAnother) {
+    setSaving(true);
+    try {
+      if (editing) {
+        await saveSparePartApi(
+          {
+            name: form.values.partName.trim(),
+            vendor: vendor?.name ?? "",
+            category: form.values.category,
+            unit: form.values.unit,
+            reorder,
+            location: form.values.storageLocation.trim() || "—",
+            machineName: machine?.id ?? "",
+            standardRate: rate,
+            criticality: form.values.criticality,
+            notes: form.values.notes.trim(),
+          },
+          editing.code,
+        );
+        await reloadSpareParts();
+        message.success("Spare part updated.");
+        if (!addAnother) {
+          router.push("/inventory/spare-parts");
+        }
+        return;
+      }
+
+      const code = form.values.partCode.trim().toUpperCase();
+
+      await saveSparePartApi({
+        ...(code ? { code } : {}),
+        name: form.values.partName.trim(),
+        vendor: vendor?.name ?? "",
+        category: form.values.category,
+        unit: form.values.unit,
+        reorder,
+        location: form.values.storageLocation.trim() || "—",
+        machineName: machine?.id ?? "",
+        standardRate: rate,
+        criticality: form.values.criticality,
+        notes: form.values.notes.trim(),
+      });
+      await reloadSpareParts();
+
+      message.success("Spare parts master saved.");
+
+      if (addAnother) {
+        form.reset({ ...INITIAL });
+      } else {
         router.push("/inventory/spare-parts");
       }
-      return;
-    }
-
-    const stock = 0;
-
-    await append("spareParts", {
-      code,
-      name: form.values.partName.trim(),
-      vendor: vendor?.name ?? "",
-      category: form.values.category,
-      stock,
-      unit: form.values.unit,
-      reorder,
-      value: stock * rate,
-      location: form.values.storageLocation.trim() || "—",
-      status: stockStatus(stock, reorder, critical),
-      trend: 0,
-      critical,
-      lastIssued: "—",
-      machineName: machine?.id ?? "",
-      standardRate: rate,
-      criticality: form.values.criticality,
-      notes: form.values.notes.trim(),
-    });
-
-    message.success("Spare parts master saved.");
-
-    if (addAnother) {
-      form.reset({ ...INITIAL });
-    } else {
-      router.push("/inventory/spare-parts");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Save failed";
+      setError(msg);
+      message.error(msg);
+      throw e;
+    } finally {
+      setSaving(false);
     }
   };
 
