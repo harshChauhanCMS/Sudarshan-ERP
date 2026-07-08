@@ -60,6 +60,20 @@ export type EmployeePayrollSource = {
   annualCtc?: number;
 };
 
+export const SALARY_STATUS_LABEL: Record<string, string> = {
+  pending: "Pending",
+  draft: "Salary Generated",
+  approved: "Approved",
+  disbursed: "Disbursed",
+};
+
+export const SALARY_STATUS_COLOR: Record<string, string> = {
+  pending: "default",
+  draft: "orange",
+  approved: "green",
+  disbursed: "blue",
+};
+
 export function monthDaysInCycle(cycle: string): number {
   const [year, month] = cycle.split("-").map(Number);
   if (!year || !month) return 0;

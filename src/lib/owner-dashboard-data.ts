@@ -1,7 +1,8 @@
 import type { ErpData } from "@/lib/seed-data";
 import {
   activeDispatches,
-  activeProductionJobs,
+  computeVendorPriceAlerts,
+  customerRevenueForMonth,
   dispatchStatusCounts,
   dispatchesForPlant,
   formatLakhs,
@@ -9,15 +10,19 @@ import {
   grossProfitRupees,
   lowStockCount,
   overdueOpenOrders,
+  overdueOrders,
   productionDayActual,
+  productionPlantSplit,
   revenueLakhsFromSeries,
   revenueMtdRupees,
+  type VendorPriceAlert,
 } from "@/lib/erp-stats";
 import {
   getEmployeesInFieldFromPunches,
   getTodayFieldVisitsForOwner,
 } from "@/lib/field-visit-service";
 import { isDbConfigured } from "@/lib/mongodb";
+import { listPackaging } from "@/lib/packaging-service";
 import { ownerStatKeyFromLabel } from "@/lib/owner-dashboard-stat-details";
 import { SUPPLIED_MATERIAL_CATALOG } from "@/lib/supplied-materials";
 
@@ -75,13 +80,13 @@ export type OwnerDashboardView = {
   lowRmAlerts: OwnerAlertItem[];
   lowPackAlerts: OwnerAlertItem[];
   spareAlerts: OwnerAlertItem[];
-  vendorPriceAlerts: Array<{ name: string; change: string; pct: number; up: boolean; href?: string }>;
+  vendorPriceAlerts: Array<VendorPriceAlert & { href?: string }>;
   dispatchDueItems: OwnerDispatchItem[];
   dispatchOverdueItems: OwnerDispatchItem[];
   production: {
-    batchesCompleted: number;
-    mineralsBatches: number;
-    micronsBatches: number;
+    activeJobs: number;
+    mineralsJobs: number;
+    micronsJobs: number;
     totalOutput: string;
     footnote: string;
     href: string;
@@ -130,7 +135,7 @@ function riskHref(icon: string): string {
 function statCardHref(label: string): string | undefined {
   const map: Record<string, string> = {
     "Combined sales (MTD)": "/reports",
-    "Gross margin": "/reports",
+    "Est. gross margin": "/reports",
     "Dispatches due today": "/dispatch",
     Overdue: "/orders",
     "Vendor price alerts": "/procurement/vendors",
@@ -147,16 +152,23 @@ export async function buildOwnerDashboardView(
   const revenueRupees = revenueMtdRupees(data.REVENUE_DATA);
   const grossProfit = grossProfitRupees(revenueRupees);
   const cogs = revenueRupees - grossProfit;
+  // Packaging lives in its own collection, not the bootstrap ErpData blob — load it directly.
+  const packaging = isDbConfigured() ? await listPackaging() : data.PACKAGING;
   const rmLow = lowStockCount(data.RAW_MATERIALS);
-  const packLow = lowStockCount(data.PACKAGING);
+  const packLow = lowStockCount(packaging);
   const spareLow = lowStockCount(data.SPARE_PARTS);
   const dispatchesDue = activeDispatches(data.DISPATCHES);
-  const overdueCount = overdueOpenOrders(data.ORDERS);
+  const overdueCount = overdueOpenOrders(data.ORDERS, referenceDate);
   const mineralsDispatch = dispatchesForPlant(data.DISPATCHES, "udaipur");
   const micronsDispatch = dispatchesForPlant(data.DISPATCHES, "ahmedabad");
   const dispatchCounts = dispatchStatusCounts(data.DISPATCHES);
   const prodToday = productionDayActual(data.PRODUCTION_DATA);
-  const activeJobs = activeProductionJobs(data.ORDERS);
+  const plantSplit = productionPlantSplit(data.ORDERS, data.COMPANIES);
+  const mineralsJobs = plantSplit.byCompany[0]?.count ?? 0;
+  const micronsJobs = plantSplit.byCompany[1]?.count ?? 0;
+  const vendorPriceAlerts: OwnerDashboardView["vendorPriceAlerts"] = computeVendorPriceAlerts(
+    data.PURCHASE_ORDERS,
+  ).map((a) => ({ ...a, href: "/procurement/vendors" }));
 
   let fieldCount = 0;
   let employeesInField: OwnerDashboardView["employeesInField"] = [];
@@ -213,13 +225,13 @@ export async function buildOwnerDashboardView(
       href: "/inventory/raw-material",
     }));
 
-  const lowPackAlerts: OwnerAlertItem[] = data.PACKAGING.filter(
-    (p) => p.status === "low" || p.status === "critical",
-  )
+  const lowPackAlerts: OwnerAlertItem[] = packaging
+    .filter((p) => p.status === "low" || p.status === "critical")
     .slice(0, 4)
-    .map((p, i) => ({
+    .map((p) => ({
       key: p.code,
-      microns: i >= 2,
+      // All packaging (FIBC/PP woven/BOPP) is produced by Sudarshan Microns.
+      microns: true,
       name: p.name.split(" · ")[0],
       meta: `${p.stock.toLocaleString()} left · reorder ${p.reorder.toLocaleString()}`,
       href: "/inventory/packaging",
@@ -242,13 +254,6 @@ export async function buildOwnerDashboardView(
       href: "/inventory/spare-parts",
     }));
 
-  const vendorPriceAlerts = [
-    { name: "Titanium Dioxide — Pigments & Fillers", change: "+8.2%", pct: 8.2, up: true, href: "/procurement/vendors" },
-    { name: "HDPE Bags — Prime Pack Ltd", change: "+3.5%", pct: 3.5, up: true, href: "/procurement/vendors" },
-    { name: "Calcium Carbonate — Minerals & Chem", change: "−2.1%", pct: 2.1, up: false, href: "/procurement/vendors" },
-    { name: "Kaolin Clay — Minerals & Chemicals", change: "+5.0%", pct: 5.0, up: true, href: "/procurement/vendors" },
-  ];
-
   const dispatchDueItems: OwnerDispatchItem[] = data.DISPATCHES.filter(
     (d) => d.status !== "delivered",
   )
@@ -260,10 +265,9 @@ export async function buildOwnerDashboardView(
       href: dispatchDetailHref(d.id),
     }));
 
-  let dispatchOverdueItems: OwnerDispatchItem[] = data.ORDERS.filter(
-    (o) => o.status !== "delivered" && o.status !== "dispatched",
-  )
-    .slice(0, 2)
+  // Same source and same overdue definition as `overdueCount` above — never disagree.
+  const dispatchOverdueItems: OwnerDispatchItem[] = overdueOrders(data.ORDERS, referenceDate)
+    .slice(0, 5)
     .map((o) => ({
       key: o.id,
       label: `${o.customer.split(" ")[0]} — ${o.qty} (due ${o.due})`,
@@ -271,27 +275,31 @@ export async function buildOwnerDashboardView(
       href: orderDetailHref(o.id),
     }));
 
-  if (dispatchOverdueItems.length === 0 && overdueCount > 0) {
-    dispatchOverdueItems = [
-      {
-        key: "overdue",
-        label: `${overdueCount} open order${overdueCount === 1 ? "" : "s"} past due`,
-        microns: false,
-        href: "/orders",
-      },
-    ];
-  }
-
-  const topCustomers = [...data.CUSTOMERS]
-    .sort((a, b) => (Number(b.ytd) || 0) - (Number(a.ytd) || 0))
+  // Real MTD sales per customer for the selected month; if nobody has a
+  // dated order that month (e.g. viewing a month with no order history),
+  // fall back to a YTD run-rate so the widget isn't just empty.
+  const monthCustomers = data.CUSTOMERS.map((c) => ({
+    customer: c,
+    monthRupees: customerRevenueForMonth(data.ORDERS, c.name, referenceDate),
+  }));
+  const anyMonthSales = monthCustomers.some((c) => c.monthRupees > 0);
+  const topCustomers = (
+    anyMonthSales
+      ? [...monthCustomers].sort((a, b) => b.monthRupees - a.monthRupees)
+      : [...monthCustomers].sort(
+          (a, b) => (Number(b.customer.ytd) || 0) - (Number(a.customer.ytd) || 0),
+        )
+  )
     .slice(0, 5)
-    .map((c, i) => {
-      const monthlyRupees = Math.round((Number(c.ytd) || 0) / 12);
+    .map(({ customer: c, monthRupees }, i) => {
+      const monthlyRupees = anyMonthSales
+        ? monthRupees
+        : Math.round((Number(c.ytd) || 0) / 12);
       return {
         key: c.id,
         rank: i + 1,
         name: c.name,
-        meta: formatInr(monthlyRupees),
+        meta: anyMonthSales ? formatInr(monthlyRupees) : `~${formatInr(monthlyRupees)}`,
         salesLakhs: Math.round((monthlyRupees / 100_000) * 10) / 10,
         href: "/customers",
       };
@@ -329,21 +337,30 @@ export async function buildOwnerDashboardView(
       href: riskHref("truck"),
     });
   }
-  operationalRisks.push({
-    key: "vendor",
-    sev: "med",
-    icon: "money",
-    title: "Vendor price increases",
-    desc: "TiO₂ +8.2%, Kaolin +5%. Review margins on running orders and quotes for paint segment.",
-    href: riskHref("money"),
-  });
+  if (vendorPriceAlerts.length > 0) {
+    const risers = vendorPriceAlerts.filter((v) => v.up);
+    operationalRisks.push({
+      key: "vendor",
+      sev: "med",
+      icon: "money",
+      title: "Vendor price increases",
+      desc: `${(risers.length ? risers : vendorPriceAlerts)
+        .slice(0, 2)
+        .map((v) => `${v.name.split(" — ")[0]} ${v.change}`)
+        .join(", ")}. Review margins on running orders and quotes.`,
+      href: riskHref("money"),
+    });
+  }
   if (spareLow > 0) {
     operationalRisks.push({
       key: "spare",
       sev: "med",
       icon: "wrench",
       title: "Spare parts lead time",
-      desc: "Grinder blade set and belt assembly — order before 15 Mar to avoid unplanned downtime.",
+      desc: `${spareAlerts
+        .slice(0, 3)
+        .map((a) => a.name)
+        .join(", ") || "Key spares"} low or critical. Order before planned maintenance to avoid unplanned downtime.`,
       href: riskHref("wrench"),
     });
   }
@@ -358,8 +375,7 @@ export async function buildOwnerDashboardView(
         { label: "RM alerts", value: rmLow, tone: rmLow > 0 ? "warn" : "" },
         { label: "Dispatches today", value: String(mineralsDispatch.due) },
       ],
-      footnote:
-        "Minerals processing, paint & paper grades. 12 batches produced today.",
+      footnote: `Minerals processing, paint & paper grades. ${mineralsJobs} order${mineralsJobs === 1 ? "" : "s"} in production today.`,
       href: "/inventory/raw-material",
     });
   }
@@ -376,8 +392,7 @@ export async function buildOwnerDashboardView(
         },
         { label: "Dispatches today", value: String(micronsDispatch.due) },
       ],
-      footnote:
-        "Micronized fillers. 6 batches produced today. Switch company for detail.",
+      footnote: `Micronized fillers. ${micronsJobs} order${micronsJobs === 1 ? "" : "s"} in production today. Switch company for detail.`,
       href: "/inventory/packaging",
     });
   }
@@ -391,8 +406,8 @@ export async function buildOwnerDashboardView(
       href: statCardHref("Combined sales (MTD)"),
     },
     {
-      key: ownerStatKeyFromLabel("Gross margin")!,
-      label: "Gross margin",
+      key: ownerStatKeyFromLabel("Est. gross margin")!,
+      label: "Est. gross margin",
       value: revenueRupees > 0 ? `${grossMarginPct()}%` : "—",
       tone: "success",
       href: statCardHref("Gross margin"),
@@ -414,7 +429,7 @@ export async function buildOwnerDashboardView(
       key: ownerStatKeyFromLabel("Vendor price alerts")!,
       label: "Vendor price alerts",
       value: String(vendorPriceAlerts.length),
-      tone: "warning",
+      tone: vendorPriceAlerts.length > 0 ? "warning" : "default",
       href: statCardHref("Vendor price alerts"),
     },
     {
@@ -457,18 +472,18 @@ export async function buildOwnerDashboardView(
     dispatchDueItems,
     dispatchOverdueItems,
     production: {
-      batchesCompleted: activeJobs + 12,
-      mineralsBatches: 12,
-      micronsBatches: 6,
+      activeJobs: plantSplit.total,
+      mineralsJobs,
+      micronsJobs,
       totalOutput: prodToday > 0 ? `~${prodToday} MT` : "—",
-      footnote: "No line stoppages reported. Plan vs actual on track.",
+      footnote: "Plan vs actual from today's production log.",
       href: "/production",
     },
     fieldVisits,
     employeesInField,
     operationalRisks: operationalRisks.slice(0, 4),
     profit: {
-      title: "This month (May 2026) — combined",
+      title: `This month (${referenceDate.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}) — combined`,
       revenue: formatLakhs(rev.total),
       cogs: cogs > 0 ? formatInr(cogs) : "—",
       grossProfit: grossProfit > 0 ? formatInr(grossProfit) : "—",
@@ -483,9 +498,12 @@ export async function buildOwnerDashboardView(
     },
     topCustomers,
     topMaterials,
-    criticalNotifs: data.NOTIFS.slice(0, 3).map((n) => ({
-      ...n,
-      href: n.target || "/hrms/notifications",
-    })),
+    // "Critical" means actually flagged as an alert, not just "the first 3 notifications".
+    criticalNotifs: data.NOTIFS.filter((n) => n.type === "alert")
+      .slice(0, 3)
+      .map((n) => ({
+        ...n,
+        href: n.target || "/hrms/notifications",
+      })),
   };
 }

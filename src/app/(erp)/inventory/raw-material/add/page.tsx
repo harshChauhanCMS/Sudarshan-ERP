@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { message } from "antd";
 import { Icon } from "@/components/erp/icons";
 import { Btn } from "@/components/erp/ui";
 import { DashHead } from "@/components/erp/dashboards";
 import { useDATA } from "@/components/erp/data";
-import { useEntityMutation } from "@/hooks/use-entity-mutation";
+import { useErpData } from "@/context/erp-data-provider";
 import { useFormState } from "@/components/forms";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -30,10 +30,20 @@ const INITIAL = {
   notes: "",
 };
 
-function stockStatus(stock: number, reorder: number, minStock: number): string {
-  if (minStock > 0 && stock <= minStock) return "critical";
-  if (reorder > 0 && stock < reorder) return "low";
-  return "ok";
+async function saveRawMaterial(payload: Record<string, unknown>, code?: string) {
+  const res = await fetch(
+    code
+      ? `/api/inventory/raw-materials/${encodeURIComponent(code)}`
+      : "/api/inventory/raw-materials",
+    {
+      method: code ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return json.data;
 }
 
 export default function RawMaterialMasterPage() {
@@ -41,7 +51,9 @@ export default function RawMaterialMasterPage() {
   const searchParams = useSearchParams();
   const editCode = searchParams.get("code")?.trim() ?? "";
   const DATA = useDATA();
-  const { append, update, saving, error, clearError } = useEntityMutation();
+  const { refresh } = useErpData();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const form = useFormState(INITIAL);
 
   const editing = useMemo(
@@ -119,7 +131,7 @@ export default function RawMaterialMasterPage() {
   };
 
   const saveMaterial = async (addAnother: boolean) => {
-    clearError();
+    setError(null);
     const validationError = validate();
     if (validationError) {
       message.error(validationError);
@@ -132,57 +144,59 @@ export default function RawMaterialMasterPage() {
       : 0;
     const vendor = DATA.VENDORS.find((v) => v.id === form.values.preferredVendor);
 
-    if (editing) {
-      const stock = editing.stock;
-      await update(
-        "rawMaterials",
-        editing.code,
-        {
-          name: form.values.materialName.trim(),
-          grade: form.values.grade.trim() || "—",
-          unit: form.values.uom,
-          reorder,
-          minStock,
-          location: form.values.storageLocation.trim() || "—",
-          category: form.values.category,
-          preferredVendor: vendor?.name ?? "",
-          notes: form.values.notes.trim(),
-          status: stockStatus(stock, reorder, minStock),
-        },
-        "code"
-      );
-      message.success("Raw material updated.");
-      if (!addAnother) {
+    setSaving(true);
+    try {
+      if (editing) {
+        await saveRawMaterial(
+          {
+            name: form.values.materialName.trim(),
+            grade: form.values.grade.trim() || "—",
+            category: form.values.category,
+            unit: form.values.uom,
+            reorder,
+            minStock,
+            location: form.values.storageLocation.trim() || "—",
+            preferredVendor: vendor?.name ?? "",
+            notes: form.values.notes.trim(),
+          },
+          editing.code,
+        );
+        await refresh();
+        message.success("Raw material updated.");
+        if (!addAnother) {
+          router.push("/inventory/raw-material");
+        }
+        return;
+      }
+
+      await saveRawMaterial({
+        code: form.values.materialCode.trim().toUpperCase(),
+        name: form.values.materialName.trim(),
+        grade: form.values.grade.trim() || "—",
+        category: form.values.category,
+        unit: form.values.uom,
+        reorder,
+        minStock,
+        location: form.values.storageLocation.trim() || "—",
+        preferredVendor: vendor?.name ?? "",
+        notes: form.values.notes.trim(),
+      });
+      await refresh();
+
+      message.success("Raw material master saved.");
+
+      if (addAnother) {
+        form.reset({ ...INITIAL, uom: "MT" });
+      } else {
         router.push("/inventory/raw-material");
       }
-      return;
-    }
-
-    const stock = 0;
-
-    await append("rawMaterials", {
-      code: form.values.materialCode.trim().toUpperCase(),
-      name: form.values.materialName.trim(),
-      grade: form.values.grade.trim() || "—",
-      stock,
-      unit: form.values.uom,
-      reorder,
-      minStock,
-      value: 0,
-      location: form.values.storageLocation.trim() || "—",
-      category: form.values.category,
-      preferredVendor: vendor?.name ?? "",
-      notes: form.values.notes.trim(),
-      status: stockStatus(stock, reorder, minStock),
-      trend: 0,
-    });
-
-    message.success("Raw material master saved.");
-
-    if (addAnother) {
-      form.reset({ ...INITIAL, uom: "MT" });
-    } else {
-      router.push("/inventory/raw-material");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Save failed";
+      setError(msg);
+      message.error(msg);
+      throw e;
+    } finally {
+      setSaving(false);
     }
   };
 

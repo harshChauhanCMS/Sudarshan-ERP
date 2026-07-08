@@ -100,14 +100,15 @@ function buildRawMaterialView(item: RawMaterial): InventoryItemDetailView {
   };
 }
 
-function buildPackagingView(item: Packaging, microns: boolean): InventoryItemDetailView {
+export function buildPackagingView(item: Packaging): InventoryItemDetailView {
   return {
     kind: "packaging",
     code: item.code,
     name: item.name,
     status: item.status,
     statusLabel: statusLabel(item.status),
-    company: microns ? "Microns" : "Minerals",
+    // Packaging (FIBC / PP woven / BOPP) is entirely produced by Sudarshan Microns — see COMPANIES seed data.
+    company: "Microns",
     stock: {
       current: item.stock,
       reorder: item.reorder,
@@ -146,7 +147,7 @@ function buildPackagingView(item: Packaging, microns: boolean): InventoryItemDet
   };
 }
 
-function buildSparePartView(item: SparePart, microns: boolean): InventoryItemDetailView {
+export function buildSparePartView(item: SparePart, microns: boolean): InventoryItemDetailView {
   return {
     kind: "spare-part",
     code: item.code,
@@ -205,10 +206,8 @@ export function buildInventoryItemDetailView(
   }
 
   if (kind === "packaging") {
-    const index = data.PACKAGING.findIndex((p) => p.code === normalized);
-    if (index < 0) return null;
-    const microns = index >= 2;
-    return buildPackagingView(data.PACKAGING[index], microns);
+    // Packaging lives in its own collection — see getPackagingByCode()/buildPackagingView() instead.
+    return null;
   }
 
   if (kind === "spare-part") {

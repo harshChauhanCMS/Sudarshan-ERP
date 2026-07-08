@@ -1,6 +1,7 @@
 import type { ErpData } from "@/lib/seed-data";
 import {
-  activeProductionJobs,
+  computeVendorPriceAlerts,
+  customerRevenueForMonth,
   dispatchStatusCounts,
   dispatchesForPlant,
   formatLakhs,
@@ -8,7 +9,9 @@ import {
   grossProfitRupees,
   lowStockCount,
   overdueOpenOrders,
+  overdueOrders,
   productionDayActual,
+  productionPlantSplit,
   revenueLakhsFromSeries,
   revenueMtdRupees,
 } from "@/lib/erp-stats";
@@ -18,6 +21,7 @@ import {
 } from "@/lib/field-visit-service";
 import { SUPPLIED_MATERIAL_CATALOG } from "@/lib/supplied-materials";
 import { isDbConfigured } from "@/lib/mongodb";
+import { listPackaging } from "@/lib/packaging-service";
 import {
   buildOwnerStatDetailView,
   isOwnerStatKey,
@@ -107,24 +111,30 @@ function alertRows(
 export async function buildOwnerDetailView(
   key: OwnerDetailKey,
   data: ErpData,
+  referenceDate: Date = new Date(),
 ): Promise<OwnerDetailView> {
   if (isOwnerStatKey(key)) {
-    return (await buildOwnerStatDetailView(key, data)) as OwnerDetailView;
+    return (await buildOwnerStatDetailView(key, data, referenceDate)) as OwnerDetailView;
   }
 
   const rev = revenueLakhsFromSeries(data.REVENUE_DATA);
   const revenueRupees = revenueMtdRupees(data.REVENUE_DATA);
   const grossProfit = grossProfitRupees(revenueRupees);
   const cogs = revenueRupees - grossProfit;
+  // Packaging lives in its own collection, not the bootstrap ErpData blob — load it directly.
+  const packaging = isDbConfigured() ? await listPackaging() : data.PACKAGING;
   const rmLow = lowStockCount(data.RAW_MATERIALS);
-  const packLow = lowStockCount(data.PACKAGING);
+  const packLow = lowStockCount(packaging);
   const spareLow = lowStockCount(data.SPARE_PARTS);
   const mineralsDispatch = dispatchesForPlant(data.DISPATCHES, "udaipur");
   const micronsDispatch = dispatchesForPlant(data.DISPATCHES, "ahmedabad");
   const dispatchCounts = dispatchStatusCounts(data.DISPATCHES);
   const prodToday = productionDayActual(data.PRODUCTION_DATA);
-  const activeJobs = activeProductionJobs(data.ORDERS);
-  const overdueCount = overdueOpenOrders(data.ORDERS);
+  const plantSplit = productionPlantSplit(data.ORDERS, data.COMPANIES);
+  const mineralsJobs = plantSplit.byCompany[0]?.count ?? 0;
+  const micronsJobs = plantSplit.byCompany[1]?.count ?? 0;
+  const overdueCount = overdueOpenOrders(data.ORDERS, referenceDate);
+  const vendorPriceAlerts = computeVendorPriceAlerts(data.PURCHASE_ORDERS);
 
   const lowRmAlerts = data.RAW_MATERIALS.filter(
     (r) => r.status === "low" || r.status === "critical",
@@ -140,13 +150,13 @@ export async function buildOwnerDetailView(
           : `Below reorder · ${r.stock} ${r.unit}`,
     }));
 
-  const lowPackAlerts = data.PACKAGING.filter(
-    (p) => p.status === "low" || p.status === "critical",
-  )
+  const lowPackAlerts = packaging
+    .filter((p) => p.status === "low" || p.status === "critical")
     .slice(0, 20)
-    .map((p, i) => ({
+    .map((p) => ({
       key: p.code,
-      microns: i >= 2,
+      // All packaging (FIBC/PP woven/BOPP) is produced by Sudarshan Microns.
+      microns: true,
       name: p.name.split(" · ")[0],
       meta: `${p.stock.toLocaleString()} left · reorder ${p.reorder.toLocaleString()}`,
     }));
@@ -188,8 +198,7 @@ export async function buildOwnerDetailView(
           tone: "accent",
         },
       ],
-      footnote:
-        "Minerals processing, paint & paper grades. 12 batches produced today.",
+      footnote: `Minerals processing, paint & paper grades. ${mineralsJobs} order${mineralsJobs === 1 ? "" : "s"} in production today.`,
     };
   }
 
@@ -214,8 +223,7 @@ export async function buildOwnerDetailView(
           tone: "accent",
         },
       ],
-      footnote:
-        "Micronized fillers. 6 batches produced today. Switch company for detail.",
+      footnote: `Micronized fillers. ${micronsJobs} order${micronsJobs === 1 ? "" : "s"} in production today. Switch company for detail.`,
     };
   }
 
@@ -267,12 +275,7 @@ export async function buildOwnerDetailView(
         meta: d.loaded,
         tone: "accent" as const,
       }));
-    const cutoff = new Date("2026-05-21");
-    const overdueRows = data.ORDERS.filter((o) => {
-      if (o.status === "delivered" || o.status === "dispatched") return false;
-      const due = new Date(`${o.due}, 2026`);
-      return !Number.isNaN(due.getTime()) && due <= cutoff;
-    })
+    const overdueRows = overdueOrders(data.ORDERS, referenceDate)
       .slice(0, 10)
       .map((o) => ({
         id: o.id,
@@ -302,20 +305,20 @@ export async function buildOwnerDetailView(
       key,
       title: "Production overview",
       summary: {
-        label: "Batches completed today",
-        value: String(activeJobs + 12),
+        label: "Active production jobs today",
+        value: String(plantSplit.total),
         tone: "accent",
       },
       rows: [
-        { id: "minerals", title: "Minerals (Udaipur)", meta: "12 batches" },
-        { id: "microns", title: "Microns (Makrana)", meta: "6 batches" },
+        { id: "minerals", title: "Minerals (Udaipur)", meta: `${mineralsJobs} order${mineralsJobs === 1 ? "" : "s"}` },
+        { id: "microns", title: "Microns (Makrana)", meta: `${micronsJobs} order${micronsJobs === 1 ? "" : "s"}` },
         {
           id: "output",
           title: "Total output (est.)",
           meta: prodToday > 0 ? `~${prodToday} MT` : "—",
           tone: "success",
         },
-        { id: "jobs", title: "Active production jobs", meta: String(activeJobs) },
+        { id: "jobs", title: "Active production jobs", meta: String(plantSplit.total) },
       ],
       footnote: "No line stoppages reported. Plan vs actual on track.",
     };
@@ -371,12 +374,18 @@ export async function buildOwnerDetailView(
         tone: "danger",
       });
     }
-    risks.push({
-      id: "vendor",
-      title: "Vendor price increases",
-      subtitle: "TiO₂ +8.2%, Kaolin +5% — review margins on paint segment",
-      tone: "warn",
-    });
+    if (vendorPriceAlerts.length > 0) {
+      const risers = vendorPriceAlerts.filter((v) => v.up);
+      risks.push({
+        id: "vendor",
+        title: "Vendor price increases",
+        subtitle: `${(risers.length ? risers : vendorPriceAlerts)
+          .slice(0, 2)
+          .map((v) => `${v.name.split(" — ")[0]} ${v.change}`)
+          .join(", ")} — review margins on running orders`,
+        tone: "warn",
+      });
+    }
     if (spareLow > 0) {
       risks.push({
         id: "spare",
@@ -399,7 +408,7 @@ export async function buildOwnerDetailView(
       key,
       title: "Profit overview",
       summary: {
-        label: "Gross margin",
+        label: "Est. gross margin",
         value: revenueRupees > 0 ? `${grossMarginPct()}%` : "—",
         tone: "success",
       },
@@ -414,30 +423,43 @@ export async function buildOwnerDetailView(
         },
         {
           id: "margin",
-          title: "Gross margin",
+          title: "Est. gross margin",
           meta: revenueRupees > 0 ? `${grossMarginPct()}%` : "—",
           tone: "success",
         },
       ],
-      footnote: "Estimate. Final P&L at month close. Split by company in Reports.",
+      footnote: "Estimated margin (no cost data tracked yet). Final P&L at month close.",
     };
   }
 
   if (key === "top-customers") {
-    const customers = [...data.CUSTOMERS]
-      .sort((a, b) => (Number(b.ytd) || 0) - (Number(a.ytd) || 0))
-      .slice(0, 10);
+    const monthCustomers = data.CUSTOMERS.map((c) => ({
+      customer: c,
+      monthRupees: customerRevenueForMonth(data.ORDERS, c.name, referenceDate),
+    }));
+    const anyMonthSales = monthCustomers.some((c) => c.monthRupees > 0);
+    const customers = (
+      anyMonthSales
+        ? [...monthCustomers].sort((a, b) => b.monthRupees - a.monthRupees)
+        : [...monthCustomers].sort(
+            (a, b) => (Number(b.customer.ytd) || 0) - (Number(a.customer.ytd) || 0),
+          )
+    ).slice(0, 10);
     return {
       key,
       title: "Top customers (MTD)",
       summary: { label: "Customers listed", value: String(customers.length), tone: "accent" },
-      rows: customers.map((c, i) => ({
+      rows: customers.map(({ customer: c, monthRupees }, i) => ({
         id: c.id ?? `c-${i}`,
         title: c.name,
-        meta: formatInr(Math.round((Number(c.ytd) || 0) / 12)),
+        meta: anyMonthSales
+          ? formatInr(monthRupees)
+          : `~${formatInr(Math.round((Number(c.ytd) || 0) / 12))}`,
         subtitle: c.city,
       })),
-      footnote: "MTD revenue estimate from YTD run-rate.",
+      footnote: anyMonthSales
+        ? "Actual order value for the selected month."
+        : "No dated orders this month — showing YTD run-rate instead.",
     };
   }
 
@@ -457,18 +479,20 @@ export async function buildOwnerDetailView(
   }
 
   // notifications
-  const notifs = data.NOTIFS.slice(0, 20);
+  const notifs = data.NOTIFS.filter((n) => n.type === "alert").slice(0, 20);
   return {
     key,
     title: "Recent critical notifications",
     summary: { label: "Notifications", value: String(notifs.length), tone: "accent" },
-    rows: notifs.map((n) => ({
-      id: String(n.id),
-      title: n.text,
-      subtitle: n.time,
-      meta: n.type,
-      tone: n.type === "alert" ? "danger" : n.type === "success" ? "success" : "default",
-    })),
-    footnote: "Latest system alerts and updates for leadership.",
+    rows: notifs.length
+      ? notifs.map((n) => ({
+          id: String(n.id),
+          title: n.text,
+          subtitle: n.time,
+          meta: n.type,
+          tone: "danger" as const,
+        }))
+      : [{ id: "none", title: "No critical notifications", subtitle: "All clear" }],
+    footnote: "Latest system alerts for leadership.",
   };
 }

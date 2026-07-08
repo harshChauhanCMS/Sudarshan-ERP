@@ -17,6 +17,7 @@ import {
 import type { PermissionsMap } from "@/lib/permission-types";
 import { PageShell } from "@/components/layout/page-shell";
 import { sidebarBadges } from "@/lib/erp-stats";
+import { usePackaging } from "@/hooks/use-packaging";
 import {
   GROUP_BRAND_TOAST_MESSAGE,
   isGroupBrandRoute,
@@ -28,7 +29,11 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   const pathname = usePathname();
   const router = useRouter();
   const { data, meta, loading, error } = useErpData();
-  const badgeMap = useMemo(() => sidebarBadges(data), [data]);
+  const { items: packagingItems } = usePackaging();
+  const badgeMap = useMemo(
+    () => sidebarBadges(data, packagingItems.length),
+    [data, packagingItems]
+  );
   const route =
     pathname === "/login" ||
     pathname === "/forgot" ||

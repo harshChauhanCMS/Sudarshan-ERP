@@ -2,7 +2,7 @@
 'use client';
 
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertOutlined,
@@ -19,10 +19,13 @@ import StatCard, { ErpStatGrid } from "@/components/common/StatCard";
 import { ERP_TABLE_PROPS, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
 import { ViewEditActions } from "@/components/common/TableActionIcons";
 import { Icon } from "./icons";
-import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
-import { buildInventoryItemDetailView } from "@/lib/inventory-mobile";
+import { buildSparePartView } from "@/lib/inventory-mobile";
+import { useSpareParts } from "@/hooks/use-spare-parts";
+import { useEntityList } from "@/hooks/use-entity-list";
 import { DashHead, SectionH } from "./dashboards";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
+import { Select, message } from "antd";
 
 /* ============================================================
    MODULES PART 4 — Spare Parts + shared add modals
@@ -34,24 +37,62 @@ import { DashHead, SectionH } from "./dashboards";
    ============================================================ */
 const SparePartsInventory = () => {
   const router = useRouter();
-  const DATA = useDATA();
+  const { items: sparePartItems, loading, error: loadError, reload } = useSpareParts();
+  const { items: categoryItems } = useEntityList<string>("spareCategories");
   const [viewItem, setViewItem] = useState(null);
   const [tab, setTab] = useState("all");
+  const [deletingCode, setDeletingCode] = useState(null);
 
   const viewDetail = useMemo(() => {
     if (!viewItem) return null;
-    return buildInventoryItemDetailView("spare-part", viewItem.code, DATA);
-  }, [viewItem, DATA]);
+    const index = sparePartItems.findIndex((p) => p.code === viewItem.code);
+    return buildSparePartView(viewItem, index === 2);
+  }, [viewItem, sparePartItems]);
 
-  const filtered = tab === "all" ? DATA.SPARE_PARTS
-    : tab === "low" ? DATA.SPARE_PARTS.filter(p => p.status === "low" || p.status === "critical")
-    : tab === "critical" ? DATA.SPARE_PARTS.filter(p => p.critical)
-    : DATA.SPARE_PARTS;
+  const deleteSparePart = useCallback(
+    async (code) => {
+      setDeletingCode(code);
+      try {
+        const res = await fetch(`/api/inventory/spare-parts/${encodeURIComponent(code)}`, {
+          method: "DELETE",
+        });
+        const json = await res.json();
+        if (json.error) throw new Error(json.error);
+        message.success("Spare part deleted.");
+        await reload();
+      } catch (e) {
+        message.error(e instanceof Error ? e.message : "Delete failed");
+      } finally {
+        setDeletingCode(null);
+      }
+    },
+    [reload]
+  );
 
-  const totalValue = DATA.SPARE_PARTS.reduce((s, p) => s + p.value, 0);
-  const lowCount = DATA.SPARE_PARTS.filter(p => p.status === "low").length;
-  const critCount = DATA.SPARE_PARTS.filter(p => p.status === "critical").length;
-  const criticalSKUs = DATA.SPARE_PARTS.filter(p => p.critical).length;
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+
+  const filtered = useMemo(() => {
+    return sparePartItems.filter((p) => {
+      if (tab === "low" && p.status !== "low" && p.status !== "critical") return false;
+      if (tab === "critical" && !p.critical) return false;
+
+      if (categoryFilter !== "all" && p.category !== categoryFilter) return false;
+
+      if (search) {
+        const t = search.toLowerCase();
+        if (!p.code.toLowerCase().includes(t) && !p.name.toLowerCase().includes(t)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [sparePartItems, tab, search, categoryFilter]);
+
+  const totalValue = sparePartItems.reduce((s, p) => s + p.value, 0);
+  const lowCount = sparePartItems.filter(p => p.status === "low").length;
+  const critCount = sparePartItems.filter(p => p.status === "critical").length;
+  const criticalSKUs = sparePartItems.filter(p => p.critical).length;
 
   const columns = useMemo(
     () => [
@@ -138,17 +179,21 @@ const SparePartsInventory = () => {
       {
         title: "Actions",
         key: "actions",
-        width: 88,
+        width: 120,
         align: "center",
         render: (_, p) => (
           <ViewEditActions
             onView={() => setViewItem(p)}
             editHref={`/inventory/spare-parts/add?code=${encodeURIComponent(p.code)}`}
+            showDelete
+            onDelete={() => deleteSparePart(p.code)}
+            deleteLabel={deletingCode === p.code ? "Deleting…" : "Delete"}
+            deleteConfirmTitle={`Delete ${p.code}? This cannot be undone.`}
           />
         ),
       },
     ],
-    []
+    [deletingCode, deleteSparePart]
   );
 
   return (
@@ -163,14 +208,14 @@ const SparePartsInventory = () => {
         <StatCard
           icon={SettingOutlined}
           label="Total SKUs"
-          value={DATA.SPARE_PARTS.length}
+          value={sparePartItems.length}
           hint={`${criticalSKUs} marked critical`}
         />
         <StatCard
           icon={DollarOutlined}
           label="Stock value"
           value={totalValue > 0 ? fmtINR(totalValue) : "—"}
-          hint={`${DATA.SPARE_PARTS.length} SKUs`}
+          hint={`${sparePartItems.length} SKUs`}
           hintTone="positive"
         />
         <StatCard
@@ -192,24 +237,46 @@ const SparePartsInventory = () => {
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center" }}>
           <div className="tabs" style={{ border: "none", marginBottom: -1 }}>
-            <span className={`tab ${tab === "all" ? "active" : ""}`} onClick={() => setTab("all")}>All <span className="tab-count">{DATA.SPARE_PARTS.length}</span></span>
+            <span className={`tab ${tab === "all" ? "active" : ""}`} onClick={() => setTab("all")}>All <span className="tab-count">{sparePartItems.length}</span></span>
             <span className={`tab ${tab === "low" ? "active" : ""}`} onClick={() => setTab("low")}>Reorder / critical <span className="tab-count">{lowCount + critCount}</span></span>
             <span className={`tab ${tab === "critical" ? "active" : ""}`} onClick={() => setTab("critical")}>Critical SKUs <span className="tab-count">{criticalSKUs}</span></span>
           </div>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <select className="input" style={{ height: 30, width: 140 }}>
-              <option>All categories</option>
-              {DATA.SPARE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
-            </select>
-            <input className="input" placeholder="Search SKU, part name…" style={{ height: 30, width: 220 }} />
-          </div>
         </div>
-        <div style={{ padding: 16 }}>
+        <PageFilterPanel
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search SKU, part name…"
+          activeFilterCount={categoryFilter !== "all" ? 1 : 0}
+          onApply={() => {}}
+          onClear={() => {
+            setSearch("");
+            setCategoryFilter("all");
+          }}
+          drawerWidth={320}
+        >
+          <div className="arf-item">
+            <span className="arf-label">Category</span>
+            <Select
+              className="w-full"
+              value={categoryFilter}
+              onChange={setCategoryFilter}
+              options={[
+                { value: "all", label: "All categories" },
+                ...categoryItems.map((c: string) => ({ value: c, label: c })),
+              ]}
+            />
+          </div>
+        </PageFilterPanel>
+        <div style={{ padding: 16, paddingTop: 0 }}>
+          {loadError ? (
+            <p style={{ color: "var(--danger)", fontSize: 12, marginBottom: 12 }}>{loadError}</p>
+          ) : null}
           <CommonTable
             {...ERP_TABLE_PROPS}
             columns={columns}
             dataSource={filtered}
             rowKey="code"
+            loading={loading}
             locale={{
               emptyText: (
                 <span className="muted">

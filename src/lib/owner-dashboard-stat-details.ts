@@ -1,10 +1,12 @@
 import type { ErpData } from "@/lib/seed-data";
 import {
+  computeVendorPriceAlerts,
   dispatchDeliveryCompletion,
   formatLakhs,
   grossMarginPct,
   grossProfitRupees,
   overdueOpenOrders,
+  overdueOrders,
   revenueLakhsFromSeries,
   revenueMtdRupees,
 } from "@/lib/erp-stats";
@@ -82,7 +84,7 @@ const STAT_LABELS: Record<OwnerStatKey, string> = {
 
 const LABEL_TO_KEY: Record<string, OwnerStatKey> = {
   "Combined sales (MTD)": "combined-sales",
-  "Gross margin": "gross-margin",
+  "Est. gross margin": "gross-margin",
   "Dispatches due today": "dispatches-due",
   Overdue: "overdue",
   "Vendor price alerts": "vendor-price-alerts",
@@ -97,14 +99,11 @@ export function isOwnerStatKey(value: string): value is OwnerStatKey {
   return (OWNER_STAT_KEYS as readonly string[]).includes(value);
 }
 
-function overdueOrderRows(orders: ErpData["ORDERS"]): OwnerStatDetailRow[] {
-  const cutoff = new Date("2026-05-21");
-  return orders
-    .filter((o) => {
-      if (o.status === "delivered" || o.status === "dispatched") return false;
-      const due = new Date(`${o.due}, 2026`);
-      return !Number.isNaN(due.getTime()) && due <= cutoff;
-    })
+function overdueOrderRows(
+  orders: ErpData["ORDERS"],
+  referenceDate: Date,
+): OwnerStatDetailRow[] {
+  return overdueOrders(orders, referenceDate)
     .slice(0, 20)
     .map((o) => ({
       id: o.id,
@@ -118,19 +117,15 @@ function overdueOrderRows(orders: ErpData["ORDERS"]): OwnerStatDetailRow[] {
 export async function buildOwnerStatDetailView(
   key: OwnerStatKey,
   data: ErpData,
+  referenceDate: Date = new Date(),
 ): Promise<OwnerStatDetailView> {
   const rev = revenueLakhsFromSeries(data.REVENUE_DATA);
   const revenueRupees = revenueMtdRupees(data.REVENUE_DATA);
   const grossProfit = grossProfitRupees(revenueRupees);
   const cogs = revenueRupees - grossProfit;
-  const overdueCount = overdueOpenOrders(data.ORDERS);
+  const overdueCount = overdueOpenOrders(data.ORDERS, referenceDate);
 
-  const vendorPriceAlerts = [
-    { id: "vendor-tio2", name: "Titanium Dioxide — Pigments & Fillers", change: "+8.2%", up: true },
-    { id: "vendor-hdpe", name: "HDPE Bags — Prime Pack Ltd", change: "+3.5%", up: true },
-    { id: "vendor-cc", name: "Calcium Carbonate — Minerals & Chem", change: "−2.1%", up: false },
-    { id: "vendor-kaolin", name: "Kaolin Clay — Minerals & Chemicals", change: "+5.0%", up: true },
-  ];
+  const vendorPriceAlerts = computeVendorPriceAlerts(data.PURCHASE_ORDERS);
 
   if (key === "combined-sales") {
     return {
@@ -166,7 +161,7 @@ export async function buildOwnerStatDetailView(
       key,
       title: STAT_LABELS[key],
       summary: {
-        label: "Gross margin",
+        label: "Est. gross margin",
         value: revenueRupees > 0 ? `${grossMarginPct()}%` : "—",
         tone: "success",
       },
@@ -188,7 +183,7 @@ export async function buildOwnerStatDetailView(
           tone: "success",
         },
       ],
-      footnote: "Estimate for both companies combined. See Reports for company split.",
+      footnote: "Estimated margin (no cost data tracked yet) for both companies combined.",
     };
   }
 
@@ -235,7 +230,7 @@ export async function buildOwnerStatDetailView(
   }
 
   if (key === "overdue") {
-    const rows = overdueOrderRows(data.ORDERS);
+    const rows = overdueOrderRows(data.ORDERS, referenceDate);
     return {
       key,
       title: STAT_LABELS[key],
@@ -264,15 +259,23 @@ export async function buildOwnerStatDetailView(
       summary: {
         label: "Price changes flagged",
         value: String(vendorPriceAlerts.length),
-        tone: "warn",
+        tone: vendorPriceAlerts.length > 0 ? "warn" : "default",
       },
-      rows: vendorPriceAlerts.map((item) => ({
-        id: item.id,
-        title: item.name,
-        meta: item.change,
-        tone: item.up ? "danger" : "success",
-      })),
-      footnote: "Review margin impact on running orders and quotes.",
+      rows: vendorPriceAlerts.length
+        ? vendorPriceAlerts.map((item) => ({
+            id: item.id,
+            title: item.name,
+            meta: item.change,
+            tone: item.up ? ("danger" as const) : ("success" as const),
+          }))
+        : [
+            {
+              id: "none",
+              title: "No price changes detected",
+              subtitle: "Needs at least two priced purchase orders for the same vendor + material",
+            },
+          ],
+      footnote: "Compares the two most recent purchase-order rates per vendor + material.",
     };
   }
 

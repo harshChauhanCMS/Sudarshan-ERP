@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { message } from "antd";
 import { Icon } from "@/components/erp/icons";
 import { Btn, fmtNum } from "@/components/erp/ui";
 import { DashHead } from "@/components/erp/dashboards";
 import { useDATA } from "@/components/erp/data";
-import { useEntityMutation } from "@/hooks/use-entity-mutation";
+import { usePackaging } from "@/hooks/use-packaging";
 import { useFormState } from "@/components/forms";
-import { nextPackagingCode } from "@/lib/id-generators";
 import type { Packaging } from "@/lib/entity-types";
 
 const INITIAL = {
@@ -31,12 +30,6 @@ const UNIT_LABELS: Record<string, string> = {
   mtr: "mtr",
 };
 
-function stockStatus(stock: number, reorder: number, minStock: number): string {
-  if (minStock > 0 && stock <= minStock) return "critical";
-  if (reorder > 0 && stock < reorder) return "low";
-  return "ok";
-}
-
 function buildName(type: string, capacity: number | null): string {
   const trimmed = type.trim();
   if (!trimmed) return "—";
@@ -45,6 +38,7 @@ function buildName(type: string, capacity: number | null): string {
 }
 
 function previewLabel(pkg: Packaging): string {
+  if (pkg.capacity) return `${pkg.capacity} kg`;
   const match = pkg.name.match(/(\d+)\s*kg/i);
   if (match) return `${match[1]} kg`;
   return pkg.unit === "mtr" ? "Fabric" : "Bag";
@@ -106,26 +100,48 @@ function PreviewCard({
   );
 }
 
+async function savePackagingApi(payload: Record<string, unknown>, code?: string) {
+  const res = await fetch(
+    code
+      ? `/api/inventory/packaging/${encodeURIComponent(code)}`
+      : "/api/inventory/packaging",
+    {
+      method: code ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return json.data;
+}
+
 export default function PackagingMasterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editCode = searchParams.get("code")?.trim() ?? "";
   const DATA = useDATA();
-  const { append, update, saving, error, clearError } = useEntityMutation();
+  const {
+    items: packagingItems,
+    loading: packagingLoading,
+    reload: reloadPackaging,
+  } = usePackaging();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const form = useFormState(INITIAL);
 
   const editing = useMemo(
     () =>
       editCode
-        ? DATA.PACKAGING.find(
+        ? packagingItems.find(
             (p) => p.code.toLowerCase() === editCode.toLowerCase()
           ) ?? null
         : null,
-    [DATA.PACKAGING, editCode]
+    [packagingItems, editCode]
   );
 
   useEffect(() => {
-    if (!editCode) return;
+    if (!editCode || packagingLoading) return;
     if (!editing) {
       message.error(`Packaging "${editCode}" not found.`);
       router.replace("/inventory/packaging");
@@ -148,7 +164,7 @@ export default function PackagingMasterPage() {
       notes: editing.notes ?? "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once when edit target resolves
-  }, [editCode, editing?.code]);
+  }, [editCode, editing?.code, packagingLoading]);
 
   const packagingVendors = useMemo(() => {
     const packaging = DATA.VENDORS.filter((v) => v.category === "Packaging");
@@ -158,11 +174,11 @@ export default function PackagingMasterPage() {
 
   const sampleItems = useMemo(
     () =>
-      DATA.PACKAGING.filter((p) => p.name.toLowerCase().includes("bag")).slice(
+      packagingItems.filter((p) => p.name.toLowerCase().includes("bag")).slice(
         0,
         2
       ),
-    [DATA.PACKAGING]
+    [packagingItems]
   );
 
   const livePreview = useMemo(() => {
@@ -187,20 +203,20 @@ export default function PackagingMasterPage() {
     if (!type) return "Packaging type is required.";
     if (type.length > 120) return "Packaging type must be at most 120 characters.";
 
-    let code = form.values.bagCode.trim().toUpperCase();
-    if (!code) {
-      code = nextPackagingCode(DATA.PACKAGING);
-    } else if (!/^[A-Za-z0-9-]+$/.test(code)) {
-      return "Bag code must be alphanumeric (hyphens allowed).";
-    }
-    if (
-      DATA.PACKAGING.some(
-        (p) =>
-          p.code.toLowerCase() === code.toLowerCase() &&
-          p.code.toLowerCase() !== editing?.code.toLowerCase()
-      )
-    ) {
-      return "Bag code already exists.";
+    const code = form.values.bagCode.trim().toUpperCase();
+    if (code) {
+      if (!/^[A-Za-z0-9-]+$/.test(code)) {
+        return "Bag code must be alphanumeric (hyphens allowed).";
+      }
+      if (
+        packagingItems.some(
+          (p) =>
+            p.code.toLowerCase() === code.toLowerCase() &&
+            p.code.toLowerCase() !== editing?.code.toLowerCase()
+        )
+      ) {
+        return "Bag code already exists.";
+      }
     }
 
     if (form.values.capacity.trim()) {
@@ -232,16 +248,13 @@ export default function PackagingMasterPage() {
   };
 
   const savePackaging = async (addAnother: boolean) => {
-    clearError();
+    setError(null);
     const validationError = validate();
     if (validationError) {
       message.error(validationError);
       throw new Error(validationError);
     }
 
-    const code =
-      form.values.bagCode.trim().toUpperCase() ||
-      nextPackagingCode(DATA.PACKAGING);
     const capacity = form.values.capacity.trim()
       ? parseFloat(form.values.capacity)
       : undefined;
@@ -251,56 +264,63 @@ export default function PackagingMasterPage() {
     const reorder = form.values.reorderQty.trim()
       ? parseFloat(form.values.reorderQty)
       : 0;
-    const stock = editing?.stock ?? 0;
     const supplier = DATA.VENDORS.find((v) => v.id === form.values.supplier);
 
-    if (editing) {
-      await update(
-        "packaging",
-        editing.code,
-        {
-          name: buildName(form.values.packagingType, capacity ?? null),
-          unit: form.values.unit,
-          reorder,
-          minStock,
-          capacity,
-          gradeCompatibility: form.values.gradeCompatibility.trim(),
-          supplier: supplier?.name ?? "",
-          materialType: form.values.materialType,
-          notes: form.values.notes.trim(),
-          status: stockStatus(stock, reorder, minStock),
-        },
-        "code"
-      );
-      message.success("Packaging master updated.");
-      if (!addAnother) {
+    setSaving(true);
+    try {
+      if (editing) {
+        await savePackagingApi(
+          {
+            name: buildName(form.values.packagingType, capacity ?? null),
+            unit: form.values.unit,
+            reorder,
+            minStock,
+            capacity,
+            gradeCompatibility: form.values.gradeCompatibility.trim(),
+            supplier: supplier?.name ?? "",
+            materialType: form.values.materialType,
+            notes: form.values.notes.trim(),
+          },
+          editing.code,
+        );
+        await reloadPackaging();
+        message.success("Packaging master updated.");
+        if (!addAnother) {
+          router.push("/inventory/packaging");
+        }
+        return;
+      }
+
+      const code = form.values.bagCode.trim().toUpperCase();
+
+      await savePackagingApi({
+        ...(code ? { code } : {}),
+        name: buildName(form.values.packagingType, capacity ?? null),
+        unit: form.values.unit,
+        reorder,
+        minStock,
+        capacity,
+        gradeCompatibility: form.values.gradeCompatibility.trim(),
+        supplier: supplier?.name ?? "",
+        materialType: form.values.materialType,
+        notes: form.values.notes.trim(),
+      });
+      await reloadPackaging();
+
+      message.success("Packaging master saved.");
+
+      if (addAnother) {
+        form.reset({ ...INITIAL });
+      } else {
         router.push("/inventory/packaging");
       }
-      return;
-    }
-
-    await append("packaging", {
-      code,
-      name: buildName(form.values.packagingType, capacity ?? null),
-      stock,
-      unit: form.values.unit,
-      reorder,
-      minStock,
-      capacity,
-      gradeCompatibility: form.values.gradeCompatibility.trim(),
-      supplier: supplier?.name ?? "",
-      materialType: form.values.materialType,
-      notes: form.values.notes.trim(),
-      status: stockStatus(stock, reorder, minStock),
-      trend: 0,
-    });
-
-    message.success("Packaging master saved.");
-
-    if (addAnother) {
-      form.reset({ ...INITIAL });
-    } else {
-      router.push("/inventory/packaging");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Save failed";
+      setError(msg);
+      message.error(msg);
+      throw e;
+    } finally {
+      setSaving(false);
     }
   };
 

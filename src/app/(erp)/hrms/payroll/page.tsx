@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Badge, Button } from "antd";
+import { Badge, Button, Select } from "antd";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
 import dayjs from "dayjs";
 import RepHeader from "@/components/hrms/RepHeader";
 import CommonTable from "@/components/common/CommonTable";
@@ -48,6 +49,8 @@ export default function PayrollPage() {
   const [cycles, setCycles] = useState<PayrollCycleRow[]>([]);
   const [currentRows, setCurrentRows] = useState<PayrollSheetRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -135,6 +138,24 @@ export default function PayrollPage() {
     },
   ];
 
+  const filteredCycles = useMemo(() => {
+    return cycles.filter((c) => {
+      if (statusFilter !== "all") {
+        if (statusFilter === "pending" && c.status !== "Not started") return false;
+        if (statusFilter === "approved" && c.status !== "Approved") return false;
+        if (statusFilter === "disbursed" && c.status !== "Disbursed") return false;
+        if (statusFilter === "processing" && !c.status.startsWith("Processing")) return false;
+      }
+      if (search) {
+        const term = search.toLowerCase();
+        if (!c.cycle.toLowerCase().includes(term) && !c.status.toLowerCase().includes(term)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [cycles, search, statusFilter]);
+
   return (
     <div className="attendance-reports-page">
       <RepHeader
@@ -177,11 +198,40 @@ export default function PayrollPage() {
         />
       </div>
 
+      <PageFilterPanel
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search cycle name or status…"
+        activeFilterCount={statusFilter !== "all" ? 1 : 0}
+        onApply={() => {}}
+        onClear={() => {
+          setSearch("");
+          setStatusFilter("all");
+        }}
+        drawerWidth={320}
+      >
+        <div className="arf-item">
+          <span className="arf-label">Status</span>
+          <Select
+            className="w-full"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { value: "all", label: "All statuses" },
+              { value: "pending", label: "Not started" },
+              { value: "processing", label: "Processing" },
+              { value: "approved", label: "Approved" },
+              { value: "disbursed", label: "Disbursed" },
+            ]}
+          />
+        </div>
+      </PageFilterPanel>
+
       <ReportSection title="Salary disbursements" flush>
         <CommonTable
           {...ERP_TABLE_PROPS}
           loading={loading}
-          dataSource={cycles}
+          dataSource={filteredCycles}
           columns={columns}
           pagination={false}
           bordered

@@ -30,29 +30,13 @@ import CommonTable from "@/components/common/CommonTable";
 import StatCard from "@/components/common/StatCard";
 import EmployeeSelect from "@/components/erp/EmployeeSelect";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
-import { leaveTypeColor } from "@/lib/leave-apply";
+import { leaveTypeColor, LEAVE_STATUS_LABEL, LEAVE_STATUS_COLOR } from "@/lib/leave-apply";
 import { hrCannotActionOwnLeave, filterLeavesForHrApproval } from "@/lib/leave-approval-rules";
 import { computeLeaveApprovalKpi } from "@/lib/hrms-leave-kpi";
 import type { PermissionsMap } from "@/lib/permission-types";
-import PageFilterToolbar from "@/components/common/PageFilterToolbar";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
 import { filterBySearch } from "@/lib/filter-search";
 
-const STATUS_COLOR: Record<string, string> = {
-  pending: "orange",
-  approved: "green",
-  rejected: "red",
-  cancelled: "default",
-  rolled_back: "purple",
-  completed: "cyan",
-};
-const STATUS_LABEL: Record<string, string> = {
-  pending: "Pending",
-  approved: "HR Approved",
-  rejected: "Rejected",
-  cancelled: "Cancelled",
-  rolled_back: "Rolled Back",
-  completed: "Completed",
-};
 const LEAVE_TYPE_LABEL: Record<string, string> = {
   casual: "Casual",
   sick: "Sick",
@@ -97,7 +81,8 @@ export default function LeaveApprovalPage() {
     setViewRow(row);
     setViewOpen(true);
   };
-
+  const [leaveTypeFilter, setLeaveTypeFilter] = useState("all");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
   const load = async () => {
     setLoading(true);
     try {
@@ -147,7 +132,12 @@ export default function LeaveApprovalPage() {
       activeTab === "all"
         ? approvalLeaves
         : approvalLeaves.filter((row) => String(row.status) === activeTab);
-    return filterBySearch(byTab, search, (row) => [
+    const filtered = byTab.filter((row) => {
+      if (leaveTypeFilter !== "all" && String(row.leaveType) !== leaveTypeFilter) return false;
+      if (departmentFilter !== "all" && String(row.department) !== departmentFilter) return false;
+      return true;
+    });
+    return filterBySearch(filtered, search, (row) => [
       String(row.employeeId ?? ""),
       String(row.employeeName ?? ""),
       String(row.department ?? ""),
@@ -157,7 +147,7 @@ export default function LeaveApprovalPage() {
       String(row.fromDate ?? ""),
       String(row.toDate ?? ""),
     ]);
-  }, [approvalLeaves, activeTab, search]);
+  }, [approvalLeaves, activeTab, search, leaveTypeFilter, departmentFilter]);
 
   const approve = async (id: string) => {
     try {
@@ -306,10 +296,10 @@ export default function LeaveApprovalPage() {
       width: 130,
       render: (v: string) => (
         <Tag
-          color={STATUS_COLOR[v] || "default"}
+          color={LEAVE_STATUS_COLOR[v] || "default"}
           style={{ borderRadius: 20, border: 0, fontWeight: 600 }}
         >
-          {STATUS_LABEL[v] || v}
+          {LEAVE_STATUS_LABEL[v] || v}
         </Tag>
       ),
     },
@@ -456,12 +446,52 @@ export default function LeaveApprovalPage() {
         />
       </div>
 
-      <PageFilterToolbar
+      <PageFilterPanel
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search employee name, ID, leave type, reason…"
-        showFilterButton={false}
-      />
+        activeFilterCount={(leaveTypeFilter !== "all" ? 1 : 0) + (departmentFilter !== "all" ? 1 : 0)}
+        onApply={() => {}}
+        onClear={() => {
+          setSearch("");
+          setLeaveTypeFilter("all");
+          setDepartmentFilter("all");
+        }}
+        drawerWidth={320}
+      >
+        <div className="arf-item">
+          <span className="arf-label">Leave Type</span>
+          <Select
+            className="w-full"
+            value={leaveTypeFilter}
+            onChange={setLeaveTypeFilter}
+            options={[
+              { value: "all", label: "All types" },
+              { value: "Casual", label: "Casual" },
+              { value: "Sick", label: "Sick" },
+              { value: "Privilege", label: "Privilege" },
+              { value: "Unpaid", label: "Unpaid" },
+            ]}
+          />
+        </div>
+        <div className="arf-item">
+          <span className="arf-label">Department</span>
+          <Select
+            className="w-full"
+            value={departmentFilter}
+            onChange={setDepartmentFilter}
+            options={[
+              { value: "all", label: "All departments" },
+              { value: "Sales", label: "Sales" },
+              { value: "Engineering", label: "Engineering" },
+              { value: "HR", label: "HR" },
+              { value: "Management", label: "Management" },
+              { value: "Operations", label: "Operations" },
+              { value: "Marketing", label: "Marketing" },
+            ]}
+          />
+        </div>
+      </PageFilterPanel>
 
       {/* Leave table */}
       <div className="attendance-report-section">
@@ -628,10 +658,10 @@ export default function LeaveApprovalPage() {
               <dt>Status</dt>
               <dd>
                 <Tag
-                  color={STATUS_COLOR[String(viewRow.status)] || "default"}
+                  color={LEAVE_STATUS_COLOR[String(viewRow.status)] || "default"}
                   style={{ borderRadius: 20, border: 0 }}
                 >
-                  {STATUS_LABEL[String(viewRow.status)] ||
+                  {LEAVE_STATUS_LABEL[String(viewRow.status)] ||
                     String(viewRow.status)}
                 </Tag>
               </dd>

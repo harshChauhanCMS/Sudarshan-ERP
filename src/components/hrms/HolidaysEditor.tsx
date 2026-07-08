@@ -21,8 +21,7 @@ import ReportSection from "@/components/hrms/ReportSection";
 import { ViewEditActions } from "@/components/common/TableActionIcons";
 import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 import { downloadHolidayCalendarPdf } from "@/lib/holiday-calendar-pdf";
-import PageFilterDrawer from "@/components/common/PageFilterDrawer";
-import PageFilterToolbar from "@/components/common/PageFilterToolbar";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
 import { filterBySearch } from "@/lib/filter-search";
 
 export type HolidayRecord = {
@@ -61,7 +60,7 @@ export function HolidaysEditor({ companyName = "Sudarshan Group" }: HolidaysEdit
   const [editing, setEditing] = useState<HolidayRecord | null>(null);
   const [year, setYear] = useState(new Date().getFullYear());
   const [search, setSearch] = useState("");
-  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
   const [form] = Form.useForm<HolidayFormValues>();
 
   const filteredHolidays = useMemo(
@@ -247,11 +246,10 @@ export function HolidaysEditor({ companyName = "Sudarshan Group" }: HolidaysEdit
 
   return (
     <>
-      <PageFilterToolbar
+      <PageFilterPanel
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search holiday name, date, type…"
-        onFilterClick={() => setFilterDrawerOpen(true)}
         activeFilterCount={year !== new Date().getFullYear() ? 1 : 0}
         trailing={
           <Space wrap>
@@ -267,12 +265,7 @@ export function HolidaysEditor({ companyName = "Sudarshan Group" }: HolidaysEdit
             </Button>
           </Space>
         }
-      />
-
-      <PageFilterDrawer
-        open={filterDrawerOpen}
-        onClose={() => setFilterDrawerOpen(false)}
-        onApply={() => setFilterDrawerOpen(false)}
+        onApply={() => {}}
         onClear={() => {
           setYear(new Date().getFullYear());
         }}
@@ -286,7 +279,7 @@ export function HolidaysEditor({ companyName = "Sudarshan Group" }: HolidaysEdit
             options={YEAR_OPTIONS.map((y) => ({ value: y, label: String(y) }))}
           />
         </div>
-      </PageFilterDrawer>
+      </PageFilterPanel>
 
       <ReportSection
         title="Company holiday calendar"

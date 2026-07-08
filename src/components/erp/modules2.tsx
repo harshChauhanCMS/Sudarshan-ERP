@@ -24,23 +24,14 @@ import {
   EnvironmentOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import PageFilterDrawer from "@/components/common/PageFilterDrawer";
-import PageFilterToolbar from "@/components/common/PageFilterToolbar";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
 import StatCard, { ErpStatGrid, mapDashStatTone } from "@/components/common/StatCard";
 import dayjs from "dayjs";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import { useOrders } from "@/hooks/use-orders";
-import {
-  EntityFormModal,
-  FormField,
-  FormGrid,
-  FormInput,
-  FormSelect,
-  useFormState,
-  requireFields,
-} from "@/components/forms";
+import { FormGrid, FormField, FormInput, FormSelect, EntityFormModal, requireFields, useFormState } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { nextCustomerId, nextOrderId, nextFieldVisitId, nextInvoiceId, formatDueDate, formatDisplayDate } from "@/lib/id-generators";
 import { DashHead, SectionH } from "./dashboards";
@@ -908,6 +899,22 @@ const InvoiceVerify = () => {
     ? Math.round(mismatched.reduce((s, i) => s + Math.abs(i.invAmt - i.poAmt), 0) / mismatched.length)
     : 0;
 
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const filteredInvoices = useMemo(() => {
+    return INVOICES.filter((i) => {
+      if (statusFilter !== "all" && i.status !== statusFilter) return false;
+      if (search) {
+        const t = search.toLowerCase();
+        if (!i.id.toLowerCase().includes(t) && !i.po.toLowerCase().includes(t) && !i.vendor.toLowerCase().includes(t)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [INVOICES, search, statusFilter]);
+
   const approveInvoice = async () => {
     if (!open) return;
     await update("invoices", open.id, {
@@ -1068,19 +1075,37 @@ const InvoiceVerify = () => {
       </ErpStatGrid>
 
       <div className="card">
-        <div className="card-head">
-          <div className="card-title"><Icon name="invoice" size={14} /> Invoices awaiting verification</div>
-          <div className="tabs" style={{ border: "none" }}>
-            <span className="tab active">All <span className="tab-count">{INVOICES.length}</span></span>
-            <span className="tab">Mismatched <span className="tab-count">{INVOICES.filter(i => i.status === "mismatch").length}</span></span>
-            <span className="tab">Auto-matched <span className="tab-count">{INVOICES.filter(i => i.status === "matched").length}</span></span>
+        <PageFilterPanel
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search Invoice, PO, or Vendor…"
+          activeFilterCount={statusFilter !== "all" ? 1 : 0}
+          onApply={() => {}}
+          onClear={() => {
+            setSearch("");
+            setStatusFilter("all");
+          }}
+          drawerWidth={320}
+        >
+          <div className="arf-item">
+            <span className="arf-label">Status</span>
+            <Select
+              className="w-full"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: "all", label: "All invoices" },
+                { value: "matched", label: "Auto-matched" },
+                { value: "mismatch", label: "Mismatched" },
+              ]}
+            />
           </div>
-        </div>
-        <div style={{ padding: 16 }}>
+        </PageFilterPanel>
+        <div style={{ padding: 16, paddingTop: 0 }}>
           <CommonTable
             {...ERP_TABLE_PROPS}
             columns={invoiceColumns}
-            dataSource={INVOICES}
+            dataSource={filteredInvoices}
             rowKey="id"
             onRow={(inv) => ({
               onClick: () => setOpen(inv),
@@ -1640,7 +1665,7 @@ const FieldVisitHistory = () => {
   const [dateFrom, setDateFrom] = useState(dayjs("2025-03-01"));
   const [dateTo, setDateTo] = useState(dayjs("2025-03-09"));
   const [search, setSearch] = useState("");
-  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
 
   const selected = FIELD_VISIT_HISTORY_ROWS.find((r) => r.id === selectedId) ?? FIELD_VISIT_HISTORY_ROWS[0];
 
@@ -1713,18 +1738,12 @@ const FieldVisitHistory = () => {
       />
 
       <div className="field-visit-history-page">
-        <PageFilterToolbar
+        <PageFilterPanel
           search={search}
           onSearchChange={setSearch}
           searchPlaceholder="Search employee, customer, area…"
-          onFilterClick={() => setFilterDrawerOpen(true)}
           activeFilterCount={2}
-        />
-
-        <PageFilterDrawer
-          open={filterDrawerOpen}
-          onClose={() => setFilterDrawerOpen(false)}
-          onApply={() => setFilterDrawerOpen(false)}
+          onApply={() => {}}
         >
           <div className="arf-item">
             <span className="arf-label">Employee</span>
@@ -1794,7 +1813,7 @@ const FieldVisitHistory = () => {
               onChange={(d) => d && setDateTo(d)}
             />
           </div>
-        </PageFilterDrawer>
+        </PageFilterPanel>
 
         <div className="field-beat-card field-visit-history-table-card">
           <div className="field-visit-history-table-head">

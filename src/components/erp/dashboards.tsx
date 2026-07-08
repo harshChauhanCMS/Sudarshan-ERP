@@ -29,7 +29,9 @@ import StatCard, { mapDashStatTone } from "@/components/common/StatCard";
 import { AddDriverModal } from "@/components/dispatch/add-driver-modal";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
+import { usePackaging } from "@/hooks/use-packaging";
 import { useOwnerDashboard } from "@/hooks/use-owner-dashboard";
+import { useProductionDashboard } from "@/hooks/use-production-dashboard";
 import {
   revenueMtdRupees,
   revenueLakhsFromSeries,
@@ -561,6 +563,7 @@ const MasterListRow = ({ label, value, pillTone }) => (
    ============================================================ */
 const MasterDashboard = ({ navigate }) => {
   const DATA = useDATA();
+  const { items: packagingItems } = usePackaging();
   const rev = revenueLakhsFromSeries(DATA.REVENUE_DATA);
   const revenueRupees = revenueMtdRupees(DATA.REVENUE_DATA);
   const attendance = DATA.ATTENDANCE_TODAY;
@@ -576,7 +579,7 @@ const MasterDashboard = ({ navigate }) => {
   const overdueDispatches = overdueOpenOrders(DATA.ORDERS);
   const dispatchCounts = dispatchStatusCounts(DATA.DISPATCHES);
   const rmLow = lowStockCount(DATA.RAW_MATERIALS);
-  const packLow = lowStockCount(DATA.PACKAGING);
+  const packLow = lowStockCount(packagingItems);
   const spareRisk = lowStockCount(DATA.SPARE_PARTS);
   const pendingInvoices = pendingInvoiceVerifications(DATA.INVOICES);
   const mineralsDispatch = dispatchesForPlant(DATA.DISPATCHES, "udaipur");
@@ -932,13 +935,14 @@ const AdminWidget = ({ title, icon, badge, children }) => (
 
 const AdminDashboard = ({ navigate }) => {
   const DATA = useDATA();
+  const { items: packagingItems } = usePackaging();
   const attendance = DATA.ATTENDANCE_TODAY;
   const totalUsers =
     attendance.total > 0 ? attendance.total : DATA.EMPLOYEES.length;
   const presentToday =
     attendance.total > 0 ? attendance.present : DATA.EMPLOYEES.length;
   const rmLow = lowStockCount(DATA.RAW_MATERIALS);
-  const packLow = lowStockCount(DATA.PACKAGING);
+  const packLow = lowStockCount(packagingItems);
   const spareLow = lowStockCount(DATA.SPARE_PARTS);
   const lowStockTotal = rmLow + packLow + spareLow;
   const pendingInvoices = pendingInvoiceVerifications(DATA.INVOICES);
@@ -961,9 +965,8 @@ const AdminDashboard = ({ navigate }) => {
     .slice(0, 3)
     .map((r) => r.name.split(" ")[0])
     .join(", ");
-  const lowPackLabels = DATA.PACKAGING.filter(
-    (p) => p.status === "low" || p.status === "critical",
-  )
+  const lowPackLabels = packagingItems
+    .filter((p) => p.status === "low" || p.status === "critical")
     .slice(0, 2)
     .map((p) => p.name.split(" · ")[0])
     .join(", ");
@@ -1604,7 +1607,7 @@ const OwnerCompanyTile = ({
 
 const OWNER_STAT_ICONS = {
   "Combined sales (MTD)": DollarOutlined,
-  "Gross margin": RiseOutlined,
+  "Est. gross margin": RiseOutlined,
   "Dispatches due today": CalendarOutlined,
   Overdue: ExclamationCircleOutlined,
   "Vendor price alerts": AlertOutlined,
@@ -1732,6 +1735,18 @@ const ownerChartTooltip = {
 const OwnerVendorPriceChart = ({ items, navigate }) => {
   const maxAbs = Math.max(...items.map((i) => i.pct), 1);
   const [hovered, setHovered] = useState(null);
+
+  if (!items.length) {
+    return (
+      <div className="owner-vendor-chart owner-vendor-chart--empty">
+        <p className="owner-chart-caption" style={{ margin: 0 }}>
+          No price changes detected yet — needs at least two priced purchase
+          orders for the same vendor and material.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="owner-vendor-chart">
       {items.map((item, index) => {
@@ -1890,8 +1905,12 @@ const OwnerDispatchDonut = ({ due, overdue }) => {
 };
 
 const OwnerDashboard = ({ navigate }) => {
-  const { data, loading, error } = useOwnerDashboard();
-  const [dashboardDate, setDashboardDate] = useState(() => dayjs("2026-05-21"));
+  const [dashboardDate, setDashboardDate] = useState(() => dayjs());
+  const { data, loading, error } = useOwnerDashboard({
+    year: dashboardDate.year(),
+    month: dashboardDate.month() + 1,
+    day: dashboardDate.date(),
+  });
 
   if (loading) {
     return (
@@ -1950,9 +1969,9 @@ const OwnerDashboard = ({ navigate }) => {
   ];
 
   const productionChartData = [
-    { plant: "Total", batches: production.batchesCompleted },
-    { plant: "Minerals", batches: production.mineralsBatches },
-    { plant: "Microns", batches: production.micronsBatches },
+    { plant: "Total", batches: production.activeJobs },
+    { plant: "Minerals", batches: production.mineralsJobs },
+    { plant: "Microns", batches: production.micronsJobs },
   ];
 
   const profitChartData = [
@@ -2196,7 +2215,11 @@ const OwnerDashboard = ({ navigate }) => {
           icon="money"
           titleHref="/procurement/vendors"
           navigate={navigate}
-          badge={<Badge tone="warning">{counts.vendorPriceAlerts}</Badge>}
+          badge={
+            counts.vendorPriceAlerts > 0 ? (
+              <Badge tone="warning">{counts.vendorPriceAlerts}</Badge>
+            ) : null
+          }
           theme={OWNER_CHART_THEMES.vendor.container}
         >
           <p className="owner-chart-caption">
@@ -2276,7 +2299,7 @@ const OwnerDashboard = ({ navigate }) => {
           theme={OWNER_CHART_THEMES.production.container}
         >
           <p className="owner-chart-caption">
-            Batches completed today by plant
+            Active production jobs today by plant
           </p>
           <OwnerChartPanel
             legend={
@@ -2306,21 +2329,21 @@ const OwnerDashboard = ({ navigate }) => {
           >
             <div className="owner-prod-stat">
               <div className="owner-prod-stat__val">
-                {production.batchesCompleted}
+                {production.activeJobs}
               </div>
               <div className="owner-prod-stat__lbl">
-                Batches completed today
+                Active production jobs today
               </div>
             </div>
             <div className="owner-prod-stat">
               <div className="owner-prod-stat__val">
-                {production.mineralsBatches}
+                {production.mineralsJobs}
               </div>
               <div className="owner-prod-stat__lbl">Minerals (Udaipur)</div>
             </div>
             <div className="owner-prod-stat">
               <div className="owner-prod-stat__val">
-                {production.micronsBatches}
+                {production.micronsJobs}
               </div>
               <div className="owner-prod-stat__lbl">Microns (Makrana)</div>
             </div>
@@ -2484,7 +2507,7 @@ const OwnerDashboard = ({ navigate }) => {
                 <span className="val positive">{profit.grossProfit}</span>
               </div>
               <div className="owner-profit-row">
-                <span>Gross margin</span>
+                <span>Est. gross margin</span>
                 <span className="val positive">{profit.grossMargin}</span>
               </div>
             </div>
@@ -2582,23 +2605,22 @@ const OwnerDashboard = ({ navigate }) => {
           navigate={navigate}
         >
           <div className="owner-critical-notifs">
-            {criticalNotifs.map((n) => (
-              <OwnerNavButton
-                key={n.id}
-                navigate={navigate}
-                href={n.href}
-                className="owner-critical-notifs__item owner-critical-notifs__item--nav"
-              >
-                <strong>
-                  {n.type === "alert"
-                    ? "Alert:"
-                    : n.type === "success"
-                      ? "Update:"
-                      : "Info:"}
-                </strong>{" "}
-                {n.text}
-              </OwnerNavButton>
-            ))}
+            {criticalNotifs.length ? (
+              criticalNotifs.map((n) => (
+                <OwnerNavButton
+                  key={n.id}
+                  navigate={navigate}
+                  href={n.href}
+                  className="owner-critical-notifs__item owner-critical-notifs__item--nav"
+                >
+                  <strong>Alert:</strong> {n.text}
+                </OwnerNavButton>
+              ))
+            ) : (
+              <p className="owner-widget-footnote" style={{ margin: 0 }}>
+                No critical notifications right now.
+              </p>
+            )}
           </div>
         </OwnerWidget>
       </div>
@@ -2632,207 +2654,6 @@ const ProdWidget = ({ title, icon, badge, meta, children, footnote }) => (
   </div>
 );
 
-const PROD_MACHINES = [
-  "Ball Mill #1",
-  "Ball Mill #2",
-  "Raymond Mill #1",
-  "Raymond Mill #2",
-];
-
-const PENDING_CONSUMPTION = [
-  { id: "PO-2025-035", product: "TiO₂ Blend 325M" },
-  { id: "PO-2025-034", product: "Talc 500 Mesh" },
-  { id: "PO-2025-033", product: "Barytes 200 Mesh" },
-];
-
-const BAG_IMPACT = [
-  { label: "Reserved for today’s production", value: "3,680 bags" },
-  { label: "HDPE 50 kg (reserved)", value: "800" },
-  { label: "HDPE 25 kg (reserved)", value: "2,400" },
-  { label: "Laminated 25 kg (reserved)", value: "480 — tight", warn: true },
-  { label: "After today (est. balance)", value: "HDPE 50 kg: 3,400" },
-];
-
-const MACHINE_UTIL = [
-  {
-    name: "Ball Mill #1",
-    meta: "PO-2025-037 — Calcium Carbonate · Est. complete 14:00",
-    pct: 78,
-    tone: "default",
-  },
-  {
-    name: "Ball Mill #2",
-    meta: "PO-2025-039 — Barytes · Est. complete 16:30",
-    pct: 35,
-    tone: "default",
-  },
-  {
-    name: "Raymond Mill #1",
-    meta: "PO-2025-038 — Talc 400 Mesh · Est. complete 15:00",
-    pct: 55,
-    tone: "default",
-  },
-  {
-    name: "Raymond Mill #2",
-    meta: "PO-2025-036 — Kaolin · QC hold",
-    pct: 95,
-    tone: "warning",
-  },
-];
-
-const PACK_REQUIRED = [
-  {
-    type: "HDPE Valve Bag 25 kg",
-    required: 2400,
-    available: 8500,
-    status: "OK",
-    tone: "success",
-  },
-  {
-    type: "HDPE Valve Bag 50 kg",
-    required: 800,
-    available: 4200,
-    status: "OK",
-    tone: "success",
-  },
-  {
-    type: "Laminated Paper Bag 25 kg",
-    required: 480,
-    available: 1200,
-    status: "Tight",
-    tone: "warning",
-  },
-  {
-    type: "Jumbo Bag 500 kg",
-    required: 24,
-    available: 320,
-    status: "OK",
-    tone: "success",
-  },
-];
-
-const COMPLETED_BATCHES = [
-  {
-    order: "PO-2025-035",
-    product: "Titanium Dioxide Blend 325M",
-    qty: 8,
-    machine: "Ball Mill #2",
-    time: "08:45",
-  },
-  {
-    order: "PO-2025-034",
-    product: "Talc 500 Mesh",
-    qty: 10,
-    machine: "Raymond #1",
-    time: "07:30",
-  },
-  {
-    order: "PO-2025-033",
-    product: "Barytes 200 Mesh",
-    qty: 25,
-    machine: "Ball Mill #1",
-    time: "06:15",
-  },
-  {
-    order: "PO-2025-032",
-    product: "Iron Oxide Red 325M",
-    qty: 5,
-    machine: "Raymond #2",
-    time: "05:50",
-  },
-  {
-    order: "PO-2025-031",
-    product: "Calcium Carbonate 300M",
-    qty: 12,
-    machine: "Ball Mill #1",
-    time: "04:20",
-  },
-];
-
-const DELAYED_TASKS = [
-  {
-    id: "PO-2025-032",
-    text: "Detergent Base Powder (30 MT). On hold: raw material shortfall. Expected start: tomorrow.",
-  },
-  {
-    id: "PO-2025-030",
-    text: "Talc 400 Mesh (15 MT). Delayed 4 hrs: Raymond #1 breakdown. Resumed 08:00; est. complete 15:00.",
-  },
-];
-
-const PRODUCTION_QUEUE = [
-  {
-    order: "PO-2025-040",
-    product: "Talc Powder",
-    spec: "500 Mesh",
-    qty: 15,
-    date: "2025-03-10",
-    machine: "Raymond #1",
-    status: "Planned",
-    priority: "High",
-  },
-  {
-    order: "PO-2025-041",
-    product: "Calcium Carbonate",
-    spec: "300 Mesh",
-    qty: 20,
-    date: "2025-03-10",
-    machine: "Ball Mill #1",
-    status: "Planned",
-    priority: "High",
-  },
-  {
-    order: "PO-2025-042",
-    product: "Kaolin Clay",
-    spec: "200 Mesh",
-    qty: 12,
-    date: "2025-03-10",
-    machine: "Raymond #2",
-    status: "Planned",
-    priority: "Medium",
-  },
-  {
-    order: "PO-2025-043",
-    product: "Detergent Base Powder",
-    spec: "Custom",
-    qty: 30,
-    date: "2025-03-11",
-    machine: "—",
-    status: "On Hold",
-    priority: "High",
-    hold: true,
-  },
-  {
-    order: "PO-2025-044",
-    product: "Barytes Powder",
-    spec: "200 Mesh",
-    qty: 25,
-    date: "2025-03-11",
-    machine: "Ball Mill #1",
-    status: "Planned",
-    priority: "Medium",
-  },
-  {
-    order: "PO-2025-045",
-    product: "Zinc Oxide",
-    spec: "325 Mesh",
-    qty: 8,
-    date: "2025-03-11",
-    machine: "Ball Mill #2",
-    status: "Planned",
-    priority: "Low",
-  },
-];
-
-const SPARES_RISK_STATIC = [
-  {
-    machine: "Ball Mill #2",
-    text: "Grinder blade set (SP-102) low. Order before 15 Mar.",
-  },
-  { machine: "Conveyor C3", text: "Belt drive assembly. Lead time 2 weeks." },
-  { machine: "Raymond #1", text: "Wear parts due next month. Monitor." },
-];
-
 function rmAvailClass(status) {
   if (status === "critical") return "critical";
   if (status === "low") return "low";
@@ -2845,65 +2666,44 @@ function rmAvailLabel(stock, unit, status) {
 }
 
 const ProductionDashboard = ({ navigate }) => {
-  const DATA = useDATA();
+  const { data, loading, error, reload } = useProductionDashboard();
 
-  const week = productionWeekTotals(DATA.PRODUCTION_DATA);
-  const todayActual = productionDayActual(DATA.PRODUCTION_DATA);
-  const todayTarget =
-    DATA.PRODUCTION_DATA.find((d) => d.day === "Fri")?.planned ?? 85;
-  const targetPct =
-    todayTarget > 0 ? Math.round((todayActual / todayTarget) * 100) : 0;
-  const activeJobs = activeProductionJobs(DATA.ORDERS);
+  if (loading) {
+    return (
+      <div
+        className="prod-dash"
+        style={{ display: "flex", justifyContent: "center", padding: "4rem 0" }}
+      >
+        <Spin size="large" />
+      </div>
+    );
+  }
 
-  const activeJobRows = useMemo(() => {
-    const running = DATA.ORDERS.filter((o) => o.status === "in-production");
-    if (running.length > 0) {
-      return running.slice(0, 4).map((o, i) => ({
-        id: o.id,
-        label: `${o.product} (${o.qty})`,
-        machine: PROD_MACHINES[i % PROD_MACHINES.length],
-      }));
-    }
-    return [
-      {
-        id: "PO-2025-037",
-        label: "Calcium Carbonate 300 Mesh (20 MT)",
-        machine: "Ball Mill #1",
-      },
-      {
-        id: "PO-2025-036",
-        label: "Kaolin Clay 200 Mesh (12 MT)",
-        machine: "Raymond #2",
-      },
-      {
-        id: "PO-2025-038",
-        label: "Talc 400 Mesh (15 MT)",
-        machine: "Raymond #1",
-      },
-      {
-        id: "PO-2025-039",
-        label: "Barytes 200 Mesh (25 MT)",
-        machine: "Ball Mill #2",
-      },
-    ];
-  }, [DATA.ORDERS]);
+  if (error || !data) {
+    return (
+      <div className="prod-dash">
+        <DashHead title="Production Dashboard" sub="Unable to load dashboard data" />
+        <div className="card" style={{ padding: 24 }}>
+          <p style={{ color: "var(--danger)", margin: 0 }}>
+            {error ?? "No data available"}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-  const rawAvailability = useMemo(
-    () => DATA.RAW_MATERIALS.slice(0, 7),
-    [DATA.RAW_MATERIALS],
-  );
-
-  const sparesRisk = useMemo(() => {
-    const fromData = DATA.SPARE_PARTS.filter(
-      (p) => p.critical && (p.status === "low" || p.status === "critical"),
-    )
-      .slice(0, 3)
-      .map((p) => ({
-        machine: p.location.split("·")[0]?.trim() || "Plant",
-        text: `${p.name} (${p.code}) — ${p.status === "critical" ? "critical" : "low"} stock.`,
-      }));
-    return fromData.length ? fromData : SPARES_RISK_STATIC;
-  }, [DATA.SPARE_PARTS]);
+  const {
+    stats,
+    activeJobRows,
+    consumptionPending,
+    packagingRequired,
+    unitUtilization,
+    rawMaterialAvailability,
+    sparePartsAtRisk,
+    completedBatches,
+    delayedTasks,
+    productionQueue,
+  } = data;
 
   return (
     <div className="prod-dash">
@@ -2911,7 +2711,7 @@ const ProductionDashboard = ({ navigate }) => {
         title="Production Dashboard"
         sub="Targets, active jobs, consumption, packaging & machines"
       >
-        <Btn icon="refresh" size="sm">
+        <Btn icon="refresh" size="sm" onClick={() => reload(true)}>
           Refresh
         </Btn>
         <Btn
@@ -2928,68 +2728,91 @@ const ProductionDashboard = ({ navigate }) => {
         <ProdStatCard
           icon={DashboardOutlined}
           label="Today’s target (MT)"
-          value={String(todayTarget)}
+          value={String(stats.todayTargetMt)}
         />
         <ProdStatCard
           icon={BarChartOutlined}
           label="Achieved so far (MT)"
-          value={String(todayActual)}
+          value={String(stats.todayActualMt)}
           tone="accent"
         />
         <ProdStatCard
           icon={TrophyOutlined}
           label="Target achieved"
-          value={`${targetPct}%`}
-          tone="success"
+          value={`${stats.targetPct}%`}
+          tone={
+            stats.targetPct >= 100
+              ? "success"
+              : stats.targetPct >= 75
+                ? "warning"
+                : "danger"
+          }
         />
         <ProdStatCard
           icon={CalendarOutlined}
           label="Week target (MT)"
-          value={String(week.planned)}
+          value={String(stats.weekTargetMt)}
         />
         <ProdStatCard
           icon={RiseOutlined}
           label="Week achieved"
-          value={String(week.actual)}
+          value={String(stats.weekActualMt)}
         />
         <ProdStatCard
           icon={ThunderboltOutlined}
           label="Active jobs now"
-          value={String(activeJobs || activeJobRows.length)}
+          value={String(stats.activeJobsCount)}
         />
       </div>
 
       <div className="prod-dash-grid prod-dash-grid--3">
         <ProdWidget
           title="Actual consumption pending entry"
-          badge={<Badge tone="warning">3</Badge>}
-          footnote="Batches completed today; RM consumption not yet recorded."
+          badge={
+            consumptionPending.length ? (
+              <Badge tone="warning">{consumptionPending.length}</Badge>
+            ) : null
+          }
+          footnote="Orders at 100% progress still marked in-production — RM consumption not yet recorded."
         >
           <ul className="prod-dash-pending">
-            {PENDING_CONSUMPTION.map((item) => (
-              <li key={item.id}>
-                <span>
-                  {item.id} — {item.product}
-                </span>
-                <button
-                  type="button"
-                  className="prod-dash-link"
-                  onClick={() => navigate && navigate("/production")}
-                >
-                  Enter
-                </button>
-              </li>
-            ))}
+            {consumptionPending.length ? (
+              consumptionPending.map((item) => (
+                <li key={item.id}>
+                  <span>
+                    {item.id} — {item.label}
+                  </span>
+                  <button
+                    type="button"
+                    className="prod-dash-link"
+                    onClick={() => navigate && navigate("/production")}
+                  >
+                    Enter
+                  </button>
+                </li>
+              ))
+            ) : (
+              <li className="prod-dash-empty">Nothing pending entry</li>
+            )}
           </ul>
         </ProdWidget>
 
         <ProdWidget title="Bag stock auto-impact summary">
-          {BAG_IMPACT.map((row) => (
-            <div key={row.label} className="prod-dash-bag-row">
-              <span>{row.label}</span>
-              <span className={row.warn ? "warn" : ""}>{row.value}</span>
-            </div>
-          ))}
+          {packagingRequired.length ? (
+            packagingRequired.map((row) => (
+              <div key={row.type} className="prod-dash-bag-row">
+                <span>{row.type} (reserved)</span>
+                <span className={row.status !== "OK" ? "warn" : ""}>
+                  {fmtNum(row.required)}
+                  {row.status !== "OK" ? ` — ${row.status.toLowerCase()}` : ""}
+                </span>
+              </div>
+            ))
+          ) : (
+            <p className="prod-dash-widget__footnote" style={{ margin: 0 }}>
+              No packaging reserved for active orders right now.
+            </p>
+          )}
           <p className="prod-dash-widget__footnote">
             Stock is auto-reserved against current jobs. Updates on consumption
             entry.
@@ -2998,10 +2821,11 @@ const ProductionDashboard = ({ navigate }) => {
 
         <ProdWidget title="Production summary">
           <div className="prod-dash-co-box">
-            <div className="prod-dash-co-box__v">{todayActual} MT</div>
+            <div className="prod-dash-co-box__v">{stats.todayActualMt} MT</div>
             <div className="prod-dash-co-box__l">Today’s production</div>
             <p className="prod-dash-co-box__sub">
-              12 batches · {activeJobs || activeJobRows.length} jobs running
+              {completedBatches.length} at 100% · {stats.activeJobsCount} jobs
+              running
             </p>
           </div>
         </ProdWidget>
@@ -3013,40 +2837,52 @@ const ProductionDashboard = ({ navigate }) => {
           badge={<Badge tone="success">{activeJobRows.length} running</Badge>}
         >
           <ul className="prod-dash-jobs">
-            {activeJobRows.map((job) => (
-              <li key={job.id}>
-                <span>
-                  <strong>{job.id}</strong> — {job.label}
-                </span>
-                <span className="prod-dash-job-badge">{job.machine}</span>
-              </li>
-            ))}
+            {activeJobRows.length ? (
+              activeJobRows.map((job) => (
+                <li key={job.id}>
+                  <span>
+                    <strong>{job.id}</strong> — {job.label}
+                  </span>
+                  <span className="prod-dash-job-badge">{job.unit}</span>
+                </li>
+              ))
+            ) : (
+              <li className="prod-dash-empty">No active production jobs</li>
+            )}
           </ul>
         </ProdWidget>
 
         <ProdWidget
-          title="Machine utilization"
-          meta={<span className="prod-dash-widget__meta">Current shift</span>}
+          title="Unit utilization"
+          meta={<span className="prod-dash-widget__meta">Active jobs by plant</span>}
         >
-          {MACHINE_UTIL.map((m) => (
-            <div key={m.name} className="prod-dash-machine">
-              <div className="prod-dash-machine__name">{m.name}</div>
-              <div className="prod-dash-machine__meta">{m.meta}</div>
-              <div className="prod-dash-machine__bar">
-                <div
-                  className={`prod-dash-machine__fill ${m.tone === "warning" ? "warning" : m.tone === "danger" ? "danger" : ""}`}
-                  style={{ width: `${m.pct}%` }}
-                />
+          {unitUtilization.length ? (
+            unitUtilization.map((u) => (
+              <div key={u.unit} className="prod-dash-machine">
+                <div className="prod-dash-machine__name">{u.label}</div>
+                <div className="prod-dash-machine__meta">
+                  {u.count} active job{u.count === 1 ? "" : "s"}
+                </div>
+                <div className="prod-dash-machine__bar">
+                  <div
+                    className="prod-dash-machine__fill"
+                    style={{ width: `${u.pct}%` }}
+                  />
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            <p className="prod-dash-widget__footnote" style={{ margin: 0 }}>
+              No active jobs assigned to a unit yet.
+            </p>
+          )}
         </ProdWidget>
       </div>
 
       <div className="prod-dash-grid prod-dash-grid--2">
         <ProdWidget title="Raw material availability summary">
           <ul className="prod-dash-rm-list">
-            {rawAvailability.map((rm) => (
+            {rawMaterialAvailability.map((rm) => (
               <li key={rm.code}>
                 <span>
                   {rm.name} ({rm.code})
@@ -3071,16 +2907,24 @@ const ProductionDashboard = ({ navigate }) => {
                 </tr>
               </thead>
               <tbody>
-                {PACK_REQUIRED.map((row) => (
-                  <tr key={row.type}>
-                    <td>{row.type}</td>
-                    <td>{fmtNum(row.required)}</td>
-                    <td>{fmtNum(row.available)}</td>
-                    <td>
-                      <Badge tone={row.tone}>{row.status}</Badge>
+                {packagingRequired.length ? (
+                  packagingRequired.map((row) => (
+                    <tr key={row.type}>
+                      <td>{row.type}</td>
+                      <td>{fmtNum(row.required)}</td>
+                      <td>{fmtNum(row.available)}</td>
+                      <td>
+                        <Badge tone={row.tone}>{row.status}</Badge>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="prod-dash-empty">
+                      No packaging reserved for active orders
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -3090,19 +2934,27 @@ const ProductionDashboard = ({ navigate }) => {
       <div className="prod-dash-grid prod-dash-grid--2">
         <ProdWidget
           title="Machine spare parts at risk"
-          badge={<Badge tone="warning">{sparesRisk.length}</Badge>}
+          badge={
+            sparePartsAtRisk.length ? (
+              <Badge tone="warning">{sparePartsAtRisk.length}</Badge>
+            ) : null
+          }
         >
           <ul className="prod-dash-spares">
-            {sparesRisk.map((item, i) => (
-              <li key={i}>
-                <span className="prod-dash-spares__icon">
-                  <Icon name="wrench" size={13} />
-                </span>
-                <span>
-                  <strong>{item.machine}</strong> — {item.text}
-                </span>
-              </li>
-            ))}
+            {sparePartsAtRisk.length ? (
+              sparePartsAtRisk.map((item, i) => (
+                <li key={i}>
+                  <span className="prod-dash-spares__icon">
+                    <Icon name="wrench" size={13} />
+                  </span>
+                  <span>
+                    <strong>{item.machine}</strong> — {item.text}
+                  </span>
+                </li>
+              ))
+            ) : (
+              <li className="prod-dash-empty">No spare parts at risk</li>
+            )}
           </ul>
         </ProdWidget>
 
@@ -3118,8 +2970,12 @@ const ProductionDashboard = ({ navigate }) => {
 
       <div className="prod-dash-grid prod-dash-grid--2">
         <ProdWidget
-          title="Completed batches today"
-          meta={<span className="prod-dash-widget__meta">12 batches</span>}
+          title="Completed batches"
+          meta={
+            <span className="prod-dash-widget__meta">
+              {completedBatches.length} at 100%
+            </span>
+          }
         >
           <div className="prod-dash-table-wrap">
             <table className="prod-dash-table">
@@ -3127,21 +2983,27 @@ const ProductionDashboard = ({ navigate }) => {
                 <tr>
                   <th>Order</th>
                   <th>Product</th>
-                  <th>Qty (MT)</th>
-                  <th>Machine</th>
-                  <th>Completed</th>
+                  <th>Qty</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {COMPLETED_BATCHES.map((row) => (
-                  <tr key={row.order}>
-                    <td>{row.order}</td>
-                    <td>{row.product}</td>
-                    <td>{row.qty}</td>
-                    <td>{row.machine}</td>
-                    <td>{row.time}</td>
+                {completedBatches.length ? (
+                  completedBatches.map((row) => (
+                    <tr key={row.id}>
+                      <td>{row.id}</td>
+                      <td>{row.product}</td>
+                      <td>{row.qty}</td>
+                      <td>{row.status.replace(/-/g, " ")}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="prod-dash-empty">
+                      No batches at 100% yet
+                    </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -3149,19 +3011,27 @@ const ProductionDashboard = ({ navigate }) => {
 
         <ProdWidget
           title="Delayed production tasks"
-          badge={<Badge tone="danger">2</Badge>}
+          badge={
+            delayedTasks.length ? (
+              <Badge tone="danger">{delayedTasks.length}</Badge>
+            ) : null
+          }
         >
           <ul className="prod-dash-delayed">
-            {DELAYED_TASKS.map((item) => (
-              <li key={item.id}>
-                <span className="prod-dash-delayed__icon">
-                  <Icon name="clock" size={14} />
-                </span>
-                <div>
-                  <strong>{item.id}</strong> — {item.text}
-                </div>
-              </li>
-            ))}
+            {delayedTasks.length ? (
+              delayedTasks.map((item) => (
+                <li key={item.id}>
+                  <span className="prod-dash-delayed__icon">
+                    <Icon name="clock" size={14} />
+                  </span>
+                  <div>
+                    <strong>{item.id}</strong> — {item.text}
+                  </div>
+                </li>
+              ))
+            ) : (
+              <li className="prod-dash-empty">No delayed tasks</li>
+            )}
           </ul>
         </ProdWidget>
       </div>
@@ -3202,31 +3072,39 @@ const ProductionDashboard = ({ navigate }) => {
               <tr>
                 <th>Order</th>
                 <th>Product</th>
-                <th>Spec / Mesh</th>
-                <th>Qty (MT)</th>
-                <th>Planned date</th>
-                <th>Machine</th>
+                <th>Spec / Grade</th>
+                <th>Qty</th>
+                <th>Due date</th>
+                <th>Unit</th>
                 <th>Status</th>
                 <th>Priority</th>
               </tr>
             </thead>
             <tbody>
-              {PRODUCTION_QUEUE.map((row) => (
-                <tr key={row.order}>
-                  <td>{row.order}</td>
-                  <td>{row.product}</td>
-                  <td>{row.spec}</td>
-                  <td>{row.qty}</td>
-                  <td>{row.date}</td>
-                  <td>{row.machine}</td>
-                  <td>
-                    <Badge tone={row.hold ? "danger" : "default"}>
-                      {row.status}
-                    </Badge>
+              {productionQueue.length ? (
+                productionQueue.map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.id}</td>
+                    <td>{row.product}</td>
+                    <td>{row.spec}</td>
+                    <td>{row.qty}</td>
+                    <td>{row.date}</td>
+                    <td>{row.unit}</td>
+                    <td>
+                      <Badge tone={row.status === "scheduled" ? "default" : "warning"}>
+                        {row.status.replace(/-/g, " ")}
+                      </Badge>
+                    </td>
+                    <td>{row.priority}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={8} className="prod-dash-empty">
+                    No scheduled or in-production orders
                   </td>
-                  <td>{row.priority}</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -3733,10 +3611,11 @@ const DispatchMapHoverButton = ({ children }) => (
 const DispatchDashboard = ({ navigate }) => {
   const [addDriverOpen, setAddDriverOpen] = useState(false);
   const DATA = useDATA();
+  const { items: packagingItems } = usePackaging();
   const dispatchCounts = dispatchStatusCounts(DATA.DISPATCHES);
   const mineralsPlant = dispatchesForPlant(DATA.DISPATCHES, "udaipur");
   const micronsPlant = dispatchesForPlant(DATA.DISPATCHES, "ahmedabad");
-  const packBlock = lowStockCount(DATA.PACKAGING);
+  const packBlock = lowStockCount(packagingItems);
 
   const dueToday = DISPATCH_DUE_TODAY.length;
   const overdue = OVERDUE_DISPATCHES.length;

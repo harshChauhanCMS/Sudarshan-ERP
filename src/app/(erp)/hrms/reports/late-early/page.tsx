@@ -35,8 +35,7 @@ import {
   type LateEarlyKpi,
   type LateEarlyUnitRow,
 } from "@/lib/hrms-late-early-report";
-import PageFilterDrawer from "@/components/common/PageFilterDrawer";
-import PageFilterToolbar from "@/components/common/PageFilterToolbar";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
 import { filterBySearch } from "@/lib/filter-search";
 import { downloadCsv } from "@/lib/download-csv";
 
@@ -153,7 +152,7 @@ export default function LateEarlyReportPage() {
   const [minMinutes, setMinMinutes] = useState(5);
   const [groupBy, setGroupBy] = useState<GroupBy>("employee");
   const [search, setSearch] = useState("");
-  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [kpi, setKpi] = useState<LateEarlyKpi>(EMPTY_KPI);
   const [employees, setEmployees] = useState<LateEarlyEmployeeRow[]>([]);
@@ -527,11 +526,10 @@ export default function LateEarlyReportPage() {
         />
       </div>
 
-      <PageFilterToolbar
+      <PageFilterPanel
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search employee, ID, department, shift…"
-        onFilterClick={() => setFilterDrawerOpen(true)}
         activeFilterCount={
           (company !== "all" ? 1 : 0) +
           (dept !== "all" ? 1 : 0) +
@@ -539,15 +537,10 @@ export default function LateEarlyReportPage() {
           (reportType !== "both" ? 1 : 0) +
           (minMinutes !== 5 ? 1 : 0)
         }
-      />
-
-      <PageFilterDrawer
-        open={filterDrawerOpen}
-        onClose={() => setFilterDrawerOpen(false)}
         onApply={handleApplyFilters}
         onClear={handleClearFilters}
         loading={loading}
-        width={400}
+        drawerWidth={400}
       >
         <div className="arf-item">
           <span className="arf-label">Company / unit</span>
@@ -619,7 +612,7 @@ export default function LateEarlyReportPage() {
             onChange={(v) => setMinMinutes(v ?? 0)}
           />
         </div>
-      </PageFilterDrawer>
+      </PageFilterPanel>
 
       <ReportSection title="Group by">
         <div className="attendance-report-config__block">

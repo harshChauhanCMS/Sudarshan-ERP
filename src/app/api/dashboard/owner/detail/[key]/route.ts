@@ -37,7 +37,28 @@ export async function GET(
 
   try {
     const erpData = await loadErpData();
-    const view = await buildOwnerDetailView(key, erpData);
+    const { searchParams } = new URL(request.url);
+    const yearParam = searchParams.get("year");
+    const monthParam = searchParams.get("month");
+    const dayParam = searchParams.get("day");
+    let referenceDate = new Date();
+    if (yearParam && monthParam) {
+      const year = Number(yearParam);
+      const month = Number(monthParam);
+      const day = dayParam ? Number(dayParam) : 1;
+      if (
+        Number.isFinite(year) &&
+        Number.isFinite(month) &&
+        month >= 1 &&
+        month <= 12 &&
+        Number.isFinite(day) &&
+        day >= 1 &&
+        day <= 31
+      ) {
+        referenceDate = new Date(year, month - 1, day);
+      }
+    }
+    const view = await buildOwnerDetailView(key, erpData, referenceDate);
     return ok(view);
   } catch (e) {
     const message =

@@ -67,6 +67,26 @@ export function leaveTypeColor(code: string) {
   return LEAVE_TYPE_TAG_COLORS[code] ?? "default";
 }
 
+export const LEAVE_STATUS_LABEL: Record<string, string> = {
+  pending: "Pending",
+  hod_approved: "Manager Approved",
+  approved: "HR Approved",
+  rejected: "Rejected",
+  cancelled: "Cancelled",
+  rolled_back: "Rolled Back",
+  completed: "Completed",
+};
+
+export const LEAVE_STATUS_COLOR: Record<string, string> = {
+  pending: "orange",
+  hod_approved: "gold",
+  approved: "green",
+  rejected: "red",
+  cancelled: "default",
+  rolled_back: "purple",
+  completed: "cyan",
+};
+
 /** True when leave is stored as completed or the end date is before today. */
 export function isLeavePeriodCompleted(
   toDate: unknown,

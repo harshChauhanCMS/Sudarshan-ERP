@@ -64,7 +64,13 @@ export async function POST(request: Request) {
 
     const workingDays = countWorkingDays(start, end);
 
-    const employees = await Employee.find({}).lean();
+    const employeeIds: string[] = Array.isArray(body.employeeIds)
+      ? body.employeeIds.map((id: unknown) => String(id)).filter(Boolean)
+      : [];
+
+    const employees = await Employee.find(
+      employeeIds.length > 0 ? { employeeId: { $in: employeeIds } } : {}
+    ).lean();
 
     // Build attendance map
     const punches = await AttendancePunch.find({
@@ -84,9 +90,10 @@ export async function POST(request: Request) {
       punchDayMap.set(k, cur);
     }
 
-    // Approved leaves in the range
+    // Approved leaves in the range (includes leaves auto-marked "completed"
+    // once their end date has passed — see syncCompletedLeaveStatuses)
     const leaves = await LeaveRequest.find({
-      status: "approved",
+      status: { $in: ["approved", "completed"] },
       fromDate: { $lte: end },
       toDate:   { $gte: start },
     }).lean();

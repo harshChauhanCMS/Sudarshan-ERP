@@ -2,11 +2,13 @@
 'use client';
 
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
+import { Select, message } from "antd";
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { nextEmployeeId, formatDisplayDate } from "@/lib/id-generators";
@@ -26,7 +28,8 @@ import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
 import { ErpViewAction, ViewEditActions } from "@/components/common/TableActionIcons";
 import StatCard, { ErpStatGrid } from "@/components/common/StatCard";
-import { buildInventoryItemDetailView } from "@/lib/inventory-mobile";
+import { buildPackagingView } from "@/lib/inventory-mobile";
+import { usePackaging } from "@/hooks/use-packaging";
 
 
 const Employees = () => {
@@ -1102,27 +1105,94 @@ const HRReport = () => {
    ============================================================ */
 const PackagingInventory = () => {
   const router = useRouter();
-  const DATA = useDATA();
-  const { update, saving, error, clearError } = useEntityMutation();
+  const { items: packagingItems, loading, error: loadError, reload } = usePackaging();
   const [calcOpen, setCalcOpen] = useState(false);
   const [viewItem, setViewItem] = useState(null);
   const [orderQty, setOrderQty] = useState(24);
   const [bagSize, setBagSize] = useState(1000);
+  const [deletingCode, setDeletingCode] = useState(null);
 
   const viewDetail = useMemo(() => {
     if (!viewItem) return null;
-    return buildInventoryItemDetailView("packaging", viewItem.code, DATA);
-  }, [viewItem, DATA]);
+    return buildPackagingView(viewItem);
+  }, [viewItem]);
   const bagsNeeded = Math.ceil(orderQty * 1000 / bagSize);
-  const generateStockRequest = async () => {
-    const codeMap = { 1000: "PK-FIBC-25", 500: "PK-FIBC-12", 50: "PK-PPW-50", 25: "PK-PPW-25", 20: "PK-BOPP-20" };
-    const code = codeMap[bagSize];
-    const p = DATA.PACKAGING.find((x) => x.code === code);
-    if (p && p.stock < bagsNeeded) {
-      await update("packaging", code, { status: "low" }, "code");
+  const generateStockRequest = () => {
+    const p = packagingItems.find((x) => x.unit === "pcs" && x.capacity === bagSize);
+    if (!p) {
+      message.info("No matching packaging SKU found for this bag size.");
+    } else if (p.stock < bagsNeeded) {
+      message.warning(
+        `${p.code} has only ${fmtNum(p.stock)} ${p.unit} in stock — short by ${fmtNum(bagsNeeded - p.stock)} for this order.`
+      );
+    } else {
+      message.success(`${p.code} has enough stock (${fmtNum(p.stock)} ${p.unit}) for this order.`);
     }
     setCalcOpen(false);
   };
+
+  const deletePackaging = useCallback(
+    async (code) => {
+      setDeletingCode(code);
+      try {
+        const res = await fetch(`/api/inventory/packaging/${encodeURIComponent(code)}`, {
+          method: "DELETE",
+        });
+        const json = await res.json();
+        if (json.error) throw new Error(json.error);
+        message.success("Packaging deleted.");
+        await reload();
+      } catch (e) {
+        message.error(e instanceof Error ? e.message : "Delete failed");
+      } finally {
+        setDeletingCode(null);
+      }
+    },
+    [reload]
+  );
+
+  const packagingStats = useMemo(() => {
+    const bagItems = packagingItems.filter((p) => p.unit === "pcs");
+    const fabricItems = packagingItems.filter((p) => p.unit !== "pcs");
+    const totalBagsInStock = bagItems.reduce((sum, p) => sum + p.stock, 0);
+    const coverageItems = packagingItems.filter((p) => p.reorder > 0);
+    const avgCoverageDays = coverageItems.length
+      ? Math.round(
+          coverageItems.reduce((sum, p) => sum + (p.stock / p.reorder) * 7, 0) /
+            coverageItems.length
+        )
+      : 0;
+    return {
+      bagCount: bagItems.length,
+      fabricCount: fabricItems.length,
+      totalBagsInStock,
+      avgCoverageDays,
+    };
+  }, [packagingItems]);
+
+  const [search, setSearch] = useState("");
+  const [materialFilter, setMaterialFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const filteredPackaging = useMemo(() => {
+    return packagingItems.filter((p) => {
+      if (statusFilter !== "all" && p.status !== statusFilter) return false;
+      if (materialFilter !== "all") {
+        const lowerCode = p.code.toLowerCase();
+        const lowerName = p.name.toLowerCase();
+        if (materialFilter === "fibc" && !lowerCode.includes("fibc") && !lowerName.includes("fibc")) return false;
+        if (materialFilter === "ppw" && !lowerCode.includes("ppw") && !lowerName.includes("pp")) return false;
+        if (materialFilter === "bopp" && !lowerCode.includes("bopp") && !lowerName.includes("bopp")) return false;
+      }
+      if (search) {
+        const t = search.toLowerCase();
+        if (!p.code.toLowerCase().includes(t) && !p.name.toLowerCase().includes(t)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [packagingItems, search, materialFilter, statusFilter]);
 
   const columns = useMemo(
     () => [
@@ -1188,17 +1258,21 @@ const PackagingInventory = () => {
       {
         title: "Actions",
         key: "actions",
-        width: 88,
+        width: 120,
         align: "center",
         render: (_, p) => (
           <ViewEditActions
             onView={() => setViewItem(p)}
             editHref={`/inventory/packaging/add?code=${encodeURIComponent(p.code)}`}
+            showDelete
+            onDelete={() => deletePackaging(p.code)}
+            deleteLabel={deletingCode === p.code ? "Deleting…" : "Delete"}
+            deleteConfirmTitle={`Delete ${p.code}? This cannot be undone.`}
           />
         ),
       },
     ],
-    []
+    [deletingCode, deletePackaging]
   );
 
   return (
@@ -1206,62 +1280,95 @@ const PackagingInventory = () => {
       <DashHead title="Packaging Inventory" sub="FIBC, PP woven, BOPP — stock, bag auto-calc, alerts">
         <Btn size="sm" icon="bolt" onClick={() => setCalcOpen(true)}>Bag calc</Btn>
         <Btn size="sm" icon="download">Export</Btn>
-        <Btn variant="primary" size="sm" icon="plus" onClick={() => { clearError(); router.push("/inventory/packaging/add"); }}>Add packaging</Btn>
+        <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/inventory/packaging/add")}>Add packaging</Btn>
       </DashHead>
 
       <ErpStatGrid cols={4}>
         <StatCard
           icon={AppstoreOutlined}
           label="Total SKUs"
-          value={DATA.PACKAGING.length}
-          hint="4 bag · 2 fabric"
+          value={packagingItems.length}
+          hint={`${packagingStats.bagCount} bag · ${packagingStats.fabricCount} fabric`}
         />
         <StatCard
           icon={ShoppingOutlined}
           label="Total bags in stock"
-          value="39,820"
-          hint="+4.2% this week"
-          hintTone="positive"
+          value={fmtNum(packagingStats.totalBagsInStock)}
         />
         <StatCard
           icon={AlertOutlined}
           label="Low stock SKUs"
-          value={DATA.PACKAGING.filter((p) => p.status === "low").length}
+          value={packagingItems.filter((p) => p.status === "low").length}
           hint="Reorder needed"
           hintTone="warning"
         />
         <StatCard
           icon={ThunderboltOutlined}
           label="Coverage (days)"
-          value={21}
-          hint="At current run rate"
+          value={packagingStats.avgCoverageDays}
+          hint="Average across SKUs"
         />
       </ErpStatGrid>
 
       <div className="card">
-        <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center" }}>
-          <div className="tabs" style={{ border: "none", marginBottom: -1 }}>
-            <span className="tab active">All <span className="tab-count">{DATA.PACKAGING.length}</span></span>
-            <span className="tab">FIBC <span className="tab-count">2</span></span>
-            <span className="tab">PP Woven <span className="tab-count">2</span></span>
-            <span className="tab">BOPP & Fabric <span className="tab-count">2</span></span>
+        <PageFilterPanel
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search Packaging SKU or name…"
+          activeFilterCount={(materialFilter !== "all" ? 1 : 0) + (statusFilter !== "all" ? 1 : 0)}
+          onApply={() => {}}
+          onClear={() => {
+            setSearch("");
+            setMaterialFilter("all");
+            setStatusFilter("all");
+          }}
+          drawerWidth={320}
+        >
+          <div className="arf-item">
+            <span className="arf-label">Material</span>
+            <Select
+              className="w-full"
+              value={materialFilter}
+              onChange={setMaterialFilter}
+              options={[
+                { value: "all", label: "All materials" },
+                { value: "fibc", label: "FIBC" },
+                { value: "ppw", label: "PP Woven" },
+                { value: "bopp", label: "BOPP" },
+              ]}
+            />
           </div>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <input className="input" placeholder="Search packaging…" style={{ height: 30, width: 220 }} />
+          <div className="arf-item">
+            <span className="arf-label">Status</span>
+            <Select
+              className="w-full"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: "all", label: "All statuses" },
+                { value: "healthy", label: "Healthy" },
+                { value: "low", label: "Low stock" },
+                { value: "critical", label: "Critical" },
+              ]}
+            />
           </div>
-        </div>
-        <div style={{ padding: 16 }}>
+        </PageFilterPanel>
+        <div style={{ padding: 16, paddingTop: 0 }}>
+          {loadError ? (
+            <p style={{ color: "var(--danger)", fontSize: 12, marginBottom: 12 }}>{loadError}</p>
+          ) : null}
           <CommonTable
             {...ERP_TABLE_PROPS}
             columns={columns}
-            dataSource={DATA.PACKAGING}
+            dataSource={filteredPackaging}
             rowKey="code"
+            loading={loading}
           />
         </div>
       </div>
 
       <Modal open={calcOpen} onClose={() => setCalcOpen(false)} title="Bag auto-calculator" sub="Compute packaging requirement from order quantity" wide
-        footer={<><Btn variant="ghost" onClick={() => setCalcOpen(false)}>Close</Btn><Btn variant="primary" onClick={generateStockRequest} disabled={saving}>Generate stock request</Btn></>}>
+        footer={<><Btn variant="ghost" onClick={() => setCalcOpen(false)}>Close</Btn><Btn variant="primary" onClick={generateStockRequest}>Generate stock request</Btn></>}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
           <div className="field"><label className="field-label">Order quantity (MT)</label>
             <input className="input lg" type="number" value={orderQty} onChange={(e) => setOrderQty(Number(e.target.value || 0))} />
@@ -1301,14 +1408,7 @@ const PackagingInventory = () => {
         </div>
 
         <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>STOCK AVAILABILITY</div>
-        {DATA.PACKAGING.filter(p => {
-          if (bagSize === 1000) return p.code === "PK-FIBC-25";
-          if (bagSize === 500)  return p.code === "PK-FIBC-12";
-          if (bagSize === 50)   return p.code === "PK-PPW-50";
-          if (bagSize === 25)   return p.code === "PK-PPW-25";
-          if (bagSize === 20)   return p.code === "PK-BOPP-20";
-          return false;
-        }).map((p) => {
+        {packagingItems.filter((p) => p.unit === "pcs" && p.capacity === bagSize).map((p) => {
           const enough = p.stock >= bagsNeeded;
           const shortage = bagsNeeded - p.stock;
           return (

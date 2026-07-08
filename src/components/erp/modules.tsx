@@ -10,8 +10,10 @@ import { ERP_TABLE_PROPS, erpStatusBadge, inventoryStatusBadge } from "@/compone
 import { ErpViewAction, TableActionIcon, ViewEditActions } from "@/components/common/TableActionIcons";
 import StatCard, { ErpStatGrid } from "@/components/common/StatCard";
 import { Icon } from "./icons";
-import { useDATA } from "./data";
+import { useDATA, useErpData } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
+import PageFilterPanel from "@/components/common/PageFilterPanel";
+import { Select, message } from "antd";
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { nextDispatchId, formatDisplayDate } from "@/lib/id-generators";
@@ -144,12 +146,49 @@ function downloadPoCsv(po) {
 const RawMaterialInventory = () => {
   const router = useRouter();
   const DATA = useDATA();
+  const { refresh } = useErpData();
   const [viewItem, setViewItem] = useState(null);
+  const [deletingCode, setDeletingCode] = useState(null);
+
+  const deleteMaterial = async (code) => {
+    setDeletingCode(code);
+    try {
+      const res = await fetch(`/api/inventory/raw-materials/${encodeURIComponent(code)}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      message.success("Raw material deleted.");
+      await refresh();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeletingCode(null);
+    }
+  };
 
   const viewDetail = useMemo(() => {
     if (!viewItem) return null;
     return buildInventoryItemDetailView("raw-material", viewItem.code, DATA);
   }, [viewItem, DATA]);
+
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const filteredMaterials = useMemo(() => {
+    return DATA.RAW_MATERIALS.filter((r) => {
+      if (categoryFilter !== "all" && r.category !== categoryFilter) return false;
+      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (search) {
+        const term = search.toLowerCase();
+        if (!r.code.toLowerCase().includes(term) && !r.name.toLowerCase().includes(term) && !r.grade.toLowerCase().includes(term)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [DATA.RAW_MATERIALS, search, categoryFilter, statusFilter]);
 
   const totalValue = DATA.RAW_MATERIALS.reduce((s, r) => s + r.value, 0);
   const lowCount = DATA.RAW_MATERIALS.filter(r => r.status === "low").length;
@@ -213,17 +252,21 @@ const RawMaterialInventory = () => {
       {
         title: "Actions",
         key: "actions",
-        width: 88,
+        width: 120,
         align: "center",
         render: (_, r) => (
           <ViewEditActions
             onView={() => setViewItem(r)}
             editHref={`/inventory/raw-material/add?code=${encodeURIComponent(r.code)}`}
+            showDelete
+            onDelete={() => deleteMaterial(r.code)}
+            deleteLabel={deletingCode === r.code ? "Deleting…" : "Delete"}
+            deleteConfirmTitle={`Delete ${r.code}? This cannot be undone.`}
           />
         ),
       },
     ],
-    []
+    [deletingCode, deleteMaterial]
   );
 
   return (
@@ -265,26 +308,52 @@ const RawMaterialInventory = () => {
       </ErpStatGrid>
 
       <div className="card" style={{ marginBottom: 20 }}>
-        <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid var(--border)" }}>
-          <div className="tabs" style={{ border: "none", marginBottom: -1 }}>
-            <span className="tab active">All <span className="tab-count">10</span></span>
-            <span className="tab">Minerals <span className="tab-count">6</span></span>
-            <span className="tab">Chemicals <span className="tab-count">4</span></span>
-            <span className="tab">Alerts <span className="tab-count">3</span></span>
+        <PageFilterPanel
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search SKU, name, grade…"
+          activeFilterCount={(categoryFilter !== "all" ? 1 : 0) + (statusFilter !== "all" ? 1 : 0)}
+          onApply={() => {}}
+          onClear={() => {
+            setSearch("");
+            setCategoryFilter("all");
+            setStatusFilter("all");
+          }}
+          drawerWidth={320}
+        >
+          <div className="arf-item">
+            <span className="arf-label">Category</span>
+            <Select
+              className="w-full"
+              value={categoryFilter}
+              onChange={setCategoryFilter}
+              options={[
+                { value: "all", label: "All categories" },
+                { value: "Mineral", label: "Minerals" },
+                { value: "Chemical", label: "Chemicals" },
+              ]}
+            />
           </div>
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ position: "relative" }}>
-              <Icon name="search" size={13} style={{ position: "absolute", left: 10, top: 9, color: "var(--fg-subtle)" }} />
-              <input className="input" style={{ paddingLeft: 30, width: 220, height: 30 }} placeholder="Search SKU, name, grade…" />
-            </div>
-            <Btn size="sm" icon="sort">Sort</Btn>
+          <div className="arf-item">
+            <span className="arf-label">Status</span>
+            <Select
+              className="w-full"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: "all", label: "All statuses" },
+                { value: "healthy", label: "Healthy" },
+                { value: "low", label: "Low stock" },
+                { value: "critical", label: "Critical" },
+              ]}
+            />
           </div>
-        </div>
-        <div style={{ padding: 16 }}>
+        </PageFilterPanel>
+        <div style={{ padding: 16, paddingTop: 0 }}>
           <CommonTable
             {...ERP_TABLE_PROPS}
             columns={columns}
-            dataSource={DATA.RAW_MATERIALS}
+            dataSource={filteredMaterials}
             rowKey="code"
           />
         </div>
@@ -355,6 +424,36 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
   const [tab, setTab] = useState(defaultTab);
   const [viewVendor, setViewVendor] = useState(null);
   const [viewPo, setViewPo] = useState(null);
+
+  const [vendorSearch, setVendorSearch] = useState("");
+  const [vendorRatingFilter, setVendorRatingFilter] = useState("all");
+
+  const [poSearch, setPoSearch] = useState("");
+  const [poStatusFilter, setPoStatusFilter] = useState("all");
+
+  const filteredVendors = useMemo(() => {
+    return DATA.VENDORS.filter(v => {
+      if (vendorRatingFilter === "4.5" && parseFloat(v.rating) < 4.5) return false;
+      if (vendorRatingFilter === "4.0" && parseFloat(v.rating) < 4.0) return false;
+      if (vendorSearch) {
+        const t = vendorSearch.toLowerCase();
+        if (!v.name.toLowerCase().includes(t) && !v.id.toLowerCase().includes(t)) return false;
+      }
+      return true;
+    });
+  }, [DATA.VENDORS, vendorSearch, vendorRatingFilter]);
+
+  const filteredPos = useMemo(() => {
+    return DATA.PURCHASE_ORDERS.filter(p => {
+      if (poStatusFilter !== "all" && p.status !== poStatusFilter) return false;
+      if (poSearch) {
+        const t = poSearch.toLowerCase();
+        if (!p.id.toLowerCase().includes(t) && !p.vendor.toLowerCase().includes(t)) return false;
+      }
+      return true;
+    });
+  }, [DATA.PURCHASE_ORDERS, poSearch, poStatusFilter]);
+
   const vendorColumns = useMemo(
     () => [
       {
@@ -557,25 +656,80 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
             </span>
           </div>
         </div>
-        {tab === "vendors" && (
-          <div style={{ padding: 16 }}>
-            <CommonTable
-              {...ERP_TABLE_PROPS}
-              columns={vendorColumns}
-              dataSource={DATA.VENDORS}
-              rowKey="id"
-            />
-          </div>
-        )}
-        {tab === "po" && (
-          <div style={{ padding: 16 }}>
-            <CommonTable
-              {...ERP_TABLE_PROPS}
-              columns={poColumns}
-              dataSource={DATA.PURCHASE_ORDERS}
-              rowKey="id"
-            />
-          </div>
+        {tab === "vendors" ? (
+          <>
+            <PageFilterPanel
+              search={vendorSearch}
+              onSearchChange={setVendorSearch}
+              searchPlaceholder="Search vendors by name or ID…"
+              activeFilterCount={vendorRatingFilter !== "all" ? 1 : 0}
+              onApply={() => {}}
+              onClear={() => {
+                setVendorSearch("");
+                setVendorRatingFilter("all");
+              }}
+              drawerWidth={320}
+            >
+              <div className="arf-item">
+                <span className="arf-label">Rating</span>
+                <Select
+                  className="w-full"
+                  value={vendorRatingFilter}
+                  onChange={setVendorRatingFilter}
+                  options={[
+                    { value: "all", label: "All ratings" },
+                    { value: "4.5", label: "4.5 & up" },
+                    { value: "4.0", label: "4.0 & up" },
+                  ]}
+                />
+              </div>
+            </PageFilterPanel>
+            <div style={{ padding: 16, paddingTop: 0 }}>
+              <CommonTable
+                {...ERP_TABLE_PROPS}
+                columns={vendorColumns}
+                dataSource={filteredVendors}
+                rowKey="id"
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            <PageFilterPanel
+              search={poSearch}
+              onSearchChange={setPoSearch}
+              searchPlaceholder="Search PO by ID or vendor…"
+              activeFilterCount={poStatusFilter !== "all" ? 1 : 0}
+              onApply={() => {}}
+              onClear={() => {
+                setPoSearch("");
+                setPoStatusFilter("all");
+              }}
+              drawerWidth={320}
+            >
+              <div className="arf-item">
+                <span className="arf-label">PO Status</span>
+                <Select
+                  className="w-full"
+                  value={poStatusFilter}
+                  onChange={setPoStatusFilter}
+                  options={[
+                    { value: "all", label: "All statuses" },
+                    { value: "pending", label: "Pending" },
+                    { value: "received", label: "Received" },
+                  ]}
+                />
+              </div>
+            </PageFilterPanel>
+            <div style={{ padding: 16, paddingTop: 0 }}>
+              <CommonTable
+                {...ERP_TABLE_PROPS}
+                columns={poColumns}
+                dataSource={filteredPos}
+                rowKey="id"
+              />
+            </div>
+          </>
         )}
       </div>
 

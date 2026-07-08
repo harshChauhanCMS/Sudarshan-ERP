@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { OwnerDashboardView } from "@/lib/owner-dashboard-data";
 
-export function useOwnerDashboard() {
+export function useOwnerDashboard(period?: { year: number; month: number; day: number }) {
   const [data, setData] = useState<OwnerDashboardView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +15,14 @@ export function useOwnerDashboard() {
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/dashboard/owner", { cache: "no-store" });
+      const params = period
+        ? `?${new URLSearchParams({
+            year: String(period.year),
+            month: String(period.month),
+            day: String(period.day),
+          })}`
+        : "";
+      const res = await fetch(`/api/dashboard/owner${params}`, { cache: "no-store" });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
       if (!json.data) throw new Error("No dashboard data returned");
@@ -27,7 +34,7 @@ export function useOwnerDashboard() {
       inFlightRef.current = false;
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [period?.year, period?.month, period?.day]);
 
   useEffect(() => {
     void reload(false);

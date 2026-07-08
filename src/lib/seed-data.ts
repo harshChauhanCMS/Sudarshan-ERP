@@ -1,4 +1,4 @@
-import type { PurchaseOrder, RawMaterial, SparePart, Packaging } from "./entity-types";
+import type { Order, PurchaseOrder, RawMaterial, SparePart, Packaging } from "./entity-types";
 
 const COMPANIES = [
   {
@@ -28,40 +28,40 @@ const COMPANIES = [
 ];
 
 const RAW_MATERIALS: RawMaterial[] = [
-  { code: "RM-TAL-001", name: "Talcum Powder",            grade: "Cosmetic 600 mesh",  stock: 84.5, unit: "MT", reorder: 25, value: 6258000, location: "Plant A · Bay 1",  status: "ok",     trend: 5.2 },
-  { code: "RM-CC-002",  name: "Calcium Carbonate",         grade: "Coated 2µ",          stock: 12.3, unit: "MT", reorder: 30, value: 1845000, location: "Plant A · Bay 2",  status: "low",    trend: -18.4 },
-  { code: "RM-DOL-003", name: "Dolomite Powder",           grade: "200 mesh",           stock: 156,  unit: "MT", reorder: 40, value: 2496000, location: "Plant A · Bay 3",  status: "ok",     trend: 2.1 },
-  { code: "RM-PCC-004", name: "Precipitated Calcium Carb.",grade: "Ultra-fine 0.8µ",    stock: 7.8,  unit: "MT", reorder: 15, value: 1638000, location: "Plant B · Tank 1", status: "critical", trend: -22.1 },
-  { code: "RM-CCL-005", name: "China Clay Powder",         grade: "Hydrous 350 mesh",   stock: 64.2, unit: "MT", reorder: 35, value: 3210000, location: "Plant A · Bay 4",  status: "ok",     trend: -3.2 },
-  { code: "RM-QTZ-006", name: "Quartz Grains",             grade: "20-40 mesh",         stock: 218,  unit: "MT", reorder: 60, value: 4360000, location: "Yard 2",           status: "ok",     trend: 8.4 },
-  { code: "CH-SDA-007", name: "Soda Ash",                  grade: "Light, dense pack",  stock: 22.6, unit: "MT", reorder: 25, value: 904000,  location: "Plant B · Bay 1",  status: "low",    trend: -10.4 },
-  { code: "CH-ZEO-008", name: "Zeolite",                   grade: "4A detergent grade", stock: 41.7, unit: "MT", reorder: 20, value: 1668000, location: "Plant B · Bay 2",  status: "ok",     trend: 6.5 },
-  { code: "CH-SSL-009", name: "Sodium Silicate",           grade: "Glass 1.6 ratio",    stock: 9.4,  unit: "KL", reorder: 12, value: 658000,  location: "Plant B · Tank 2", status: "low",    trend: -4.1 },
-  { code: "CH-STP-010", name: "STPP",                      grade: "Tech 94%",           stock: 28.0, unit: "MT", reorder: 18, value: 1932000, location: "Plant B · Bay 3",  status: "ok",     trend: 1.3 },
+  { code: "RM-TAL-001", name: "Talcum Powder",            grade: "Cosmetic 600 mesh",  category: "minerals",  stock: 84.5, unit: "MT", reorder: 25, value: 6258000, location: "Plant A · Bay 1",  status: "ok",     trend: 5.2 },
+  { code: "RM-CC-002",  name: "Calcium Carbonate",         grade: "Coated 2µ",          category: "minerals",  stock: 12.3, unit: "MT", reorder: 30, value: 1845000, location: "Plant A · Bay 2",  status: "low",    trend: -18.4 },
+  { code: "RM-DOL-003", name: "Dolomite Powder",           grade: "200 mesh",           category: "minerals",  stock: 156,  unit: "MT", reorder: 40, value: 2496000, location: "Plant A · Bay 3",  status: "ok",     trend: 2.1 },
+  { code: "RM-PCC-004", name: "Precipitated Calcium Carb.",grade: "Ultra-fine 0.8µ",    category: "fillers",   stock: 7.8,  unit: "MT", reorder: 15, value: 1638000, location: "Plant B · Tank 1", status: "critical", trend: -22.1 },
+  { code: "RM-CCL-005", name: "China Clay Powder",         grade: "Hydrous 350 mesh",   category: "minerals",  stock: 64.2, unit: "MT", reorder: 35, value: 3210000, location: "Plant A · Bay 4",  status: "ok",     trend: -3.2 },
+  { code: "RM-QTZ-006", name: "Quartz Grains",             grade: "20-40 mesh",         category: "minerals",  stock: 218,  unit: "MT", reorder: 60, value: 4360000, location: "Yard 2",           status: "ok",     trend: 8.4 },
+  { code: "CH-SDA-007", name: "Soda Ash",                  grade: "Light, dense pack",  category: "additives", stock: 22.6, unit: "MT", reorder: 25, value: 904000,  location: "Plant B · Bay 1",  status: "low",    trend: -10.4 },
+  { code: "CH-ZEO-008", name: "Zeolite",                   grade: "4A detergent grade", category: "additives", stock: 41.7, unit: "MT", reorder: 20, value: 1668000, location: "Plant B · Bay 2",  status: "ok",     trend: 6.5 },
+  { code: "CH-SSL-009", name: "Sodium Silicate",           grade: "Glass 1.6 ratio",    category: "additives", stock: 9.4,  unit: "L",  reorder: 12, value: 658000,  location: "Plant B · Tank 2", status: "low",    trend: -4.1 },
+  { code: "CH-STP-010", name: "STPP",                      grade: "Tech 94%",           category: "additives", stock: 28.0, unit: "MT", reorder: 18, value: 1932000, location: "Plant B · Bay 3",  status: "ok",     trend: 1.3 },
 ];
 
 const PACKAGING: Packaging[] = [
-  { code: "PK-FIBC-25", name: "FIBC Bag · 1000 kg · 4-loop", stock: 4280, unit: "pcs", reorder: 1500, status: "ok",   trend: 4.1 },
-  { code: "PK-FIBC-12", name: "FIBC Bag · 500 kg · UN-rated",stock: 920,  unit: "pcs", reorder: 1200, status: "low",  trend: -8.2 },
-  { code: "PK-PPW-50",  name: "PP Woven Bag · 50 kg",        stock: 18400,unit: "pcs", reorder: 6000, status: "ok",   trend: 2.4 },
-  { code: "PK-PPW-25",  name: "PP Woven Bag · 25 kg",        stock: 7240, unit: "pcs", reorder: 4000, status: "ok",   trend: 12.0 },
-  { code: "PK-BOPP-20", name: "BOPP Bag · 20 kg · 4-color",  stock: 1980, unit: "pcs", reorder: 3000, status: "low",  trend: -3.1 },
-  { code: "PK-FAB-001", name: "PP Woven Fabric · 1100 GSM",  stock: 6800, unit: "mtr", reorder: 2000, status: "ok",   trend: 1.0 },
+  { code: "PK-FIBC-25", name: "FIBC Bag · 1000 kg · 4-loop", capacity: 1000, materialType: "PP Woven", stock: 4280, unit: "pcs", reorder: 1500, status: "ok",   trend: 4.1 },
+  { code: "PK-FIBC-12", name: "FIBC Bag · 500 kg · UN-rated",capacity: 500,  materialType: "PP Woven", stock: 920,  unit: "pcs", reorder: 1200, status: "low",  trend: -8.2 },
+  { code: "PK-PPW-50",  name: "PP Woven Bag · 50 kg",        capacity: 50,   materialType: "PP Woven", stock: 18400,unit: "pcs", reorder: 6000, status: "ok",   trend: 2.4 },
+  { code: "PK-PPW-25",  name: "PP Woven Bag · 25 kg",        capacity: 25,   materialType: "PP Woven", stock: 7240, unit: "pcs", reorder: 4000, status: "ok",   trend: 12.0 },
+  { code: "PK-BOPP-20", name: "BOPP Bag · 20 kg · 4-color",  capacity: 20,   materialType: "Laminated",stock: 1980, unit: "pcs", reorder: 3000, status: "low",  trend: -3.1 },
+  { code: "PK-FAB-001", name: "PP Woven Fabric · 1100 GSM",                  materialType: "PP Woven", stock: 6800, unit: "mtr", reorder: 2000, status: "ok",   trend: 1.0 },
 ];
 
 const SPARE_PARTS: SparePart[] = [
-  { code: "SP-BRG-001", name: "Pulverizer Bearing 6320",     vendor: "SKF India",          category: "Bearing",     stock: 12, unit: "pcs", reorder: 6,  value: 84000,   location: "Plant A · Stores · Rack 3", status: "ok",       trend: 0,    critical: true,  lastIssued: "May 12" },
-  { code: "SP-BLT-002", name: "V-Belt B-92 (industrial)",    vendor: "Fenner India",       category: "Belt",        stock: 4,  unit: "pcs", reorder: 8,  value: 9600,    location: "Plant A · Stores · Rack 1", status: "low",      trend: -25,  critical: true,  lastIssued: "May 18" },
-  { code: "SP-MOT-003", name: "Motor 50 HP TEFC 3-phase",    vendor: "Crompton Greaves",   category: "Motor",       stock: 2,  unit: "pcs", reorder: 2,  value: 184000,  location: "Plant A · Stores · Bay 4", status: "low",      trend: 0,    critical: true,  lastIssued: "Apr 22" },
-  { code: "SP-SEL-004", name: "Mechanical Seal MS-45",        vendor: "John Crane India",   category: "Seal",        stock: 18, unit: "pcs", reorder: 8,  value: 32400,   location: "Plant A · Stores · Rack 2", status: "ok",       trend: 8,    critical: false, lastIssued: "May 19" },
-  { code: "SP-GBX-005", name: "Reduction Gearbox 30:1",       vendor: "Bonfiglioli",        category: "Gearbox",     stock: 1,  unit: "pcs", reorder: 1,  value: 145000,  location: "Plant B · Stores · Bay 2", status: "critical", trend: 0,    critical: true,  lastIssued: "Apr 30" },
-  { code: "SP-FLT-006", name: "Bag filter element 40µ",        vendor: "Pall India",         category: "Filter",      stock: 84, unit: "pcs", reorder: 30, value: 67200,   location: "Plant B · Stores · Rack 5", status: "ok",       trend: 4,    critical: false, lastIssued: "May 20" },
-  { code: "SP-VAL-007", name: "Pneumatic ball valve 2-inch",   vendor: "Forbes Marshall",    category: "Valve",       stock: 6,  unit: "pcs", reorder: 4,  value: 36000,   location: "Plant B · Stores · Rack 3", status: "ok",       trend: 0,    critical: false, lastIssued: "May 14" },
-  { code: "SP-CHN-008", name: "Bucket elevator chain · 24mt",  vendor: "Tsubaki India",      category: "Chain",       stock: 0,  unit: "set", reorder: 1,  value: 0,       location: "—",                          status: "critical", trend: -100, critical: true,  lastIssued: "Apr 18" },
-  { code: "SP-PMP-009", name: "Slurry pump impeller MS-32",     vendor: "Kirloskar Brothers", category: "Pump",        stock: 3,  unit: "pcs", reorder: 4,  value: 54000,   location: "Plant A · Stores · Rack 4", status: "low",      trend: -12,  critical: false, lastIssued: "May 16" },
-  { code: "SP-ELC-010", name: "Contactor 100A LC1-D80",         vendor: "Schneider Electric", category: "Electrical",  stock: 14, unit: "pcs", reorder: 6,  value: 28000,   location: "Plant A · Stores · Panel",  status: "ok",       trend: 2,    critical: false, lastIssued: "May 11" },
-  { code: "SP-INS-011", name: "RTD Pt100 temperature sensor",   vendor: "Honeywell India",    category: "Instrument",  stock: 22, unit: "pcs", reorder: 10, value: 39600,   location: "Plant B · Stores · Cabinet",status: "ok",       trend: 0,    critical: false, lastIssued: "May 09" },
-  { code: "SP-LUB-012", name: "Mobil SHC Gear 220 (20L)",       vendor: "ExxonMobil Lubes",   category: "Lubricant",   stock: 8,  unit: "drum",reorder: 4,  value: 96000,   location: "Plant A · Stores · Bay 6",  status: "ok",       trend: 6,    critical: false, lastIssued: "May 17" },
+  { code: "SP-BRG-001", name: "Pulverizer Bearing 6320",     vendor: "SKF India",          category: "Bearing",     stock: 12, unit: "pcs", reorder: 6,  value: 84000,   location: "Plant A · Stores · Rack 3", status: "ok",       trend: 0,    critical: true,  lastIssued: "May 12", standardRate: 7000,   criticality: "critical" },
+  { code: "SP-BLT-002", name: "V-Belt B-92 (industrial)",    vendor: "Fenner India",       category: "Belt",        stock: 4,  unit: "pcs", reorder: 8,  value: 9600,    location: "Plant A · Stores · Rack 1", status: "low",      trend: -25,  critical: true,  lastIssued: "May 18", standardRate: 2400,   criticality: "critical" },
+  { code: "SP-MOT-003", name: "Motor 50 HP TEFC 3-phase",    vendor: "Crompton Greaves",   category: "Motor",       stock: 2,  unit: "pcs", reorder: 2,  value: 184000,  location: "Plant A · Stores · Bay 4", status: "low",      trend: 0,    critical: true,  lastIssued: "Apr 22", standardRate: 92000,  criticality: "critical" },
+  { code: "SP-SEL-004", name: "Mechanical Seal MS-45",        vendor: "John Crane India",   category: "Seal",        stock: 18, unit: "pcs", reorder: 8,  value: 32400,   location: "Plant A · Stores · Rack 2", status: "ok",       trend: 8,    critical: false, lastIssued: "May 19", standardRate: 1800 },
+  { code: "SP-GBX-005", name: "Reduction Gearbox 30:1",       vendor: "Bonfiglioli",        category: "Gearbox",     stock: 1,  unit: "pcs", reorder: 1,  value: 145000,  location: "Plant B · Stores · Bay 2", status: "critical", trend: 0,    critical: true,  lastIssued: "Apr 30", standardRate: 145000, criticality: "critical" },
+  { code: "SP-FLT-006", name: "Bag filter element 40µ",        vendor: "Pall India",         category: "Filter",      stock: 84, unit: "pcs", reorder: 30, value: 67200,   location: "Plant B · Stores · Rack 5", status: "ok",       trend: 4,    critical: false, lastIssued: "May 20", standardRate: 800 },
+  { code: "SP-VAL-007", name: "Pneumatic ball valve 2-inch",   vendor: "Forbes Marshall",    category: "Valve",       stock: 6,  unit: "pcs", reorder: 4,  value: 36000,   location: "Plant B · Stores · Rack 3", status: "ok",       trend: 0,    critical: false, lastIssued: "May 14", standardRate: 6000 },
+  { code: "SP-CHN-008", name: "Bucket elevator chain · 24mt",  vendor: "Tsubaki India",      category: "Chain",       stock: 0,  unit: "set", reorder: 1,  value: 0,       location: "—",                          status: "critical", trend: -100, critical: true,  lastIssued: "Apr 18", standardRate: 0,      criticality: "critical" },
+  { code: "SP-PMP-009", name: "Slurry pump impeller MS-32",     vendor: "Kirloskar Brothers", category: "Pump",        stock: 3,  unit: "pcs", reorder: 4,  value: 54000,   location: "Plant A · Stores · Rack 4", status: "low",      trend: -12,  critical: false, lastIssued: "May 16", standardRate: 18000 },
+  { code: "SP-ELC-010", name: "Contactor 100A LC1-D80",         vendor: "Schneider Electric", category: "Electrical",  stock: 14, unit: "pcs", reorder: 6,  value: 28000,   location: "Plant A · Stores · Panel",  status: "ok",       trend: 2,    critical: false, lastIssued: "May 11", standardRate: 2000 },
+  { code: "SP-INS-011", name: "RTD Pt100 temperature sensor",   vendor: "Honeywell India",    category: "Instrument",  stock: 22, unit: "pcs", reorder: 10, value: 39600,   location: "Plant B · Stores · Cabinet",status: "ok",       trend: 0,    critical: false, lastIssued: "May 09", standardRate: 1800 },
+  { code: "SP-LUB-012", name: "Mobil SHC Gear 220 (20L)",       vendor: "ExxonMobil Lubes",   category: "Lubricant",   stock: 8,  unit: "drum",reorder: 4,  value: 96000,   location: "Plant A · Stores · Bay 6",  status: "ok",       trend: 6,    critical: false, lastIssued: "May 17", standardRate: 12000 },
 ];
 
 const SPARE_CATEGORIES = ["Bearing", "Belt", "Motor", "Seal", "Gearbox", "Filter", "Valve", "Chain", "Pump", "Electrical", "Instrument", "Lubricant"];
@@ -93,7 +93,7 @@ const CUSTOMERS = [
   { id: "C-006", name: "JK White Cement Works",  city: "Gotan, RJ",  orders: 16, ytd: 28400000, terms: "Net 45" },
 ];
 
-const ORDERS = [
+const ORDERS: Order[] = [
   { id: "SO-2026-0421", customer: "Asian Paints Limited",  product: "Talcum Powder · 600 mesh",    qty: "24 MT",   value: 1776000, due: "May 24",   status: "in-production",  progress: 65 },
   { id: "SO-2026-0420", customer: "Pidilite Industries",   product: "Calcium Carbonate · Coated", qty: "18 MT",    value: 1296000, due: "May 23",   status: "scheduled",       progress: 0 },
   { id: "SO-2026-0419", customer: "Berger Paints",         product: "China Clay · Hydrous",        qty: "32 MT",   value: 2080000, due: "May 22",   status: "in-production",  progress: 84 },
