@@ -9,6 +9,7 @@ export type AttendanceSummaryRow = {
   primaryShift: string;
   empType?: string;
   dateJoining?: string;
+  workLocationType?: "Onsite" | "Field" | "Remote" | string;
   totalDays: number;
   presentDays: number;
   absentDays: number;
@@ -39,6 +40,7 @@ export type AttendanceDailyRow = {
   inLng?: number | null;
   outLat?: number | null;
   outLng?: number | null;
+  workLocationType?: "Onsite" | "Field" | "Remote" | string;
 };
 
 export type AttendanceReportKpi = {

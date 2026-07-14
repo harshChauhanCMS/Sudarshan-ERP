@@ -97,7 +97,8 @@ export async function GET(request: Request) {
 
     const employees = await Employee.find(empQuery)
       .select({ employeeId:1, fullName:1, department:1, designation:1, locationUnit:1,
-                primaryShift:1, workingHours:1, overtimeApplicable:1, dateJoining:1 })
+                primaryShift:1, workingHours:1, overtimeApplicable:1, dateJoining:1,
+                workLocationType:1 })
       .lean();
 
     const empIds = employees.map((e) => String(e.employeeId));
@@ -215,6 +216,9 @@ export async function GET(request: Request) {
           expectedHours,
           shortfall,
           overtime,
+          // Older employee docs predate this field and lack it in the DB;
+          // .lean() skips Mongoose schema defaults, so fall back explicitly.
+          workLocationType: emp.workLocationType || "Onsite",
         });
 
         // Accumulate summary
@@ -224,6 +228,7 @@ export async function GET(request: Request) {
           locationUnit: emp.locationUnit, primaryShift: emp.primaryShift,
           empType: emp.compensationType || "Regular",
           dateJoining: emp.dateJoining,
+          workLocationType: emp.workLocationType || "Onsite",
           totalDays: 0, presentDays: 0, absentDays: 0, lateDays: 0,
           totalWorkedHours: 0, totalShortfall: 0, totalOvertime: 0,
         };
@@ -247,8 +252,12 @@ export async function GET(request: Request) {
 
     summary = summary.filter((s) => s.presentDays > 0);
 
-    const activeEmpIds = new Set(summary.map((s) => s.employeeId));
-    let activeDaily = daily.filter((d) => activeEmpIds.has(d.employeeId));
+    // Note: `daily` intentionally keeps every employee×day row (including
+    // fully-absent employees) — the daily report renders an explicit
+    // "Absent" status per row, so pruning by presentDays here would drop
+    // absent employees from the table entirely (most visible on the
+    // single-day "today" default, where anyone absent that day would
+    // vanish instead of showing as Absent).
 
     // KPI totals
     const kpi = {
@@ -285,7 +294,7 @@ export async function GET(request: Request) {
       kpi,
       gpsSummary,
       summary,
-      daily: sortDailyRows(activeDaily),
+      daily: sortDailyRows(daily),
     });
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Report failed", 500);

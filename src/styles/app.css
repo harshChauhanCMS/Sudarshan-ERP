@@ -8928,6 +8928,10 @@ button.owner-vendor-chart__row:focus-visible {
   margin-bottom: 1.25rem;
 }
 
+.vendor-master-section > * + * {
+  margin-top: 1rem;
+}
+
 .vendor-master-section-title {
   font-size: 0.85rem;
   font-weight: 600;
@@ -8943,7 +8947,6 @@ button.owner-vendor-chart__row:focus-visible {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
-  margin-bottom: 1rem;
 }
 
 @media (max-width: 640px) {
@@ -9277,6 +9280,10 @@ button.owner-vendor-chart__row:focus-visible {
   margin-bottom: 1.25rem;
 }
 
+.po-create-section > * + * {
+  margin-top: 1rem;
+}
+
 .po-create-section-title {
   font-size: 0.85rem;
   font-weight: 600;
@@ -9292,7 +9299,6 @@ button.owner-vendor-chart__row:focus-visible {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
-  margin-bottom: 1rem;
 }
 
 @media (max-width: 640px) {

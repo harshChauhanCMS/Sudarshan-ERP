@@ -20,6 +20,7 @@ import {
   moduleForEntityKey,
   sanitizeEntityPatch,
 } from "@/lib/entity-permissions";
+import { notifyPoNeedsApproval } from "@/lib/po-approval-notifications";
 
 const REVERSE_MAP = Object.fromEntries(
   Object.entries(KEY_MAP).map(([field, key]) => [key, field])
@@ -86,12 +87,37 @@ export async function POST(request: Request, { params }: Params) {
     return fail("Body must include item object", 400);
   }
 
+  const item = sanitizeEntityPatch(body.item as Record<string, unknown>);
+
+  // Purchase order status/verification is never client-controlled: owner/admin
+  // self-verify on issue, everyone else needs owner/admin sign-off.
+  let notifyPending = false;
+  if (key === "purchaseOrders") {
+    const intent = item.status === "draft" ? "draft" : "submitted";
+    if (intent === "draft") {
+      item.status = "draft";
+    } else if (isAdminOrOwner(user.role)) {
+      item.status = "approved";
+      item.verifiedBy = user.email;
+      item.verifiedAt = new Date().toISOString();
+    } else {
+      item.status = "pending_verification";
+      notifyPending = true;
+    }
+    item.createdByEmail = user.email;
+    item.createdByName = user.name;
+    item.createdByRole = user.role;
+  }
+
   try {
-    const item = await appendEntityItem(
-      key,
-      sanitizeEntityPatch(body.item as Record<string, unknown>),
-    );
-    return ok({ created: true, item });
+    const created = await appendEntityItem(key, item);
+    if (notifyPending) {
+      void notifyPoNeedsApproval(
+        created as { id: string; vendor: string; total: number },
+        { name: user.name, email: user.email },
+      );
+    }
+    return ok({ created: true, item: created });
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Create failed", 500);
   }

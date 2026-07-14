@@ -2,9 +2,9 @@
 'use client';
 
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DownloadOutlined, AlertOutlined, AppstoreOutlined, CarOutlined, CheckCircleOutlined, ClockCircleOutlined, DollarOutlined, FileExclamationOutlined, ShoppingCartOutlined, TeamOutlined, ThunderboltOutlined, WarningOutlined } from "@ant-design/icons";
+import { DownloadOutlined, AlertOutlined, AppstoreOutlined, CarOutlined, CheckCircleOutlined, CheckOutlined, CloseOutlined, ClockCircleOutlined, DollarOutlined, FileExclamationOutlined, ShoppingCartOutlined, TeamOutlined, ThunderboltOutlined, WarningOutlined } from "@ant-design/icons";
 import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS, erpStatusBadge, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
 import { ErpViewAction, TableActionIcon, ViewEditActions } from "@/components/common/TableActionIcons";
@@ -16,6 +16,8 @@ import PageFilterPanel from "@/components/common/PageFilterPanel";
 import { Select, message } from "antd";
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
+import { useSessionUser } from "@/hooks/use-session-user";
+import { isAdminOrOwner } from "@/lib/role-utils";
 import { nextDispatchId, formatDisplayDate } from "@/lib/id-generators";
 import { buildInventoryItemDetailView } from "@/lib/inventory-mobile";
 import { downloadCsv } from "@/lib/download-csv";
@@ -421,15 +423,41 @@ const RawMaterialInventory = () => {
 const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) => {
   const router = useRouter();
   const DATA = useDATA();
+  const { refresh } = useErpData();
+  const { user } = useSessionUser();
+  const canApprovePo = isAdminOrOwner(user?.role);
   const [tab, setTab] = useState(defaultTab);
   const [viewVendor, setViewVendor] = useState(null);
   const [viewPo, setViewPo] = useState(null);
+  const [poActionId, setPoActionId] = useState(null);
 
   const [vendorSearch, setVendorSearch] = useState("");
   const [vendorRatingFilter, setVendorRatingFilter] = useState("all");
 
   const [poSearch, setPoSearch] = useState("");
   const [poStatusFilter, setPoStatusFilter] = useState("all");
+
+  const decidePo = useCallback(
+    async (id, decision) => {
+      setPoActionId(id);
+      try {
+        const res = await fetch(`/api/procurement/po/${encodeURIComponent(id)}/${decision}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const json = await res.json();
+        if (!res.ok || json?.error) throw new Error(json?.error || "Action failed");
+        message.success(decision === "approve" ? "Purchase order approved." : "Purchase order rejected.");
+        await refresh();
+      } catch (e) {
+        message.error(e instanceof Error ? e.message : "Action failed");
+      } finally {
+        setPoActionId(null);
+      }
+    },
+    [refresh]
+  );
 
   const filteredVendors = useMemo(() => {
     return DATA.VENDORS.filter(v => {
@@ -503,12 +531,15 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         dataIndex: "rating",
         key: "rating",
         align: "center",
-        render: (rating) => (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <span style={{ color: "var(--secondary)" }}>★</span>
-            <span className="mono strong">{rating}</span>
-          </div>
-        ),
+        render: (rating) =>
+          rating > 0 ? (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span style={{ color: "var(--secondary)" }}>★</span>
+              <span className="mono strong">{rating}</span>
+            </div>
+          ) : (
+            <span className="subtle" style={{ fontSize: 12 }}>Not rated</span>
+          ),
       },
       {
         title: "POs YTD",
@@ -586,7 +617,7 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       {
         title: "Actions",
         key: "actions",
-        width: 88,
+        width: 132,
         align: "center",
         render: (_, row) => (
           <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
@@ -596,11 +627,27 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
               label="Download purchase order"
               onClick={() => downloadPoCsv(row)}
             />
+            {canApprovePo && row.status === "pending_verification" ? (
+              <>
+                <TableActionIcon
+                  icon={<CheckOutlined />}
+                  label="Approve purchase order"
+                  onClick={() => decidePo(row.id, "approve")}
+                  disabled={poActionId === row.id}
+                />
+                <TableActionIcon
+                  icon={<CloseOutlined />}
+                  label="Reject purchase order"
+                  onClick={() => decidePo(row.id, "reject")}
+                  disabled={poActionId === row.id}
+                />
+              </>
+            ) : null}
           </div>
         ),
       },
     ],
-    []
+    [canApprovePo, decidePo, poActionId]
   );
 
   return (
@@ -626,7 +673,7 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
           icon={ShoppingCartOutlined}
           label="Open POs"
           value={DATA.PURCHASE_ORDERS.filter((p) => p.status !== "received").length}
-          hint={`${DATA.PURCHASE_ORDERS.filter((p) => p.status === "pending").length} pending`}
+          hint={`${DATA.PURCHASE_ORDERS.filter((p) => p.status === "pending_verification").length} awaiting verification`}
           hintTone="accent"
         />
         <StatCard
@@ -715,7 +762,10 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
                   onChange={setPoStatusFilter}
                   options={[
                     { value: "all", label: "All statuses" },
-                    { value: "pending", label: "Pending" },
+                    { value: "draft", label: "Draft" },
+                    { value: "pending_verification", label: "Awaiting verification" },
+                    { value: "approved", label: "Approved" },
+                    { value: "rejected", label: "Rejected" },
                     { value: "received", label: "Received" },
                   ]}
                 />

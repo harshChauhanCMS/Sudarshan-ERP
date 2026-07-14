@@ -130,21 +130,26 @@ export function FieldActivityDashboardPage() {
                   Employee live status
                 </div>
                 <div className="field-activity-panel__body">
-                  {data.liveEmployees.length === 0 ? (
+                  {/* Onsite attendance is tracked in HRMS reports; this dashboard
+                      shows field employees only. */}
+                  {data.liveEmployees.filter((row) => row.badge !== "onsite")
+                    .length === 0 ? (
                     <p style={{ margin: 0, fontSize: 12, color: "var(--fg-muted)" }}>
-                      No onsite or field employees checked in right now.
+                      No field employees checked in right now.
                     </p>
                   ) : (
-                    data.liveEmployees.map((row) => (
-                      <div key={`${row.employeeId}-${row.status}`} className="field-activity-row">
-                        <span className="field-activity-row__name">{row.name}</span>
-                        <span
-                          className={`field-activity-badge field-activity-badge--${badgeClass(row.badge)}`}
-                        >
-                          {row.status}
-                        </span>
-                      </div>
-                    ))
+                    data.liveEmployees
+                      .filter((row) => row.badge !== "onsite")
+                      .map((row) => (
+                        <div key={`${row.employeeId}-${row.status}`} className="field-activity-row">
+                          <span className="field-activity-row__name">{row.name}</span>
+                          <span
+                            className={`field-activity-badge field-activity-badge--${badgeClass(row.badge)}`}
+                          >
+                            {row.status}
+                          </span>
+                        </div>
+                      ))
                   )}
                 </div>
               </div>

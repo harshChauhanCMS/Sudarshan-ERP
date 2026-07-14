@@ -9,7 +9,6 @@ import { DashHead } from "@/components/erp/dashboards";
 import { useDATA } from "@/components/erp/data";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { useFormState } from "@/components/forms";
-import { nextVendorId } from "@/lib/id-generators";
 
 const INITIAL = {
   vendorName: "",
@@ -33,27 +32,6 @@ const PAYMENT_LABELS: Record<string, string> = {
   "60": "60 days",
 };
 
-function cityFromAddress(address: string): string {
-  const line = address.trim().split("\n")[0] || address.trim();
-  const parts = line.split(",").map((s) => s.trim()).filter(Boolean);
-  if (parts.length >= 2) return parts.slice(-2).join(", ");
-  return parts[0] || "—";
-}
-
-function categoryFromMaterials(materials: string): string {
-  const text = materials.toLowerCase();
-  if (text.includes("pack") || text.includes("bag") || text.includes("fibc")) {
-    return "Packaging";
-  }
-  if (text.includes("spare") || text.includes("bearing") || text.includes("motor")) {
-    return "Spare Parts";
-  }
-  if (text.includes("chemical") || text.includes("soda") || text.includes("stpp")) {
-    return "Chemical";
-  }
-  return "Raw Material";
-}
-
 function renderStars(rating: number): string {
   const full = Math.floor(rating);
   const half = rating - full >= 0.5 ? 1 : 0;
@@ -64,7 +42,7 @@ function renderStars(rating: number): string {
 export default function VendorMasterPage() {
   const router = useRouter();
   const DATA = useDATA();
-  const { append, saving, error, clearError } = useEntityMutation();
+  const { createVendor, saving, error, clearError } = useEntityMutation();
   const form = useFormState(INITIAL);
 
   const previewMaterials = useMemo(() => {
@@ -83,14 +61,14 @@ export default function VendorMasterPage() {
     if (!name) return "Vendor name is required.";
     if (name.length > 120) return "Vendor name must be at most 120 characters.";
 
-    let code = form.values.vendorCode.trim().toUpperCase();
-    if (!code) {
-      code = nextVendorId(DATA.VENDORS);
-    } else if (!/^[A-Za-z0-9-]+$/.test(code)) {
-      return "Vendor code must be alphanumeric (hyphens allowed).";
-    }
-    if (DATA.VENDORS.some((v) => v.id.toLowerCase() === code.toLowerCase())) {
-      return "Vendor code already exists.";
+    const code = form.values.vendorCode.trim().toUpperCase();
+    if (code) {
+      if (!/^[A-Za-z0-9-]+$/.test(code)) {
+        return "Vendor code must be alphanumeric (hyphens allowed).";
+      }
+      if (DATA.VENDORS.some((v) => v.id.toLowerCase() === code.toLowerCase())) {
+        return "Vendor code already exists.";
+      }
     }
 
     if (form.values.email.trim()) {
@@ -114,22 +92,16 @@ export default function VendorMasterPage() {
       throw new Error(validationError);
     }
 
-    const code = form.values.vendorCode.trim().toUpperCase() || nextVendorId(DATA.VENDORS);
-    const address = form.values.address.trim();
-
-    await append("vendors", {
-      id: code,
+    // city/category are derived server-side from address/materialsSupplied,
+    // and vendor code is auto-allocated server-side when left blank.
+    await createVendor({
+      id: form.values.vendorCode.trim().toUpperCase(),
       name: form.values.vendorName.trim(),
-      city: cityFromAddress(address),
-      category: categoryFromMaterials(form.values.materialsSupplied),
-      poCount: 0,
-      ytd: 0,
-      rating: 4,
       contactPerson: form.values.contactPerson.trim(),
       phone: form.values.phone.trim(),
       email: form.values.email.trim(),
       gstin: form.values.gst.trim(),
-      address,
+      address: form.values.address.trim(),
       materialsSupplied: form.values.materialsSupplied.trim(),
       paymentTerms: form.values.paymentTerms,
       leadTime: parseInt(form.values.leadTime, 10) || 7,
@@ -388,10 +360,10 @@ export default function VendorMasterPage() {
             <h3>
               <Icon name="money" size={14} /> Vendor rating
             </h3>
-            <div className="vendor-master-rating__stars">{renderStars(4)}</div>
-            <div className="vendor-master-rating__value">4.0</div>
+            <div className="vendor-master-rating__stars">{renderStars(0)}</div>
+            <div className="vendor-master-rating__value">Not yet rated</div>
             <div className="vendor-master-rating__label">
-              New vendor · rating updates after orders
+              New vendor · rating starts after the first completed order
             </div>
           </div>
 

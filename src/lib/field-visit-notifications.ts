@@ -1,6 +1,6 @@
 import { connectDB } from "@/lib/db";
 import Notification from "@/lib/models/Notification";
-import { User } from "@/models/User";
+import { ownerAdminEmails } from "@/lib/notify-roles";
 import type { FieldVisitView } from "@/lib/field-visit-types";
 import { companyLabel, formatVisitTime12h } from "@/lib/field-visit-form";
 
@@ -18,15 +18,6 @@ function buildVisitAssignedMessage(visit: FieldVisitView): string {
   if (visit.notes?.trim()) lines.push(`Notes: ${visit.notes.trim()}`);
   if (visit.createdByName) lines.push(`Assigned by: ${visit.createdByName}`);
   return lines.join(" · ");
-}
-
-async function ownerEmails(): Promise<string[]> {
-  const users = await User.find({ role: { $in: ["owner", "admin"] } })
-    .select({ email: 1 })
-    .lean();
-  return users
-    .map((u) => u.email?.trim().toLowerCase())
-    .filter(Boolean) as string[];
 }
 
 export async function notifyFieldVisitAssigned(visit: FieldVisitView): Promise<void> {
@@ -53,7 +44,7 @@ export async function notifyFieldVisitAssigned(visit: FieldVisitView): Promise<v
 export async function notifyFieldVisitSelfCreated(visit: FieldVisitView): Promise<void> {
   try {
     await connectDB();
-    const recipients = await ownerEmails();
+    const recipients = await ownerAdminEmails();
     if (!recipients.length) return;
 
     const lines = [
@@ -91,7 +82,7 @@ export async function notifyFieldVisitStatusChange(
 ): Promise<void> {
   try {
     await connectDB();
-    const recipients = await ownerEmails();
+    const recipients = await ownerAdminEmails();
     if (!recipients.length) return;
 
     const messages = {
@@ -136,7 +127,7 @@ export async function notifyOnsitePunchLocation(input: {
 }): Promise<void> {
   try {
     await connectDB();
-    const recipients = await ownerEmails();
+    const recipients = await ownerAdminEmails();
     if (!recipients.length) return;
 
     const time = input.punchedAt.toLocaleTimeString("en-IN", {

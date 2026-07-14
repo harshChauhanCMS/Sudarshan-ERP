@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { Button, Tag } from "antd";
-import { DownloadOutlined } from "@ant-design/icons";
+import { DownloadOutlined, EyeOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
 import RepHeader from "@/components/hrms/RepHeader";
@@ -11,7 +11,17 @@ import ReportSection from "@/components/hrms/ReportSection";
 import AttendanceFilterPanel, {
   type PeriodOption,
 } from "@/components/hrms/AttendanceFilterPanel";
+import { TableActionIcon } from "@/components/common/TableActionIcons";
 import { useAttendanceReport, type AttendanceDailyRow } from "@/hooks/use-attendance-report";
+import { downloadDailyAttendanceReportPdf } from "@/lib/daily-attendance-report-pdf";
+
+function buildEmployeeReportHref(employeeId: string) {
+  const params = new URLSearchParams({
+    from: dayjs().startOf("month").format("YYYY-MM-DD"),
+    to: dayjs().endOf("month").format("YYYY-MM-DD"),
+  });
+  return `/hrms/reports/employee/${encodeURIComponent(employeeId)}?${params}`;
+}
 
 const DAILY_PERIOD_OPTIONS: PeriodOption[] = [
   { value: "today", label: "Today" },
@@ -169,6 +179,24 @@ export default function DailyAttendancePage() {
         <span className="text-blue-600">{v > 0 ? `${v.toFixed(2)}h` : "—"}</span>
       ),
     },
+    {
+      title: "Actions",
+      key: "actions",
+      width: 72,
+      fixed: "right" as const,
+      render: (_: unknown, row: AttendanceDailyRow) => {
+        if (row.workLocationType === "Field" || row.workLocationType === "Onsite") {
+          return (
+            <TableActionIcon
+              label="View monthly record"
+              icon={<EyeOutlined />}
+              href={buildEmployeeReportHref(row.employeeId)}
+            />
+          );
+        }
+        return null;
+      },
+    },
   ];
 
   const tableProps = {
@@ -185,9 +213,7 @@ export default function DailyAttendancePage() {
         actions={
           <Button
             icon={<DownloadOutlined />}
-            onClick={() =>
-              window.open(`/api/hrms/attendance/report.csv?${r.buildCsvUrl()}`, "_blank")
-            }
+            onClick={() => downloadDailyAttendanceReportPdf(r.rangeLabel, r.daily)}
           >
             Export
           </Button>
@@ -200,7 +226,7 @@ export default function DailyAttendancePage() {
         employeeId={r.employeeId}
         setEmployeeId={r.setEmployeeId}
         unit={r.unit} setUnit={r.setUnit}
-        period={r.period} setPeriod={r.setPeriod}
+        period={r.period} setPeriod={r.setPeriod} defaultPeriod={r.defaultPeriod}
         departments={r.departments} units={r.units}
         loading={r.loading} onApply={r.handleApply} onClear={r.handleClearFilters}
         search={r.search} setSearch={r.setSearch}

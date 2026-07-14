@@ -46,23 +46,31 @@ export async function POST(request: Request) {
   if ("error" in locRes) return fail(locRes.error, 400);
 
   const notes = typeof (body as any).notes === "string" ? (body as any).notes.trim() : "";
-  const workSite =
+  // Legacy fallback only: workLocationType is now the employee's own assigned
+  // value from their HR profile, not a per-punch client choice.
+  const clientWorkSite =
     (body as any).workSite === "field" ? "field" : "office";
   const sourceRaw = (body as any).source;
   const source =
     sourceRaw === "mobile" || sourceRaw === "machine" ? sourceRaw : "web";
-  const punchNotes = [
-    notes,
-    workSite === "field" ? "Field" : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
 
   try {
     await connectDB();
 
     const email = user.email.trim().toLowerCase();
     const employee = await resolveSessionEmployee(user);
+
+    const workLocationType = employee?.workLocationType
+      ? String(employee.workLocationType)
+      : clientWorkSite === "field"
+        ? "Field"
+        : "Onsite";
+    const punchNotes = [
+      notes,
+      workLocationType === "Field" ? "Field" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
 
     const now = new Date();
     const start = new Date(now);
@@ -110,12 +118,6 @@ export async function POST(request: Request) {
       source,
       punchId: String(created._id),
     });
-
-    const workLocationType = employee?.workLocationType
-      ? String(employee.workLocationType)
-      : workSite === "field"
-        ? "Field"
-        : "Onsite";
 
     if (
       (workLocationType === "Onsite" || workLocationType === "Field") &&

@@ -25,6 +25,7 @@ interface Props {
   setUnit: (v: string) => void;
   period: string;
   setPeriod: (v: string) => void;
+  defaultPeriod?: string;
   departments: string[];
   units: string[];
   loading: boolean;
@@ -51,6 +52,7 @@ export default function AttendanceFilterPanel({
   setUnit,
   period,
   setPeriod,
+  defaultPeriod = "month",
   departments,
   units,
   loading,
@@ -80,10 +82,10 @@ export default function AttendanceFilterPanel({
     if (dept !== "all") count += 1;
     if (unit !== "all") count += 1;
     if (showShift && shift !== "all") count += 1;
-    if (period !== "month") count += 1;
+    if (period !== defaultPeriod) count += 1;
     if (showEmployee && employeeId) count += 1;
     return count;
-  }, [dept, unit, shift, period, showShift, showEmployee, employeeId]);
+  }, [dept, unit, shift, period, defaultPeriod, showShift, showEmployee, employeeId]);
 
   return (
     <PageFilterPanel

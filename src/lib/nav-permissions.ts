@@ -155,8 +155,16 @@ export function getDefaultLandingRoute(
     }
   }
 
+  const normalizedRole = role?.toLowerCase();
+  if (normalizedRole === "owner" && canAccessRoute("/dashboard/owner", permissions, role)) {
+    return "/dashboard/owner";
+  }
+  if (normalizedRole === "admin" && canAccessRoute("/dashboard/admin", permissions, role)) {
+    return "/dashboard/admin";
+  }
+
   const candidates = [
-    "/dashboard/master",
+    // "/dashboard/master", // commented out: owner/admin no longer land on the shared master dashboard
     "/hrms/employees",
     "/procurement/po",
     "/inventory/raw-material",

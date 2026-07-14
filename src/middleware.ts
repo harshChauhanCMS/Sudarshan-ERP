@@ -25,8 +25,31 @@ const PUBLIC_API = [
   "/api/dispatch/track",
 ];
 
+function withCors(request: NextRequest, response: NextResponse) {
+  const origin = request.headers.get("origin");
+  response.headers.set("Access-Control-Allow-Origin", origin ?? "*");
+  response.headers.set("Vary", "Origin");
+  response.headers.set(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+  );
+  // Echo back whatever headers the preflight actually asked for (falls back to
+  // a sane default) instead of a fixed list, so ad-hoc headers like ngrok's
+  // browser-warning bypass don't get silently rejected.
+  const requestedHeaders = request.headers.get("access-control-request-headers");
+  response.headers.set(
+    "Access-Control-Allow-Headers",
+    requestedHeaders || "Content-Type, Authorization",
+  );
+  return response;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/api/") && request.method === "OPTIONS") {
+    return withCors(request, new NextResponse(null, { status: 204 }));
+  }
 
   if (
     pathname.startsWith("/_next") ||
@@ -50,7 +73,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (PUBLIC_API.some((p) => pathname === p || pathname.startsWith(p))) {
-    return NextResponse.next();
+    return withCors(request, NextResponse.next());
   }
 
   if (pathname.startsWith("/api/")) {
@@ -62,13 +85,13 @@ export async function middleware(request: NextRequest) {
     if (mobileToken) {
       try {
         if (await verifyMobileToken(mobileToken)) {
-          return NextResponse.next();
+          return withCors(request, NextResponse.next());
         }
       } catch {
         // Edge verify can fail if SESSION_SECRET is unavailable — route verifies in Node
       }
       // Mobile Bearer present: reach API route; getUserFromRequest validates in Node runtime
-      return NextResponse.next();
+      return withCors(request, NextResponse.next());
     }
 
     const res = NextResponse.next();
@@ -78,12 +101,15 @@ export async function middleware(request: NextRequest) {
       getSessionOptions(),
     );
     if (!session.isLoggedIn) {
-      return NextResponse.json(
-        { data: null, error: "Unauthorized" },
-        { status: 401 },
+      return withCors(
+        request,
+        NextResponse.json(
+          { data: null, error: "Unauthorized" },
+          { status: 401 },
+        ),
       );
     }
-    return res;
+    return withCors(request, res);
   }
 
   const res = NextResponse.next();

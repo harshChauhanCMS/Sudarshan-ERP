@@ -70,15 +70,26 @@ export async function GET(request: Request) {
     const scopeFilter = scopeEmployeeFilter(dataScope);
     if (scopeFilter) Object.assign(empQuery, scopeFilter);
 
-    const employees = await Employee.find(empQuery)
-      .select({
-        employeeId: 1,
-        fullName: 1,
-        department: 1,
-        locationUnit: 1,
-        primaryShift: 1,
-      })
-      .lean();
+    // Independent of the applied `department` filter (and of the date-range
+    // punch results below), so picking one department doesn't collapse the
+    // dropdown to just that department on the next load. Still respects the
+    // caller's RBAC data scope.
+    const deptScopeQuery: Record<string, unknown> = { department: { $nin: [null, ""] } };
+    if (scopeFilter) Object.assign(deptScopeQuery, scopeFilter);
+
+    const [employees, filterDepartments] = await Promise.all([
+      Employee.find(empQuery)
+        .select({
+          employeeId: 1,
+          fullName: 1,
+          department: 1,
+          locationUnit: 1,
+          primaryShift: 1,
+        })
+        .lean(),
+      Employee.distinct("department", deptScopeQuery) as Promise<string[]>,
+    ]);
+    filterDepartments.sort((a, b) => a.localeCompare(b));
 
     const empIds = employees.map((e) => String(e.employeeId));
     const punchQuery: Record<string, unknown> = {
@@ -138,7 +149,7 @@ export async function GET(request: Request) {
         departments: [],
         shifts: [],
         units: [],
-        filterDepartments: [],
+        filterDepartments,
       });
     }
 
@@ -172,7 +183,7 @@ export async function GET(request: Request) {
       departments: report.departments,
       shifts: report.shifts,
       units: report.units,
-      filterDepartments: report.filterDepartments,
+      filterDepartments,
     });
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Report failed", 500);

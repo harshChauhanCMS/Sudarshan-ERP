@@ -88,6 +88,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const fromParam = url.searchParams.get("from");
     const toParam   = url.searchParams.get("to");
+    const employeeIdParam = url.searchParams.get("employeeId")?.trim();
 
     const now = new Date();
     let start: Date;
@@ -104,7 +105,10 @@ export async function GET(request: Request) {
       end   = endOfDay(now);
     }
 
-    const punches = await AttendancePunch.find({ punchedAt: { $gte: start, $lte: end } })
+    const punchQuery: Record<string, unknown> = { punchedAt: { $gte: start, $lte: end } };
+    if (employeeIdParam) punchQuery.employeeId = employeeIdParam;
+
+    const punches = await AttendancePunch.find(punchQuery)
       .sort({ punchedAt: 1 })
       .lean();
 
