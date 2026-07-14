@@ -41,7 +41,6 @@ import {
   EMPLOYEE_LOCATION_UNIT_OPTIONS,
   EMPLOYEE_QUALIFICATION_OPTIONS,
   EMPLOYEE_WORK_LOCATION_OPTIONS,
-  hrAssignableRoleOptions,
 } from "@/lib/hrms-employee-options";
 import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
 import { useSessionUser } from "@/hooks/use-session-user";
@@ -114,9 +113,6 @@ export default function EmployeeDetailsPage({
   const [departmentOptions, setDepartmentOptions] = useState<
     { value: string; label: string; disabled?: boolean }[]
   >([]);
-  const [allRoleOptions, setAllRoleOptions] = useState<
-    { roleKey: string; label: string }[]
-  >([]);
   const [reportingManagerOptions, setReportingManagerOptions] = useState<
     { value: string; label: string }[]
   >([]);
@@ -124,11 +120,13 @@ export default function EmployeeDetailsPage({
   const [resendingCredentials, setResendingCredentials] = useState(false);
 
   useEffect(() => {
-    fetch("/api/system/roles")
+    fetch("/api/hrms/departments")
       .then((r) => r.json())
       .then((d) => {
         if (d.success && Array.isArray(d.data)) {
-          setAllRoleOptions(d.data);
+          setDepartmentOptions(
+            d.data.map((dept: string) => ({ value: dept, label: dept })),
+          );
         }
       })
       .catch(() => {});
@@ -148,12 +146,17 @@ export default function EmployeeDetailsPage({
       .catch(() => {});
   }, []);
 
+  // Ensure the employee's current department is selectable even if no other
+  // employee currently shares it (Employee.distinct alone could otherwise omit it).
   useEffect(() => {
-    if (!allRoleOptions.length) return;
-    setDepartmentOptions(
-      hrAssignableRoleOptions(allRoleOptions, originalData?.department),
+    const current = originalData?.department;
+    if (!current) return;
+    setDepartmentOptions((prev) =>
+      prev.some((opt) => opt.value === current)
+        ? prev
+        : [...prev, { value: current, label: current }],
     );
-  }, [allRoleOptions, originalData?.department]);
+  }, [originalData?.department]);
 
   useEffect(() => {
     async function loadEmployee() {

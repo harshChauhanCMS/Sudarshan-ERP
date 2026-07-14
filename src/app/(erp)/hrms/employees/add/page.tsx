@@ -36,7 +36,6 @@ import {
   EMPLOYEE_LOCATION_UNIT_OPTIONS,
   EMPLOYEE_QUALIFICATION_OPTIONS,
   EMPLOYEE_WORK_LOCATION_OPTIONS,
-  filterHrAssignableRoles,
 } from "@/lib/hrms-employee-options";
 import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
 
@@ -182,17 +181,12 @@ export default function AddEmployeePage() {
       })
       .catch(() => {});
 
-    fetch("/api/system/roles")
+    fetch("/api/hrms/departments")
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) {
+        if (d.success && Array.isArray(d.data)) {
           setDepartmentOptions(
-            filterHrAssignableRoles(
-              d.data.map((role: { roleKey: string; label: string }) => ({
-                value: role.roleKey,
-                label: role.label,
-              })),
-            ),
+            d.data.map((dept: string) => ({ value: dept, label: dept })),
           );
         }
       })
