@@ -24,6 +24,13 @@ import {
   deleteSparePartByCode,
   replaceAllSpareParts,
 } from "@/lib/spare-part-service";
+import {
+  listVendors,
+  createVendor,
+  updateVendorById,
+  deleteVendorById,
+  replaceAllVendors,
+} from "@/lib/vendor-service";
 
 const KEY_MAP: Record<Exclude<keyof ErpData, "USERS">, string> = {
   COMPANIES: "companies",
@@ -73,9 +80,10 @@ export async function loadErpDataFromDb(): Promise<ErpData> {
   for (const doc of docs) {
     Object.assign(result, docToField(doc));
   }
-  // Raw materials & spare parts live in their own validated collections, not the generic entity-store blob.
+  // Raw materials, spare parts & vendors live in their own validated collections, not the generic entity-store blob.
   result.RAW_MATERIALS = await listRawMaterials();
   result.SPARE_PARTS = await listSpareParts();
+  result.VENDORS = await listVendors();
   // Packaging is intentionally NOT loaded here — it has its own dedicated API/hook
   // (usePackaging(), /api/inventory/packaging) and no longer rides along in bootstrap.
   // Server code that needs it calls listPackaging()/getPackagingByCode() directly.
@@ -92,7 +100,8 @@ export async function seedEntities(): Promise<{ seeded: boolean; counts: Record<
       field === "USERS" ||
       field === "RAW_MATERIALS" ||
       field === "PACKAGING" ||
-      field === "SPARE_PARTS"
+      field === "SPARE_PARTS" ||
+      field === "VENDORS"
     )
       continue;
     const value = SEED_DATA[field as keyof ErpData];
@@ -114,6 +123,9 @@ export async function seedEntities(): Promise<{ seeded: boolean; counts: Record<
   await replaceAllSpareParts(SEED_DATA.SPARE_PARTS);
   counts.spareParts = SEED_DATA.SPARE_PARTS.length;
 
+  await replaceAllVendors(SEED_DATA.VENDORS);
+  counts.vendors = SEED_DATA.VENDORS.length;
+
   return { seeded: true, counts };
 }
 
@@ -131,6 +143,10 @@ export async function upsertEntity(
   }
   if (key === "spareParts" && Array.isArray(items)) {
     await replaceAllSpareParts(items);
+    return;
+  }
+  if (key === "vendors" && Array.isArray(items)) {
+    await replaceAllVendors(items);
     return;
   }
   await connectDB();
@@ -158,6 +174,9 @@ export async function getEntityItems<T = unknown>(key: string): Promise<T[]> {
   }
   if (key === "spareParts") {
     return (await listSpareParts()) as unknown as T[];
+  }
+  if (key === "vendors") {
+    return (await listVendors()) as unknown as T[];
   }
   await connectDB();
   const doc = await EntityStore.findOne({ key }).lean();
@@ -196,6 +215,9 @@ export async function appendEntityItem(key: string, item: Record<string, unknown
   if (key === "spareParts") {
     return createSparePart(item);
   }
+  if (key === "vendors") {
+    return createVendor(item);
+  }
   if (key === "attendanceToday") {
     await upsertEntity(key, item);
     return item;
@@ -220,6 +242,9 @@ export async function updateEntityItem(
   }
   if (key === "spareParts") {
     return updateSparePartByCode(id, patch);
+  }
+  if (key === "vendors") {
+    return updateVendorById(id, patch);
   }
   const field = idField ?? getEntityIdField(key);
   if (key === "attendanceToday") {
@@ -255,6 +280,10 @@ export async function removeEntityItem(
   }
   if (key === "spareParts") {
     await deleteSparePartByCode(id);
+    return;
+  }
+  if (key === "vendors") {
+    await deleteVendorById(id);
     return;
   }
   const field = idField ?? getEntityIdField(key);

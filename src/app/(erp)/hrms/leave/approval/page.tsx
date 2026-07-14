@@ -127,6 +127,18 @@ export default function LeaveApprovalPage() {
 
   const kpi = useMemo(() => computeLeaveApprovalKpi(approvalLeaves), [approvalLeaves]);
 
+  const departmentOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          approvalLeaves
+            .map((row) => String(row.department ?? "").trim())
+            .filter(Boolean),
+        ),
+      ).sort((a, b) => a.localeCompare(b)),
+    [approvalLeaves],
+  );
+
   const tableData = useMemo(() => {
     const byTab =
       activeTab === "all"
@@ -467,10 +479,10 @@ export default function LeaveApprovalPage() {
             onChange={setLeaveTypeFilter}
             options={[
               { value: "all", label: "All types" },
-              { value: "Casual", label: "Casual" },
-              { value: "Sick", label: "Sick" },
-              { value: "Privilege", label: "Privilege" },
-              { value: "Unpaid", label: "Unpaid" },
+              ...Object.entries(LEAVE_TYPE_LABEL).map(([value, label]) => ({
+                value,
+                label,
+              })),
             ]}
           />
         </div>
@@ -482,12 +494,7 @@ export default function LeaveApprovalPage() {
             onChange={setDepartmentFilter}
             options={[
               { value: "all", label: "All departments" },
-              { value: "Sales", label: "Sales" },
-              { value: "Engineering", label: "Engineering" },
-              { value: "HR", label: "HR" },
-              { value: "Management", label: "Management" },
-              { value: "Operations", label: "Operations" },
-              { value: "Marketing", label: "Marketing" },
+              ...departmentOptions.map((d) => ({ value: d, label: d })),
             ]}
           />
         </div>

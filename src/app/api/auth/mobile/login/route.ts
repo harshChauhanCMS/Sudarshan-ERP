@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { connectDB, isDbConfigured } from "@/lib/mongodb";
 import { User } from "@/models/User";
+import Employee from "@/lib/models/Employee";
 import { ok, fail } from "@/lib/api-response";
 import { resolvePermissionsForRole } from "@/lib/resolve-user-permissions";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -49,6 +50,17 @@ export async function POST(request: Request) {
     }
 
     const permissions = await resolvePermissionsForRole(user.role);
+
+    let workLocationType: string | undefined;
+    if (user.employeeId) {
+      const employee = await Employee.findOne({ employeeId: user.employeeId })
+        .select({ workLocationType: 1 })
+        .lean();
+      workLocationType = employee?.workLocationType
+        ? String(employee.workLocationType)
+        : "Onsite";
+    }
+
     const sessionUser = {
       id: String(user._id),
       email: user.email,
@@ -57,6 +69,7 @@ export async function POST(request: Request) {
       employeeId: user.employeeId ? String(user.employeeId) : undefined,
       permissions,
       mustResetPassword: Boolean(user.requiresPasswordReset),
+      workLocationType,
     };
 
     const token = await createMobileToken(sessionUser);

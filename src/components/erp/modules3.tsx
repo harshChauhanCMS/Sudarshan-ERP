@@ -2,13 +2,16 @@
 'use client';
 
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import dayjs from "dayjs";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import PageFilterPanel from "@/components/common/PageFilterPanel";
-import { Select, message } from "antd";
+import { Select, DatePicker, Input, message } from "antd";
+import { downloadGenericTablePdf } from "@/lib/generic-table-pdf";
+import { filterBySearch } from "@/lib/filter-search";
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { nextEmployeeId, formatDisplayDate } from "@/lib/id-generators";
@@ -620,32 +623,56 @@ const Payroll = () => {
     </>
   );
 };
-const Reports = () => {
-  const DATA = useDATA();
-  const [active, setActive] = useState("profit");
+const REPORTS_META = [
+  { id: "profit",    title: "Profit Analysis",     icon: "chart",    sub: "Revenue, COGS, gross margin by product line" },
+  { id: "inventory", title: "Inventory Report",    icon: "box",      sub: "Stock movement, valuation, ABC analysis" },
+  { id: "production",title: "Production Report",   icon: "factory",  sub: "Throughput, yield, downtime, defect rate" },
+  { id: "dispatch",  title: "Dispatch Report",     icon: "truck",    sub: "On-time delivery, lead time, route P&L" },
+  { id: "vendor",    title: "Vendor Purchase",     icon: "users",    sub: "PO volume, spend, rating, payment history" },
+  { id: "hr",        title: "HR Report",           icon: "user",     sub: "Attendance, attrition, payroll summary" },
+];
 
-  const reports = [
-    { id: "profit",    title: "Profit Analysis",     icon: "chart",    sub: "Revenue, COGS, gross margin by product line" },
-    { id: "inventory", title: "Inventory Report",    icon: "box",      sub: "Stock movement, valuation, ABC analysis" },
-    { id: "production",title: "Production Report",   icon: "factory",  sub: "Throughput, yield, downtime, defect rate" },
-    { id: "dispatch",  title: "Dispatch Report",     icon: "truck",    sub: "On-time delivery, lead time, route P&L" },
-    { id: "vendor",    title: "Vendor Purchase",     icon: "users",    sub: "PO volume, spend, rating, payment history" },
-    { id: "hr",        title: "HR Report",           icon: "user",     sub: "Attendance, attrition, payroll summary" },
-  ];
+const Reports = () => {
+  const [active, setActive] = useState("profit");
+  const [period, setPeriod] = useState(() => dayjs());
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customReportId, setCustomReportId] = useState("profit");
+  // Each report registers its own PDF-export function here (it owns its
+  // rows/columns), so the header-level Export/Custom-report buttons can
+  // trigger whichever report is currently active without lifting all six
+  // dummy datasets up to this component.
+  const exportHandlers = useRef({});
+  const registerExport = useCallback((id, fn) => {
+    exportHandlers.current[id] = fn;
+  }, []);
+
+  const periodLabel = period.format("MMMM YYYY");
 
   return (
     <>
       <DashHead title="Reports" sub="Inventory · Production · Dispatch · Vendor · Profit · HR">
-        <Btn size="sm" icon="calendar">May 2026</Btn>
-        <Btn size="sm" icon="download">Export PDF</Btn>
-        <Btn variant="primary" size="sm" icon="plus">Custom report</Btn>
+        <DatePicker
+          picker="month"
+          value={period}
+          onChange={(d) => d && setPeriod(d)}
+          format="MMM YYYY"
+          allowClear={false}
+          suffixIcon={<CalendarOutlined />}
+          style={{ width: 130 }}
+        />
+        <Btn size="sm" icon="download" onClick={() => exportHandlers.current[active]?.()}>
+          Export PDF
+        </Btn>
+        <Btn variant="primary" size="sm" icon="plus" onClick={() => setCustomOpen(true)}>
+          Custom report
+        </Btn>
       </DashHead>
 
       <div className="grid" style={{ gridTemplateColumns: "260px 1fr", gap: 20 }}>
         <div className="card">
           <div className="card-head"><div className="card-title">All reports</div></div>
           <div style={{ padding: 8 }}>
-            {reports.map((r) => (
+            {REPORTS_META.map((r) => (
               <button
                 key={r.id}
                 onClick={() => setActive(r.id)}
@@ -669,35 +696,98 @@ const Reports = () => {
         </div>
 
         <div>
-          {active === "profit" && <ProfitReport />}
-          {active === "inventory" && <InventoryReport />}
-          {active === "production" && <ProductionReport />}
-          {active === "dispatch" && <DispatchReport />}
-          {active === "vendor" && <VendorReport />}
-          {active === "hr" && <HRReport />}
+          {active === "profit" && <ProfitReport periodLabel={periodLabel} registerExport={(fn) => registerExport("profit", fn)} />}
+          {active === "inventory" && <InventoryReport periodLabel={periodLabel} registerExport={(fn) => registerExport("inventory", fn)} />}
+          {active === "production" && <ProductionReport periodLabel={periodLabel} registerExport={(fn) => registerExport("production", fn)} />}
+          {active === "dispatch" && <DispatchReport periodLabel={periodLabel} registerExport={(fn) => registerExport("dispatch", fn)} />}
+          {active === "vendor" && <VendorReport periodLabel={periodLabel} registerExport={(fn) => registerExport("vendor", fn)} />}
+          {active === "hr" && <HRReport periodLabel={periodLabel} registerExport={(fn) => registerExport("hr", fn)} />}
         </div>
       </div>
+
+      <Modal
+        open={customOpen}
+        onClose={() => setCustomOpen(false)}
+        title="Custom report"
+        sub="Pick a report and period to export"
+        footer={
+          <>
+            <Btn size="sm" onClick={() => setCustomOpen(false)}>Cancel</Btn>
+            <Btn
+              variant="primary"
+              size="sm"
+              icon="download"
+              onClick={() => {
+                exportHandlers.current[customReportId]?.();
+                setCustomOpen(false);
+              }}
+            >
+              Generate PDF
+            </Btn>
+          </>
+        }
+      >
+        <div className="arf-item" style={{ marginBottom: 14 }}>
+          <label className="arf-label">Report</label>
+          <Select
+            className="w-full"
+            value={customReportId}
+            onChange={setCustomReportId}
+            options={REPORTS_META.map((r) => ({ value: r.id, label: r.title }))}
+          />
+        </div>
+        <div className="arf-item">
+          <label className="arf-label">Period</label>
+          <DatePicker
+            picker="month"
+            className="w-full"
+            value={period}
+            onChange={(d) => d && setPeriod(d)}
+            format="MMM YYYY"
+            allowClear={false}
+          />
+        </div>
+      </Modal>
     </>
   );
 };
 
-const ReportShell = ({ title, sub, children }) => (
-  <div className="card">
-    <div className="card-head">
-      <div>
-        <div className="card-title">{title}</div>
-        <div style={{ fontSize: 11, color: "var(--fg-subtle)", marginTop: 2 }}>{sub}</div>
+const ReportShell = ({ title, sub, onExport, search, onSearchChange, children }) => {
+  const [showSearch, setShowSearch] = useState(false);
+  return (
+    <div className="card">
+      <div className="card-head">
+        <div>
+          <div className="card-title">{title}</div>
+          <div style={{ fontSize: 11, color: "var(--fg-subtle)", marginTop: 2 }}>{sub}</div>
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {onSearchChange ? (
+            showSearch ? (
+              <Input
+                size="small"
+                autoFocus
+                allowClear
+                placeholder="Filter rows…"
+                value={search}
+                onChange={(e) => onSearchChange(e.target.value)}
+                onBlur={() => { if (!search) setShowSearch(false); }}
+                style={{ width: 160 }}
+              />
+            ) : (
+              <Btn size="sm" icon="filter" onClick={() => setShowSearch(true)}>Filter</Btn>
+            )
+          ) : null}
+          <Btn size="sm" icon="download" onClick={onExport}>Export</Btn>
+        </div>
       </div>
-      <div style={{ display: "flex", gap: 6 }}>
-        <Btn size="sm" icon="filter">Filter</Btn>
-        <Btn size="sm" icon="download">Export</Btn>
-      </div>
+      <div className="card-body">{children}</div>
     </div>
-    <div className="card-body">{children}</div>
-  </div>
-);
+  );
+};
 
-const ProfitReport = () => {
+const ProfitReport = ({ periodLabel, registerExport }) => {
+  const [search, setSearch] = useState("");
   const profitRows = [
     { name: "Talcum Powder", r: 3_22_00_000, c: 2_05_00_000, m: 36.3, d: 8.4 },
     { name: "Calcium Carbonate", r: 2_45_00_000, c: 1_64_00_000, m: 33.1, d: 4.2 },
@@ -753,8 +843,27 @@ const ProfitReport = () => {
     },
   ];
 
+  const filteredRows = filterBySearch(profitRows, search, (r) => [r.name]);
+
+  const handleExport = () =>
+    downloadGenericTablePdf(
+      "Profit Analysis",
+      `${periodLabel ?? ""} · Revenue, COGS, gross margin by product line`,
+      ["Product line", "Revenue", "COGS", "GP", "GM%", "vs Apr"],
+      profitRows.map((r) => [
+        r.name, fmtINR(r.r), fmtINR(r.c), fmtINR(r.r - r.c), `${r.m}%`, `${r.d >= 0 ? "+" : ""}${r.d}%`,
+      ])
+    );
+  registerExport?.(handleExport);
+
   return (
-    <ReportShell title="Profit Analysis · May 2026" sub="Revenue, COGS, gross margin by product line — both companies">
+    <ReportShell
+      title={`Profit Analysis · ${periodLabel ?? "May 2026"}`}
+      sub="Revenue, COGS, gross margin by product line — both companies"
+      search={search}
+      onSearchChange={setSearch}
+      onExport={handleExport}
+    >
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
         <Kpi icon="money" label="Revenue" value={fmtINR(11_82_00_000)} delta={12.4} spark={[8, 9, 10, 10, 11, 11, 12]} />
         <Kpi icon="layers" label="COGS" value={fmtINR(7_70_00_000)} delta={9.1} spark={[5, 6, 6, 6, 7, 7, 8]} sparkColor="var(--danger)" />
@@ -764,15 +873,16 @@ const ProfitReport = () => {
       <CommonTable
         {...ERP_TABLE_PROPS}
         columns={profitColumns}
-        dataSource={profitRows}
+        dataSource={filteredRows}
         rowKey="name"
       />
     </ReportShell>
   );
 };
 
-const InventoryReport = () => {
+const InventoryReport = ({ periodLabel, registerExport }) => {
   const DATA = useDATA();
+  const [search, setSearch] = useState("");
   const inventoryRows = DATA.RAW_MATERIALS.map((r, i) => ({
     ...r,
     classCode: i < 3 ? "A" : i < 7 ? "B" : "C",
@@ -824,8 +934,28 @@ const InventoryReport = () => {
       ),
     },
   ];
+
+  const filteredRows = filterBySearch(inventoryRows, search, (r) => [r.code, r.name, r.classCode, r.movementCode]);
+
+  const handleExport = () =>
+    downloadGenericTablePdf(
+      "Inventory Report",
+      `${periodLabel ?? ""} · Stock value, ABC analysis, ageing`,
+      ["SKU", "Material", "Stock", "Value", "Class", "Movement"],
+      inventoryRows.map((r) => [
+        r.code, r.name, `${r.stock} ${r.unit}`, fmtINR(r.value), r.classCode, r.movementCode,
+      ])
+    );
+  registerExport?.(handleExport);
+
   return (
-  <ReportShell title="Inventory Report · As of May 21" sub="Stock value, ABC analysis, ageing">
+  <ReportShell
+    title={`Inventory Report · ${periodLabel ?? "As of May 21"}`}
+    sub="Stock value, ABC analysis, ageing"
+    search={search}
+    onSearchChange={setSearch}
+    onExport={handleExport}
+  >
     <div className="grid grid-3" style={{ marginBottom: 20 }}>
       <Kpi icon="money" label="Total inventory value" value={fmtINR(2_50_00_000)} delta={4.8} spark={[2.2,2.3,2.3,2.4,2.4,2.5,2.5]} />
       <Kpi icon="loader" label="Inventory turns (annualized)" value="6.2x" delta={0.4} spark={[5.5,5.7,5.9,6.0,6.0,6.1,6.2]} sparkColor="var(--success)" />
@@ -834,15 +964,43 @@ const InventoryReport = () => {
     <CommonTable
       {...ERP_TABLE_PROPS}
       columns={inventoryColumns}
-      dataSource={inventoryRows}
+      dataSource={filteredRows}
       rowKey="code"
     />
   </ReportShell>
   );
 };
 
-const ProductionReport = () => (
-  <ReportShell title="Production Report · Last 30 days" sub="Throughput, yield, downtime, defect rate">
+const PRODUCTION_DOWNTIME = [
+  { l: "Changeover",      v: 14, color: "var(--primary)" },
+  { l: "Power outage",    v: 9,  color: "var(--secondary)" },
+  { l: "Maintenance",     v: 8,  color: "var(--info)" },
+  { l: "Material delay",  v: 6,  color: "var(--warning)" },
+  { l: "Other",           v: 5,  color: "var(--fg-faint)" },
+];
+
+const ProductionReport = ({ periodLabel, registerExport }) => {
+  const handleExport = () =>
+    downloadGenericTablePdf(
+      "Production Report",
+      `${periodLabel ?? ""} · Throughput, yield, downtime, defect rate`,
+      ["Metric", "Value"],
+      [
+        ["Total output", "2,420 MT"],
+        ["Yield", "96.8%"],
+        ["Downtime", "42 hrs"],
+        ["Defect rate", "3.8 ppm"],
+        ...PRODUCTION_DOWNTIME.map((r) => [`Downtime — ${r.l}`, `${r.v} hrs`]),
+      ]
+    );
+  registerExport?.(handleExport);
+
+  return (
+  <ReportShell
+    title={`Production Report · ${periodLabel ?? "Last 30 days"}`}
+    sub="Throughput, yield, downtime, defect rate"
+    onExport={handleExport}
+  >
     <div className="grid grid-4" style={{ marginBottom: 20 }}>
       <Kpi icon="factory" label="Total output" value="2,420" unit="MT" delta={8.4} spark={[300,310,320,330,340,350,360]} />
       <Kpi icon="bolt"    label="Yield"        value="96.8" unit="%"  delta={1.2} spark={[95,96,96,96,97,97,97]} sparkColor="var(--success)" />
@@ -868,13 +1026,7 @@ const ProductionReport = () => (
       </div>
       <div className="card" style={{ padding: 14 }}>
         <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Downtime by reason</div>
-        {[
-          { l: "Changeover",      v: 14, color: "var(--primary)" },
-          { l: "Power outage",    v: 9,  color: "var(--secondary)" },
-          { l: "Maintenance",     v: 8,  color: "var(--info)" },
-          { l: "Material delay",  v: 6,  color: "var(--warning)" },
-          { l: "Other",           v: 5,  color: "var(--fg-faint)" },
-        ].map((r) => (
+        {PRODUCTION_DOWNTIME.map((r) => (
           <div key={r.l} style={{ marginBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
               <span>{r.l}</span>
@@ -888,9 +1040,11 @@ const ProductionReport = () => (
       </div>
     </div>
   </ReportShell>
-);
+  );
+};
 
-const DispatchReport = () => {
+const DispatchReport = ({ periodLabel, registerExport }) => {
+  const [search, setSearch] = useState("");
   const dispatchRows = [
     { route: "Udaipur → Mumbai", trips: 48, volume: 1140, onTime: 96.0, leadTime: 10.4, freightCost: 21_45_000 },
     { route: "Udaipur → Pune", trips: 22, volume: 528, onTime: 95.5, leadTime: 11.2, freightCost: 11_84_000 },
@@ -943,8 +1097,27 @@ const DispatchReport = () => {
     },
   ];
 
+  const filteredRows = filterBySearch(dispatchRows, search, (r) => [r.route]);
+
+  const handleExport = () =>
+    downloadGenericTablePdf(
+      "Dispatch Report",
+      `${periodLabel ?? ""} · On-time delivery, lead time, route P&L`,
+      ["Route", "Trips", "Vol (MT)", "On-time %", "Avg lead (hrs)", "Freight cost"],
+      dispatchRows.map((r) => [
+        r.route, r.trips, r.volume, `${r.onTime}%`, r.leadTime, fmtINR(r.freightCost),
+      ])
+    );
+  registerExport?.(handleExport);
+
   return (
-    <ReportShell title="Dispatch Report · May 2026" sub="On-time delivery, lead time, route P&L">
+    <ReportShell
+      title={`Dispatch Report · ${periodLabel ?? "May 2026"}`}
+      sub="On-time delivery, lead time, route P&L"
+      search={search}
+      onSearchChange={setSearch}
+      onExport={handleExport}
+    >
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
         <Kpi icon="truck" label="Vehicles dispatched" value="218" delta={11} spark={[180, 190, 200, 205, 210, 215, 218]} />
         <Kpi icon="bolt" label="On-time %" value="94.2" unit="%" delta={1.2} sparkColor="var(--success)" spark={[91, 92, 93, 93, 93, 94, 94]} />
@@ -954,15 +1127,16 @@ const DispatchReport = () => {
       <CommonTable
         {...ERP_TABLE_PROPS}
         columns={dispatchColumns}
-        dataSource={dispatchRows}
+        dataSource={filteredRows}
         rowKey="route"
       />
     </ReportShell>
   );
 };
 
-const VendorReport = () => {
+const VendorReport = ({ periodLabel, registerExport }) => {
   const DATA = useDATA();
+  const [search, setSearch] = useState("");
   const vendorRows = DATA.VENDORS.map((v, i) => ({
     ...v,
     rowIndex: i,
@@ -1021,19 +1195,40 @@ const VendorReport = () => {
       render: (rating) => <Badge tone={rating >= 4.5 ? "success" : "warning"} dot>{rating >= 4.5 ? "On time" : "Avg 4d late"}</Badge>,
     },
   ];
+
+  const filteredRows = filterBySearch(vendorRows, search, (v) => [v.name, v.city, v.category]);
+
+  const handleExport = () =>
+    downloadGenericTablePdf(
+      "Vendor Purchase Report",
+      `${periodLabel ?? ""} · PO volume, spend, rating, payment history`,
+      ["Vendor", "City", "Category", "POs MTD", "Spend MTD", "YTD", "Rating"],
+      vendorRows.map((v) => [
+        v.name, v.city, v.category, v.poMtd, fmtINR(v.spendMtd), fmtINR(v.ytd), v.rating,
+      ])
+    );
+  registerExport?.(handleExport);
+
   return (
-  <ReportShell title="Vendor Purchase Report" sub="PO volume, spend, rating, payment history">
+  <ReportShell
+    title={`Vendor Purchase Report · ${periodLabel ?? ""}`}
+    sub="PO volume, spend, rating, payment history"
+    search={search}
+    onSearchChange={setSearch}
+    onExport={handleExport}
+  >
     <CommonTable
       {...ERP_TABLE_PROPS}
       columns={vendorColumns}
-      dataSource={vendorRows}
+      dataSource={filteredRows}
       rowKey="id"
     />
   </ReportShell>
   );
 };
 
-const HRReport = () => {
+const HRReport = ({ periodLabel, registerExport }) => {
+  const [search, setSearch] = useState("");
   const hrRows = [
     { d: "Production", h: 142, a: 91.2, t: 5.1, p: 84_00_000 },
     { d: "Procurement", h: 14, a: 95.4, t: 4.8, p: 12_00_000 },
@@ -1082,8 +1277,25 @@ const HRReport = () => {
     },
   ];
 
+  const filteredRows = filterBySearch(hrRows, search, (r) => [r.d]);
+
+  const handleExport = () =>
+    downloadGenericTablePdf(
+      "HR Report",
+      `${periodLabel ?? ""} · Attendance, attrition, training, payroll summary`,
+      ["Department", "Headcount", "Attendance %", "Avg tenure", "Payroll MTD"],
+      hrRows.map((r) => [r.d, r.h, `${r.a}%`, `${r.t} yrs`, fmtINR(r.p)])
+    );
+  registerExport?.(handleExport);
+
   return (
-    <ReportShell title="HR Report · May 2026" sub="Attendance, attrition, training, payroll summary">
+    <ReportShell
+      title={`HR Report · ${periodLabel ?? "May 2026"}`}
+      sub="Attendance, attrition, training, payroll summary"
+      search={search}
+      onSearchChange={setSearch}
+      onExport={handleExport}
+    >
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
         <Kpi icon="users" label="Headcount" value="306" delta={1.3} spark={[298, 300, 301, 303, 304, 305, 306]} sparkColor="var(--primary)" />
         <Kpi icon="check" label="Avg attendance" value="92.4" unit="%" delta={1.2} spark={[90, 91, 91, 92, 92, 92, 92]} sparkColor="var(--success)" />
@@ -1093,7 +1305,7 @@ const HRReport = () => {
       <CommonTable
         {...ERP_TABLE_PROPS}
         columns={hrColumns}
-        dataSource={hrRows}
+        dataSource={filteredRows}
         rowKey="d"
       />
     </ReportShell>

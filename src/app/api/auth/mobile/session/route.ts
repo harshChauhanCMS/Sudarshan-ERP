@@ -2,6 +2,7 @@ import { ok, fail } from "@/lib/api-response";
 import { getUserFromRequest } from "@/lib/api-request-auth";
 import { connectDB, isDbConfigured } from "@/lib/mongodb";
 import { User } from "@/models/User";
+import Employee from "@/lib/models/Employee";
 import { resolvePermissionsForRole } from "@/lib/resolve-user-permissions";
 
 export async function GET(request: Request) {
@@ -18,6 +19,17 @@ export async function GET(request: Request) {
       if (dbUser) {
         mustResetPassword = Boolean(dbUser.requiresPasswordReset);
         const permissions = await resolvePermissionsForRole(dbUser.role);
+
+        let workLocationType: string | undefined;
+        if (dbUser.employeeId) {
+          const employee = await Employee.findOne({ employeeId: dbUser.employeeId })
+            .select({ workLocationType: 1 })
+            .lean();
+          workLocationType = employee?.workLocationType
+            ? String(employee.workLocationType)
+            : "Onsite";
+        }
+
         return ok({
           user: {
             ...user,
@@ -25,6 +37,7 @@ export async function GET(request: Request) {
             employeeId: dbUser.employeeId ? String(dbUser.employeeId) : user.employeeId,
             permissions,
             mustResetPassword,
+            workLocationType,
           },
         });
       }

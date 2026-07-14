@@ -11,6 +11,13 @@ import {
 } from "@/lib/attendance-report-dummy";
 import { filterBySearch } from "@/lib/filter-search";
 
+// Prefer the employee's assigned workLocationType; fall back to a
+// department-name guess only for rows that predate that field.
+export function isFieldRow(row: Pick<AttendanceSummaryRow, "workLocationType" | "department">) {
+  if (row.workLocationType) return row.workLocationType === "Field";
+  return /sales|field/i.test(row.department);
+}
+
 const EMPTY_KPI: AttendanceReportKpi = {
   totalEmployees: 0,
   presentDays: 0,
@@ -43,6 +50,7 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
   const isDaily = options?.variant === "daily";
   const [loading, setLoading] = useState(false);
   const [departments, setDepartments] = useState<string[]>([]);
+  const [unitOptions, setUnitOptions] = useState<string[]>([]);
   const [range, setRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>(
     isDaily
       ? [dayjs().startOf("day"), dayjs().endOf("day")]
@@ -61,19 +69,18 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
   const [daily, setDaily] = useState<AttendanceDailyRow[]>([]);
 
   useEffect(() => {
+    // Independent master lists, fetched once — not derived from the
+    // currently filtered report data, so picking one filter never narrows
+    // the options available for the other.
     Promise.all([
-      fetch("/api/system/roles").then((r) => r.json()),
       fetch("/api/hrms/departments").then((r) => r.json()),
+      fetch("/api/hrms/units").then((r) => r.json()),
     ])
-      .then(([rolesRes, deptRes]) => {
-        const fromRoles: string[] = (rolesRes?.data ?? []).map(
-          (role: { roleKey?: string }) => role.roleKey
-        ).filter(Boolean);
-        const fromDistinct: string[] = deptRes?.data ?? [];
-        const merged = [...new Set([...fromRoles, ...fromDistinct])].sort(
-          (a, b) => a.localeCompare(b)
-        );
-        if (merged.length) setDepartments(merged);
+      .then(([deptRes, unitRes]) => {
+        const dept: string[] = deptRes?.data ?? [];
+        if (dept.length) setDepartments(dept);
+        const unit: string[] = unitRes?.data ?? [];
+        if (unit.length) setUnitOptions(unit);
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -171,6 +178,7 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
           from: opts.range[0].format("YYYY-MM-DD"),
           to: opts.range[1].format("YYYY-MM-DD"),
         });
+        if (opts.employeeId) logParams.set("employeeId", opts.employeeId);
         const logRes = await fetch(`/api/hrms/attendance/log?${logParams}`);
         const logJson = await logRes.json().catch(() => ({}));
         if (logRes.ok && !logJson?.error) {
@@ -275,10 +283,6 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
     return params;
   };
 
-  const units = useMemo(
-    () => [...new Set(summary.map((s) => s.locationUnit).filter(Boolean))].sort(),
-    [summary]
-  );
 
   const searchedSummary = useMemo(
     () =>
@@ -346,7 +350,7 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
   }, [searchedSummary]);
 
   const fieldRows = useMemo(
-    () => searchedSummary.filter((s) => /sales|field/i.test(s.department)),
+    () => searchedSummary.filter((s) => isFieldRow(s)),
     [searchedSummary]
   );
 
@@ -375,7 +379,7 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
       const cur = map.get(key) ?? {
         unit: key, employees: 0, present: 0, absent: 0, late: 0, inOffice: 0, fieldDays: 0,
       };
-      const isField = /sales|field/i.test(s.department);
+      const isField = isFieldRow(s);
       cur.employees += 1;
       cur.present += s.presentDays;
       cur.absent += s.absentDays;
@@ -436,9 +440,9 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
     employeeId, setEmployeeId,
     shift, setShift,
     unit, setUnit,
-    period, setPeriod,
+    period, setPeriod, defaultPeriod,
     search, setSearch,
-    departments, units,
+    departments, units: unitOptions,
     loading,
     kpi, workingDays, gpsSummary,
     summary: searchedSummary,

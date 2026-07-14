@@ -9,10 +9,12 @@ function ActionIconButton({
   icon,
   label,
   onClick,
+  disabled,
 }: {
   icon: ReactNode;
   label: string;
   onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <Button
@@ -20,6 +22,7 @@ function ActionIconButton({
       size="small"
       icon={icon}
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
       className="hrms-table-actions__btn"
     />
@@ -113,6 +116,7 @@ type SingleActionProps = {
   onClick?: () => void;
   label?: string;
   icon?: ReactNode;
+  disabled?: boolean;
 };
 
 export function TableActionIcon({
@@ -120,9 +124,15 @@ export function TableActionIcon({
   onClick,
   label = "Edit",
   icon = <EditOutlined />,
+  disabled,
 }: SingleActionProps) {
   const btn = (
-    <ActionIconButton icon={icon} label={label} onClick={href ? undefined : onClick} />
+    <ActionIconButton
+      icon={icon}
+      label={label}
+      onClick={href ? undefined : onClick}
+      disabled={disabled}
+    />
   );
 
   return (

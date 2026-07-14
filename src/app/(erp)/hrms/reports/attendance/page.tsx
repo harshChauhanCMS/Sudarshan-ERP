@@ -154,6 +154,7 @@ export default function AttendanceOverviewPage() {
         setUnit={r.setUnit}
         period={r.period}
         setPeriod={r.setPeriod}
+        defaultPeriod={r.defaultPeriod}
         departments={r.departments}
         units={r.units}
         loading={r.loading}

@@ -121,7 +121,31 @@ export function useEntityMutation() {
     [refresh]
   );
 
+  const createVendor = useCallback(
+    async (payload: Record<string, unknown>) => {
+      setSaving(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/procurement/vendors", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await parseResponse(res);
+        await refresh();
+        return data;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Create vendor failed";
+        setError(msg);
+        throw e;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [refresh]
+  );
+
   const clearError = useCallback(() => setError(null), []);
 
-  return { append, update, replaceAll, createUser, saving, error, clearError };
+  return { append, update, replaceAll, createUser, createVendor, saving, error, clearError };
 }

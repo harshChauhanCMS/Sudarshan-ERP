@@ -223,14 +223,16 @@ export default function CreatePurchaseOrderPage() {
     const rate = parseFloat(form.values.rate) || 0;
     const total = Math.round(quantity * rate);
 
-    await append("purchaseOrders", {
+    // status is server-authoritative: draft stays a draft, a submitted PO is
+    // auto-verified for owner/admin or sent for verification otherwise.
+    const result = await append("purchaseOrders", {
       id: form.values.poNumber || nextPoId(DATA.PURCHASE_ORDERS),
       vendor: vendor?.name ?? "",
       items: 1,
       total,
       date: formatDisplayDate(form.values.poDate),
       poDate: form.values.poDate,
-      status: draft ? "pending" : "approved",
+      status: draft ? "draft" : "submitted",
       invoice: "awaiting",
       materialCode: material?.code,
       materialName: material?.name,
@@ -243,7 +245,14 @@ export default function CreatePurchaseOrderPage() {
       notes: form.values.notes.trim(),
     } satisfies PurchaseOrder);
 
-    message.success(draft ? "Purchase order saved as draft." : "Purchase order issued.");
+    const finalStatus = (result as { item?: { status?: string } })?.item?.status;
+    if (draft) {
+      message.success("Purchase order saved as draft.");
+    } else if (finalStatus === "pending_verification") {
+      message.success("Purchase order submitted for verification.");
+    } else {
+      message.success("Purchase order issued.");
+    }
 
     router.push("/procurement/po");
   };

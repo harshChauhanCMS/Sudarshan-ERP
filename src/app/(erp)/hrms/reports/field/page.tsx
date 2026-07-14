@@ -11,7 +11,7 @@ import ReportSection from "@/components/hrms/ReportSection";
 import AttendanceFilterPanel, {
   type PeriodOption,
 } from "@/components/hrms/AttendanceFilterPanel";
-import { useAttendanceReport, type AttendanceSummaryRow } from "@/hooks/use-attendance-report";
+import { useAttendanceReport, isFieldRow, type AttendanceSummaryRow } from "@/hooks/use-attendance-report";
 
 const FIELD_PERIOD_OPTIONS: PeriodOption[] = [
   { value: "today", label: "Today" },
@@ -48,13 +48,13 @@ export default function FieldAttendancePage() {
       title: "In-office days",
       key: "inOffice",
       render: (_: unknown, row: AttendanceSummaryRow) =>
-        /sales|field/i.test(row.department) ? 0 : row.presentDays,
+        isFieldRow(row) ? 0 : row.presentDays,
     },
     {
       title: "Field days",
       key: "field",
       render: (_: unknown, row: AttendanceSummaryRow) =>
-        /sales|field/i.test(row.department) ? (
+        isFieldRow(row) ? (
           <span className="font-bold text-emerald-600">{row.presentDays}</span>
         ) : (
           0
@@ -124,7 +124,7 @@ export default function FieldAttendancePage() {
         range={r.range} setRange={r.setRange}
         dept={r.dept} setDept={r.setDept}
         unit={r.unit} setUnit={r.setUnit}
-        period={r.period} setPeriod={r.setPeriod}
+        period={r.period} setPeriod={r.setPeriod} defaultPeriod={r.defaultPeriod}
         departments={r.departments} units={r.units}
         loading={r.loading} onApply={r.handleApply} onClear={r.handleClearFilters}
         search={r.search} setSearch={r.setSearch}
