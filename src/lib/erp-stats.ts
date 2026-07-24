@@ -369,12 +369,16 @@ export function customerRevenueForMonth(
 
 export type SidebarBadgeMap = Record<string, { badge?: string; badgeAlert?: string }>;
 
-/**
- * `packagingCount` is passed in separately (not read from `data.PACKAGING`) because packaging
- * lives in its own collection/API, not the shared bootstrap payload — see usePackaging().
- */
-export function sidebarBadges(data: ErpData, packagingCount: number): SidebarBadgeMap {
-  const mismatch = invoiceMismatchCount(data.INVOICES);
+export function sidebarBadges(inputs: {
+  rawMaterials: ErpData["RAW_MATERIALS"];
+  packagingCount: number;
+  purchaseOrders: ErpData["PURCHASE_ORDERS"];
+  invoices: ErpData["INVOICES"];
+  orders: ErpData["ORDERS"];
+  dispatches: ErpData["DISPATCHES"];
+}): SidebarBadgeMap {
+  const { rawMaterials, packagingCount, purchaseOrders, invoices, orders, dispatches } = inputs;
+  const mismatch = invoiceMismatchCount(invoices);
   const map: SidebarBadgeMap = {};
 
   const setCount = (path: string, count: number, alert = false) => {
@@ -383,13 +387,13 @@ export function sidebarBadges(data: ErpData, packagingCount: number): SidebarBad
     else map[path] = { badge: String(count) };
   };
 
-  setCount("/inventory/raw-material", data.RAW_MATERIALS.length);
+  setCount("/inventory/raw-material", rawMaterials.length);
   setCount("/inventory/packaging", packagingCount);
-  setCount("/procurement/po", data.PURCHASE_ORDERS.length);
+  setCount("/procurement/po", purchaseOrders.length);
   if (mismatch > 0) setCount("/procurement/invoices", mismatch, true);
-  else setCount("/procurement/invoices", data.INVOICES.length);
-  setCount("/orders", openOrdersCount(data.ORDERS));
-  setCount("/dispatch", inTransitDispatchCount(data.DISPATCHES));
+  else setCount("/procurement/invoices", invoices.length);
+  setCount("/orders", openOrdersCount(orders));
+  setCount("/dispatch", inTransitDispatchCount(dispatches));
 
   return map;
 }

@@ -29,6 +29,8 @@ import StatCard, { ErpStatGrid, mapDashStatTone } from "@/components/common/Stat
 import dayjs from "dayjs";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
+import { useEmployees } from "@/hooks/use-employees";
+import { useCustomers } from "@/hooks/use-customers";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import { useOrders } from "@/hooks/use-orders";
 import { FormGrid, FormField, FormInput, FormSelect, EntityFormModal, requireFields, useFormState } from "@/components/forms";
@@ -546,8 +548,9 @@ const FieldSales = () => {
   const DATA = useDATA();
   const { append, saving, error, clearError } = useEntityMutation();
   const [planOpen, setPlanOpen] = useState(false);
-  const salesReps = DATA.EMPLOYEES.filter((e) => e.dept === "Sales");
-  const [planRep, setPlanRep] = useState(salesReps[0]?.name ?? "");
+  const { items: employees } = useEmployees();
+  const salesReps = employees.filter((e) => e.department === "Sales");
+  const [planRep, setPlanRep] = useState(salesReps[0]?.fullName ?? "");
   const [planDate, setPlanDate] = useState(new Date().toISOString().slice(0, 10));
   const [planTerritory, setPlanTerritory] = useState("Mumbai Metro");
   const [planVisits, setPlanVisits] = useState([
@@ -728,7 +731,7 @@ const FieldSales = () => {
         <FormGrid cols={3}>
           <FormField label="Rep">
             <FormSelect value={planRep} onChange={setPlanRep}>
-              {salesReps.map((e) => <option key={e.id} value={e.name}>{e.name}</option>)}
+              {salesReps.map((e) => <option key={e.employeeId} value={e.fullName}>{e.fullName}</option>)}
             </FormSelect>
           </FormField>
           <FormField label="Date">

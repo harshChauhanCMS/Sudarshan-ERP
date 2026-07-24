@@ -6,7 +6,10 @@ import React, { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import { Icon } from "./icons";
-import { useDATA } from "./data";
+import { useRawMaterials } from "@/hooks/use-raw-materials";
+import { useVendors } from "@/hooks/use-vendors";
+import { useEmployees } from "@/hooks/use-employees";
+import { useAttendanceToday } from "@/hooks/use-attendance-today";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import PageFilterPanel from "@/components/common/PageFilterPanel";
 import { Select, DatePicker, Input, message } from "antd";
@@ -14,7 +17,7 @@ import { downloadGenericTablePdf } from "@/lib/generic-table-pdf";
 import { filterBySearch } from "@/lib/filter-search";
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
-import { nextEmployeeId, formatDisplayDate } from "@/lib/id-generators";
+import { formatDisplayDate } from "@/lib/id-generators";
 import { DashHead, SectionH } from "./dashboards";
 
 /* ============================================================
@@ -36,37 +39,20 @@ import { usePackaging } from "@/hooks/use-packaging";
 
 
 const Employees = () => {
-  const DATA = useDATA();
-  const { append, saving, error, clearError } = useEntityMutation();
-  const [open, setOpen] = useState(false);
-  const empForm = useFormState({ name: "", role: "", dept: "Operations", since: String(new Date().getFullYear()) });
-
-  const saveEmployee = async () => {
-    const err = requireFields(empForm.values, ["name", "role"]);
-    if (err) throw new Error(err);
-    await append("employees", {
-      id: nextEmployeeId(DATA.EMPLOYEES),
-      name: empForm.values.name.trim(),
-      role: empForm.values.role.trim(),
-      dept: empForm.values.dept,
-      status: "active",
-      since: empForm.values.since,
-    });
-    setOpen(false);
-    empForm.reset({ name: "", role: "", dept: "Operations", since: String(new Date().getFullYear()) });
-  };
+  const router = useRouter();
+  const { items: employees } = useEmployees();
 
   const columns = [
-    { title: "Emp ID", dataIndex: "id", key: "id", render: (text) => <span className="mono strong">{text}</span> },
-    { title: "Name", dataIndex: "name", key: "name", render: (text, record, i) => (
+    { title: "Emp ID", dataIndex: "employeeId", key: "employeeId", render: (text) => <span className="mono strong">{text}</span> },
+    { title: "Name", dataIndex: "fullName", key: "fullName", render: (text, record, i) => (
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <AntAvatar style={{ backgroundColor: ["#f56a00", "#7265e6", "#ffbf00", "#00a2ae"][i % 4] }}>{text.charAt(0)}</AntAvatar>
         <div className="strong">{text}</div>
       </div>
     )},
-    { title: "Role", dataIndex: "role", key: "role" },
-    { title: "Department", dataIndex: "dept", key: "dept", render: (text) => <span className="muted">{text}</span> },
-    { title: "Joined", dataIndex: "since", key: "since", render: (text) => <span className="muted">{text}</span> },
+    { title: "Role", dataIndex: "designation", key: "designation" },
+    { title: "Department", dataIndex: "department", key: "department", render: (text) => <span className="muted">{text}</span> },
+    { title: "Joined", dataIndex: "dateOfJoining", key: "dateOfJoining", render: (text) => <span className="muted">{text}</span> },
     { title: "Reporting to", key: "reporting", render: (_, __, i) => <span className="muted">{i === 0 ? "—" : i < 3 ? "Rajiv Mehta" : "Priya Sharma"}</span> },
     { title: "Status", key: "status", render: () => <AntBadge status="success" text="Active" /> },
     { title: "Actions", key: "action", width: 72, align: "center", render: () => <ErpViewAction /> },
@@ -76,14 +62,14 @@ const Employees = () => {
     <>
       <DashHead title="Employees" sub="HR master across both companies">
         <AntButton size="small" icon={<ExportOutlined />}>Import</AntButton>
-        <AntButton type="primary" size="small" icon={<UserAddOutlined />} onClick={() => setOpen(true)}>Add employee</AntButton>
+        <AntButton type="primary" size="small" icon={<UserAddOutlined />} onClick={() => router.push("/hrms/employees/add")}>Add employee</AntButton>
       </DashHead>
 
       <ErpStatGrid cols={4}>
         <StatCard
           icon={TeamOutlined}
           label="Total headcount"
-          value={DATA.EMPLOYEES.length}
+          value={employees.length}
           hint="From database"
         />
         <StatCard
@@ -111,8 +97,8 @@ const Employees = () => {
       <div className="card">
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex" }}>
           <div className="tabs" style={{ border: "none", marginBottom: -1 }}>
-            <span className="tab active">All <span className="tab-count">{DATA.EMPLOYEES.length}</span></span>
-            <span className="tab">Active <span className="tab-count">{DATA.EMPLOYEES.length}</span></span>
+            <span className="tab active">All <span className="tab-count">{employees.length}</span></span>
+            <span className="tab">Active <span className="tab-count">{employees.length}</span></span>
             <span className="tab">Onboarding <span className="tab-count">2</span></span>
             <span className="tab">On leave <span className="tab-count">3</span></span>
           </div>
@@ -122,22 +108,9 @@ const Employees = () => {
           </div>
         </div>
         <div style={{ padding: 16 }}>
-          <CommonTable {...ERP_TABLE_PROPS} dataSource={DATA.EMPLOYEES} columns={columns} rowKey="id" />
+          <CommonTable {...ERP_TABLE_PROPS} dataSource={employees} columns={columns} rowKey="employeeId" />
         </div>
       </div>
-
-      <EntityFormModal open={open} onClose={() => setOpen(false)} title="Add employee" wide submitLabel="Create employee" saving={saving} error={error} onSubmit={saveEmployee}>
-        <FormGrid>
-          <FormField label="Full name"><FormInput value={empForm.values.name} onChange={(v) => empForm.setField("name", v)} /></FormField>
-          <FormField label="Role / designation"><FormInput value={empForm.values.role} onChange={(v) => empForm.setField("role", v)} /></FormField>
-          <FormField label="Department">
-            <FormSelect value={empForm.values.dept} onChange={(v) => empForm.setField("dept", v)}>
-              <option>Operations</option><option>Procurement</option><option>Production</option><option>Logistics</option><option>Sales</option><option>HR</option>
-            </FormSelect>
-          </FormField>
-          <FormField label="Joined year"><FormInput value={empForm.values.since} onChange={(v) => empForm.setField("since", v)} /></FormField>
-        </FormGrid>
-      </EntityFormModal>
     </>
   );
 };
@@ -146,32 +119,33 @@ const Employees = () => {
    ATTENDANCE
    ============================================================ */
 const Attendance = () => {
-  const DATA = useDATA();
+  const { items: employees } = useEmployees();
+  const { attendance, reload: reloadAttendance } = useAttendanceToday();
   const { update, saving, error, clearError } = useEntityMutation();
   const [applyLeave, setApplyLeave] = useState(false);
   const [leaveReason, setLeaveReason] = useState("");
 
   const submitLeave = async () => {
-    const att = DATA.ATTENDANCE_TODAY;
     await update("attendanceToday", "today", {
-      leave: (att.leave ?? 0) + 1,
-      present: Math.max(0, (att.present ?? 0) - 1),
+      leave: (attendance.leave ?? 0) + 1,
+      present: Math.max(0, (attendance.present ?? 0) - 1),
       lastLeaveNote: leaveReason || "Leave application",
       lastLeaveAt: formatDisplayDate(),
     });
+    await reloadAttendance();
     setApplyLeave(false);
     setLeaveReason("");
   };
 
   const columns = [
-    { title: "Emp ID", dataIndex: "id", key: "id", render: (text) => <span className="mono strong">{text}</span> },
-    { title: "Name", dataIndex: "name", key: "name", render: (text, record, i) => (
+    { title: "Emp ID", dataIndex: "employeeId", key: "employeeId", render: (text) => <span className="mono strong">{text}</span> },
+    { title: "Name", dataIndex: "fullName", key: "fullName", render: (text, record, i) => (
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <AntAvatar style={{ backgroundColor: ["#f56a00", "#7265e6", "#ffbf00", "#00a2ae"][i % 4] }}>{text.charAt(0)}</AntAvatar>
         {text}
       </div>
     )},
-    { title: "Department", dataIndex: "dept", key: "dept", render: (text) => <span className="muted">{text}</span> },
+    { title: "Department", dataIndex: "department", key: "department", render: (text) => <span className="muted">{text}</span> },
     { title: "Check-in", dataIndex: "in_", key: "in_", render: (text) => <span className="mono">{text}</span> },
     { title: "Check-out", dataIndex: "out", key: "out", render: (text) => <span className="mono subtle">{text}</span> },
     { title: "Worked", dataIndex: "w", key: "w", render: (text) => <span className="mono">{text}</span> },
@@ -186,7 +160,7 @@ const Attendance = () => {
     )},
   ];
 
-  const dataSource = DATA.EMPLOYEES.map((e, i) => {
+  const dataSource = employees.map((e, i) => {
     const states = [
       { in_: "08:54", out: "—",     w: "ongoing", late: "—",  st: "active",  late_: false },
       { in_: "09:02", out: "—",     w: "ongoing", late: "—",  st: "active",  late_: false },
@@ -214,34 +188,34 @@ const Attendance = () => {
         <StatCard
           icon={CheckCircleOutlined}
           label="Present today"
-          value={DATA.ATTENDANCE_TODAY.present}
-          hint={`${Math.round(DATA.ATTENDANCE_TODAY.present / DATA.ATTENDANCE_TODAY.total * 100)}% attendance`}
+          value={attendance.present}
+          hint={`${Math.round(attendance.present / attendance.total * 100)}% attendance`}
           hintTone="positive"
         />
         <StatCard
           icon={ClockCircleOutlined}
           label="Late comers"
-          value={DATA.ATTENDANCE_TODAY.late}
+          value={attendance.late}
           hint="3.9%"
           hintTone="warning"
         />
         <StatCard
           icon={CalendarOutlined}
           label="On leave"
-          value={DATA.ATTENDANCE_TODAY.leave}
+          value={attendance.leave}
           hint="11 sick · 7 planned"
         />
         <StatCard
           icon={CloseCircleOutlined}
           label="Absent"
-          value={DATA.ATTENDANCE_TODAY.absent}
+          value={attendance.absent}
           hint="Unscheduled"
           hintTone="negative"
         />
         <StatCard
           icon={EnvironmentOutlined}
           label="On field"
-          value={DATA.ATTENDANCE_TODAY.onField}
+          value={attendance.onField}
           hint="Sales reps"
           hintTone="accent"
         />
@@ -311,7 +285,7 @@ const Attendance = () => {
             {...ERP_TABLE_PROPS}
             columns={columns}
             dataSource={dataSource}
-            rowKey="id"
+            rowKey="employeeId"
           />
         </div>
       </div>
@@ -329,7 +303,7 @@ const Attendance = () => {
    PAYROLL
    ============================================================ */
 const Payroll = () => {
-  const DATA = useDATA();
+  const { items: employees } = useEmployees();
   const { update, saving, error, clearError } = useEntityMutation();
   const [openSlip, setOpenSlip] = useState(null);
   const [runOpen, setRunOpen] = useState(false);
@@ -343,7 +317,7 @@ const Payroll = () => {
     setRunOpen(false);
   };
 
-  const PAYROLL = DATA.EMPLOYEES.map((e, i) => {
+  const PAYROLL = employees.map((e, i) => {
     const ctcAnnual = [1800000, 1400000, 920000, 880000, 920000, 1280000, 1100000, 1080000, 680000, 540000][i];
     const monthly = Math.round(ctcAnnual / 12);
     const basic = Math.round(monthly * 0.5);
@@ -358,8 +332,8 @@ const Payroll = () => {
   const total = PAYROLL.reduce((s, p) => s + p.net, 0);
 
   const columns = [
-    { title: "Emp ID", dataIndex: "id", key: "id", render: (text) => <span className="mono strong">{text}</span> },
-    { title: "Name", dataIndex: "name", key: "name", render: (text, record, i) => (
+    { title: "Emp ID", dataIndex: "employeeId", key: "employeeId", render: (text) => <span className="mono strong">{text}</span> },
+    { title: "Name", dataIndex: "fullName", key: "fullName", render: (text, record, i) => (
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <AntAvatar style={{ backgroundColor: ["#f56a00", "#7265e6", "#ffbf00", "#00a2ae"][i % 4] }}>{text.charAt(0)}</AntAvatar>
         {text}
@@ -466,13 +440,13 @@ const Payroll = () => {
             {...ERP_TABLE_PROPS}
             dataSource={PAYROLL}
             columns={columns}
-            rowKey="id"
+            rowKey="employeeId"
             onRow={(record) => ({ onClick: () => setOpenSlip(record), style: { cursor: "pointer" } })}
           />
         </div>
       </div>
 
-      <Modal open={!!openSlip} onClose={() => setOpenSlip(null)} title="Payslip" sub={openSlip ? `${openSlip.name} · May 2026` : ""} wide
+      <Modal open={!!openSlip} onClose={() => setOpenSlip(null)} title="Payslip" sub={openSlip ? `${openSlip.fullName} · May 2026` : ""} wide
         footer={<>
           <AntButton icon={<DownloadOutlined />} onClick={() => setOpenSlip(null)}>Download PDF</AntButton>
           <AntButton icon={<MailOutlined />}>Email</AntButton>
@@ -498,8 +472,8 @@ const Payroll = () => {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, padding: "16px 0", borderBottom: "1px solid var(--border)" }}>
               <div>
                 <div style={{ fontSize: 10, color: "var(--fg-subtle)", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>Employee</div>
-                <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{openSlip.name}</div>
-                <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{openSlip.id} · {openSlip.role}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{openSlip.fullName}</div>
+                <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{openSlip.employeeId} · {openSlip.designation}</div>
               </div>
               <div>
                 <div style={{ fontSize: 10, color: "var(--fg-subtle)", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>Banking</div>
@@ -881,9 +855,9 @@ const ProfitReport = ({ periodLabel, registerExport }) => {
 };
 
 const InventoryReport = ({ periodLabel, registerExport }) => {
-  const DATA = useDATA();
+  const { items: rawMaterials } = useRawMaterials();
   const [search, setSearch] = useState("");
-  const inventoryRows = DATA.RAW_MATERIALS.map((r, i) => ({
+  const inventoryRows = rawMaterials.map((r, i) => ({
     ...r,
     classCode: i < 3 ? "A" : i < 7 ? "B" : "C",
     movementCode: i % 3 === 0 ? "fast" : i % 3 === 1 ? "medium" : "slow",
@@ -1135,9 +1109,9 @@ const DispatchReport = ({ periodLabel, registerExport }) => {
 };
 
 const VendorReport = ({ periodLabel, registerExport }) => {
-  const DATA = useDATA();
+  const { items: vendors } = useVendors();
   const [search, setSearch] = useState("");
-  const vendorRows = DATA.VENDORS.map((v, i) => ({
+  const vendorRows = vendors.map((v, i) => ({
     ...v,
     rowIndex: i,
     poMtd: Math.round(v.poCount / 6),

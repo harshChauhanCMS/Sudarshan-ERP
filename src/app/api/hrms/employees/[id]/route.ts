@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Employee from "@/lib/models/Employee";
+import { User } from "@/models/User";
 import {
   employeeUniqueConflictMessage,
   findEmployeeUniqueConflict,
@@ -9,6 +10,7 @@ import { assertEmployeeVisibleToViewer } from "@/lib/hr-staff-visibility";
 import { assertManagerCanAccessEmployee, isManagerRole } from "@/lib/manager-scope";
 import { canManageEmployees } from "@/lib/hrms-access";
 import { validateEmployeePayload } from "@/lib/hrms-validation";
+import { HR_EMPLOYEE_EXCLUDED_ROLE_KEYS } from "@/lib/hrms-employee-options";
 import {
   EMPLOYEE_WRITABLE_FIELDS,
   pickAllowedFields,
@@ -135,6 +137,24 @@ export async function PUT(
       { $set: payload },
       { new: true, runValidators: true }
     );
+
+    // Department doubles as the employee's login role — keep the linked
+    // User account's role in sync so an edit here doesn't leave them stuck
+    // with permissions from their old department (validateEmployeePayload
+    // above already blocks setting department TO owner/admin/master; the
+    // role filter below additionally protects any account that is ALREADY
+    // owner/admin/master from being silently downgraded by this sync, e.g.
+    // the seed owner employee's department is the cosmetic label
+    // "Leadership", not a real role key — never overwrite their role).
+    if (payload.department && payload.department !== employee.department) {
+      await User.updateOne(
+        {
+          employeeId: id,
+          role: { $nin: Array.from(HR_EMPLOYEE_EXCLUDED_ROLE_KEYS) },
+        },
+        { $set: { role: payload.department } },
+      );
+    }
 
     return NextResponse.json({ success: true, data: updatedEmployee });
   } catch (error: any) {

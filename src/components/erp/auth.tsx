@@ -3,7 +3,6 @@
 
 import React, { useState } from "react";
 import { Icon } from "./icons";
-import { useDATA } from "./data";
 import { Btn, Badge } from "./ui";
 
 /* ============================================================
@@ -475,14 +474,11 @@ const CompanySelect = ({
   companies: companiesProp,
   dataWarning,
 }) => {
-  const DATA = useDATA();
-  const companies = companiesProp ?? DATA.COMPANIES;
+  const companies = companiesProp ?? [];
   const [hover, setHover] = useState(null);
-  const roleLabel =
-    DATA.ROLES.find((r) => r.key === userRole)?.label ??
-    (userRole
-      ? userRole.charAt(0).toUpperCase() + userRole.slice(1)
-      : null);
+  const roleLabel = userRole
+    ? userRole.charAt(0).toUpperCase() + userRole.slice(1)
+    : null;
   const signedInLine = [userEmail || "rajiv@sudarshan.co.in", roleLabel]
     .filter(Boolean)
     .join(" · ");

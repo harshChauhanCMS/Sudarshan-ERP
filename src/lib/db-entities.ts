@@ -45,8 +45,6 @@ const KEY_MAP: Record<Exclude<keyof ErpData, "USERS">, string> = {
   INVOICES: "invoices",
   DISPATCHES: "dispatches",
   EMPLOYEES: "employees",
-  PERMISSIONS: "permissions",
-  ROLES: "roles",
   NOTIFS: "notifications",
   REVENUE_DATA: "revenueData",
   PRODUCTION_DATA: "productionData",
@@ -58,6 +56,22 @@ const REVERSE_KEY_MAP: Record<string, keyof ErpData> = Object.fromEntries(
   Object.entries(KEY_MAP).map(([field, key]) => [key, field as keyof ErpData])
 ) as Record<string, keyof ErpData>;
 
+// Items are always appended to the end (see appendEntityItem), so the stored
+// array is oldest-first. Reverse on read so tables show newest-created-first.
+// Time-series/chart data is excluded — those arrays are meant to stay
+// chronological (oldest-to-newest) for correct chart rendering. Mongoose-
+// model-backed entities are excluded too — they already come pre-sorted
+// (createdAt desc) from their own service, so reversing again would flip
+// them back to oldest-first.
+const CHRONOLOGICAL_KEYS = new Set(["revenueData", "productionData"]);
+const MODEL_BACKED_KEYS = new Set(["rawMaterials", "packaging", "spareParts", "vendors"]);
+
+function orderedItems(key: string, items: unknown[] | undefined): unknown[] {
+  const list = items ?? [];
+  if (CHRONOLOGICAL_KEYS.has(key) || MODEL_BACKED_KEYS.has(key)) return list;
+  return [...list].reverse();
+}
+
 function docToField(
   doc: { key: string; items?: unknown[]; meta?: unknown }
 ): Partial<ErpData> {
@@ -68,7 +82,7 @@ function docToField(
   if (field === "ATTENDANCE_TODAY") {
     return { ATTENDANCE_TODAY: (doc.meta ?? EMPTY_ERP_DATA.ATTENDANCE_TODAY) as ErpData["ATTENDANCE_TODAY"] };
   }
-  return { [field]: (doc.items ?? []) } as Partial<ErpData>;
+  return { [field]: orderedItems(doc.key, doc.items) } as Partial<ErpData>;
 }
 
 /** Load ERP entities from MongoDB only — never injects in-memory seed data. */
@@ -291,6 +305,15 @@ export async function removeEntityItem(
   const next = items.filter((item) => !matchItem(item, field, id));
   if (next.length === items.length) throw new Error(`Record not found: ${id}`);
   await upsertEntity(key, next);
+}
+
+/**
+ * Newest-first view of a generic entity list for display purposes. Not used
+ * internally by append/update/remove — those need the raw stored (oldest-
+ * first) order so appending to the end keeps building storage correctly.
+ */
+export function displayOrderedItems(key: string, items: unknown[]): unknown[] {
+  return orderedItems(key, items);
 }
 
 export { KEY_MAP };

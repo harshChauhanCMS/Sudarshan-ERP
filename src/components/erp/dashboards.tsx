@@ -30,6 +30,15 @@ import { AddDriverModal } from "@/components/dispatch/add-driver-modal";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { usePackaging } from "@/hooks/use-packaging";
+import { useSpareParts } from "@/hooks/use-spare-parts";
+import { useRawMaterials } from "@/hooks/use-raw-materials";
+import { useOrders } from "@/hooks/use-orders";
+import { useEmployees } from "@/hooks/use-employees";
+import { useFieldVisits } from "@/hooks/use-field-visits";
+import { useCompanies } from "@/hooks/use-companies";
+import { useRevenueData } from "@/hooks/use-revenue-data";
+import { useAttendanceToday } from "@/hooks/use-attendance-today";
+import { useCustomers } from "@/hooks/use-customers";
 import { useOwnerDashboard } from "@/hooks/use-owner-dashboard";
 import { useProductionDashboard } from "@/hooks/use-production-dashboard";
 import {
@@ -52,7 +61,6 @@ import {
   grossMarginPct,
   grossProfitRupees,
   topCustomerNames,
-  fieldVisitsTodayCount,
   dispatchesForPlant,
 } from "@/lib/erp-stats";
 import { DASHBOARD_AVATARS, OWNER_BANNER_AVATARS, ADMIN_BANNER_AVATARS, bannerAvatarSrc } from "@/lib/dashboard-banner-avatars";
@@ -558,33 +566,48 @@ const MasterListRow = ({ label, value, pillTone }) => (
   </li>
 );
 
+function fieldVisitsTodayCountFromView(visits) {
+  const todayIso = new Date().toISOString().slice(0, 10);
+  return visits.filter(
+    (v) => v.status === "in-progress" || v.visitDate === todayIso
+  ).length;
+}
+
 /* ============================================================
    MASTER DASHBOARD — group view
    ============================================================ */
 const MasterDashboard = ({ navigate }) => {
   const DATA = useDATA();
+  const { companies } = useCompanies();
   const { items: packagingItems } = usePackaging();
-  const rev = revenueLakhsFromSeries(DATA.REVENUE_DATA);
-  const revenueRupees = revenueMtdRupees(DATA.REVENUE_DATA);
-  const attendance = DATA.ATTENDANCE_TODAY;
+  const { items: spareParts } = useSpareParts();
+  const { items: rawMaterials } = useRawMaterials();
+  const { orders } = useOrders();
+  const { items: employees } = useEmployees();
+  const { visits: fieldVisits } = useFieldVisits();
+  const { revenueData } = useRevenueData();
+  const { attendance } = useAttendanceToday();
+  const { customers } = useCustomers();
+  const rev = revenueLakhsFromSeries(revenueData);
+  const revenueRupees = revenueMtdRupees(revenueData);
   const presentToday =
-    attendance.total > 0 ? attendance.present : DATA.EMPLOYEES.length;
+    attendance.total > 0 ? attendance.present : employees.length;
   const totalEmployees =
-    attendance.total > 0 ? attendance.total : DATA.EMPLOYEES.length;
+    attendance.total > 0 ? attendance.total : employees.length;
   const prodToday = productionDayActual(DATA.PRODUCTION_DATA);
   const prodWeek = productionWeekTotals(DATA.PRODUCTION_DATA);
-  const activeJobs = activeProductionJobs(DATA.ORDERS);
+  const activeJobs = activeProductionJobs(orders);
   const batchCount = Math.max(activeJobs, DATA.PRODUCTION_DATA.length);
   const dispatchesDue = activeDispatches(DATA.DISPATCHES);
-  const overdueDispatches = overdueOpenOrders(DATA.ORDERS);
+  const overdueDispatches = overdueOpenOrders(orders);
   const dispatchCounts = dispatchStatusCounts(DATA.DISPATCHES);
-  const rmLow = lowStockCount(DATA.RAW_MATERIALS);
+  const rmLow = lowStockCount(rawMaterials);
   const packLow = lowStockCount(packagingItems);
-  const spareRisk = lowStockCount(DATA.SPARE_PARTS);
+  const spareRisk = lowStockCount(spareParts);
   const pendingInvoices = pendingInvoiceVerifications(DATA.INVOICES);
   const mineralsDispatch = dispatchesForPlant(DATA.DISPATCHES, "udaipur");
   const micronsDispatch = dispatchesForPlant(DATA.DISPATCHES, "ahmedabad");
-  const fieldToday = fieldVisitsTodayCount(DATA.FIELD_VISITS);
+  const fieldToday = fieldVisitsTodayCountFromView(fieldVisits);
   const grossProfit = grossProfitRupees(revenueRupees);
   const prodTargetToday =
     DATA.PRODUCTION_DATA.length > 0
@@ -595,7 +618,7 @@ const MasterDashboard = ({ navigate }) => {
     prodTargetToday > 0
       ? Math.round((prodToday / prodTargetToday) * 100)
       : null;
-  const lowRmNames = DATA.RAW_MATERIALS.filter(
+  const lowRmNames = rawMaterials.filter(
     (r) => r.status === "low" || r.status === "critical",
   )
     .slice(0, 3)
@@ -710,7 +733,7 @@ const MasterDashboard = ({ navigate }) => {
             />
             <MasterListRow
               label="Key customers"
-              value={topCustomerNames(DATA.CUSTOMERS)}
+              value={topCustomerNames(customers)}
             />
           </MasterListCard>
         </div>
@@ -719,11 +742,11 @@ const MasterDashboard = ({ navigate }) => {
         <div className="master-two-col">
           <MasterListCard title="Company overview">
             <MasterListRow
-              label={DATA.COMPANIES[0]?.name ?? "Sudarshan Minerals"}
+              label={companies[0]?.name ?? "Sudarshan Minerals"}
               value={`Sales: ${formatLakhs(rev.smi)} · Dispatches today: ${mineralsDispatch.due} · RM alerts: ${rmLow}`}
             />
             <MasterListRow
-              label={DATA.COMPANIES[1]?.name ?? "Sudarshan Microns"}
+              label={companies[1]?.name ?? "Sudarshan Microns"}
               value={`Sales: ${formatLakhs(rev.smic)} · Dispatches today: ${micronsDispatch.due} · Overdue: ${micronsDispatch.overdue}`}
             />
           </MasterListCard>
@@ -733,7 +756,7 @@ const MasterDashboard = ({ navigate }) => {
           >
             <MasterListRow
               label="Total users"
-              value={String(DATA.EMPLOYEES.length)}
+              value={String(employees.length)}
             />
             <MasterListRow label="Present today" value={String(presentToday)} />
             <MasterListRow
@@ -839,8 +862,8 @@ const MasterDashboard = ({ navigate }) => {
             />
             <MasterListRow
               label="Key visits"
-              value={DATA.FIELD_VISITS.slice(0, 6)
-                .map((v) => v.customer.split(" ")[0])
+              value={fieldVisits.slice(0, 6)
+                .map((v) => v.partyName.split(" ")[0])
                 .join(", ")}
             />
           </MasterListCard>
@@ -856,7 +879,7 @@ const MasterDashboard = ({ navigate }) => {
             />
             <MasterListRow
               label="Top customers (MTD)"
-              value={topCustomerNames(DATA.CUSTOMERS)}
+              value={topCustomerNames(customers)}
             />
           </MasterListCard>
         </div>
@@ -935,15 +958,21 @@ const AdminWidget = ({ title, icon, badge, children }) => (
 
 const AdminDashboard = ({ navigate }) => {
   const DATA = useDATA();
+  const { companies } = useCompanies();
   const { items: packagingItems } = usePackaging();
-  const attendance = DATA.ATTENDANCE_TODAY;
+  const { items: spareParts } = useSpareParts();
+  const { items: rawMaterials } = useRawMaterials();
+  const { orders } = useOrders();
+  const { items: employees } = useEmployees();
+  const { visits: fieldVisits } = useFieldVisits();
+  const { attendance } = useAttendanceToday();
   const totalUsers =
-    attendance.total > 0 ? attendance.total : DATA.EMPLOYEES.length;
+    attendance.total > 0 ? attendance.total : employees.length;
   const presentToday =
-    attendance.total > 0 ? attendance.present : DATA.EMPLOYEES.length;
-  const rmLow = lowStockCount(DATA.RAW_MATERIALS);
+    attendance.total > 0 ? attendance.present : employees.length;
+  const rmLow = lowStockCount(rawMaterials);
   const packLow = lowStockCount(packagingItems);
-  const spareLow = lowStockCount(DATA.SPARE_PARTS);
+  const spareLow = lowStockCount(spareParts);
   const lowStockTotal = rmLow + packLow + spareLow;
   const pendingInvoices = pendingInvoiceVerifications(DATA.INVOICES);
   const mismatchInvoices = useMemo(
@@ -954,12 +983,12 @@ const AdminDashboard = ({ navigate }) => {
     (s, i) => s + (Number(i.invAmt) || 0),
     0,
   );
-  const dispatchDelays = overdueOpenOrders(DATA.ORDERS);
+  const dispatchDelays = overdueOpenOrders(orders);
   const mineralsDispatch = dispatchesForPlant(DATA.DISPATCHES, "udaipur");
   const micronsDispatch = dispatchesForPlant(DATA.DISPATCHES, "ahmedabad");
   const waTasks = pendingPoCount(DATA.PURCHASE_ORDERS);
 
-  const lowRmLabels = DATA.RAW_MATERIALS.filter(
+  const lowRmLabels = rawMaterials.filter(
     (r) => r.status === "low" || r.status === "critical",
   )
     .slice(0, 3)
@@ -970,7 +999,7 @@ const AdminDashboard = ({ navigate }) => {
     .slice(0, 2)
     .map((p) => p.name.split(" · ")[0])
     .join(", ");
-  const lowSpareLabels = DATA.SPARE_PARTS.filter(
+  const lowSpareLabels = spareParts.filter(
     (s) => s.status === "low" || s.status === "critical",
   )
     .slice(0, 2)
@@ -1068,13 +1097,13 @@ const AdminDashboard = ({ navigate }) => {
         when: dsp.lastUpdate,
       });
     }
-    const emp = DATA.EMPLOYEES[1];
+    const emp = employees[1];
     if (emp) {
       rows.push({
-        key: emp.id,
+        key: emp.employeeId,
         type: "User",
         tone: "default",
-        record: `${emp.name} — Role: ${emp.role}`,
+        record: `${emp.fullName} — Role: ${emp.designation}`,
         by: "System",
         when: "May 21, 08:55",
       });
@@ -1091,7 +1120,7 @@ const AdminDashboard = ({ navigate }) => {
         when: inv.invDate,
       });
     }
-    const order = DATA.ORDERS[0];
+    const order = orders[0];
     if (order) {
       rows.push({
         key: order.id,
@@ -1111,17 +1140,17 @@ const AdminDashboard = ({ navigate }) => {
       when: "May 21, 15:30",
     });
     return rows;
-  }, [DATA]);
+  }, [DATA, orders, employees]);
 
   const fieldAlerts = useMemo(() => {
-    const fromVisits = DATA.FIELD_VISITS.slice(0, 2).map((v) => ({
+    const fromVisits = fieldVisits.slice(0, 2).map((v) => ({
       icon: "pin",
       tone: "primary",
       text: (
         <>
-          <strong>{v.rep}</strong> —{" "}
+          <strong>{v.assignedEmployeeName}</strong> —{" "}
           {v.status === "completed" ? "Visit logged" : "Check-in"} at{" "}
-          {v.customer}. {v.ts}.
+          {v.partyName}. {v.startTime}.
         </>
       ),
     }));
@@ -1138,7 +1167,7 @@ const AdminDashboard = ({ navigate }) => {
         ),
       },
     ];
-  }, [DATA.FIELD_VISITS]);
+  }, [fieldVisits]);
 
   const dispatchDelayAlerts = useMemo(() => {
     const alerts = DATA.DISPATCHES.filter(
@@ -1196,14 +1225,14 @@ const AdminDashboard = ({ navigate }) => {
 
       <AdminEyebrow>Current company</AdminEyebrow>
       <div className="admin-company-overview">
-        {DATA.COMPANIES[0] ? (
+        {companies[0] ? (
           <AdminCompanyCard
-            company={DATA.COMPANIES[0]}
+            company={companies[0]}
             accent="primary"
             metrics={[
               {
                 label: "Active users",
-                value: DATA.COMPANIES[0].employees ?? "—",
+                value: companies[0].employees ?? "—",
               },
               {
                 label: "RM alerts",
@@ -1215,14 +1244,14 @@ const AdminDashboard = ({ navigate }) => {
             ]}
           />
         ) : null}
-        {DATA.COMPANIES[1] ? (
+        {companies[1] ? (
           <AdminCompanyCard
-            company={DATA.COMPANIES[1]}
+            company={companies[1]}
             accent="gold"
             metrics={[
               {
                 label: "Active users",
-                value: DATA.COMPANIES[1].employees ?? "—",
+                value: companies[1].employees ?? "—",
               },
               {
                 label: "Pack alerts",
@@ -1443,7 +1472,7 @@ const AdminDashboard = ({ navigate }) => {
             </div>
             <div className="admin-attendance-box field">
               <div className="admin-attendance-box__n">
-                {attendance.onField || fieldVisitsTodayCount(DATA.FIELD_VISITS)}
+                {attendance.onField || fieldVisitsTodayCountFromView(fieldVisits)}
               </div>
               <div className="admin-attendance-box__l">In field</div>
             </div>

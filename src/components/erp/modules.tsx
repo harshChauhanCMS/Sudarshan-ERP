@@ -22,6 +22,9 @@ import { nextDispatchId, formatDisplayDate } from "@/lib/id-generators";
 import { buildInventoryItemDetailView } from "@/lib/inventory-mobile";
 import { downloadCsv } from "@/lib/download-csv";
 import { DashHead, SectionH } from "./dashboards";
+import { useRawMaterials } from "@/hooks/use-raw-materials";
+import { useVendors } from "@/hooks/use-vendors";
+import { useOrders } from "@/hooks/use-orders";
 
 function detailGrid(fields) {
   return (
@@ -41,27 +44,6 @@ function detailGrid(fields) {
       ))}
     </div>
   );
-}
-
-function vendorDetailFields(v) {
-  return [
-    { label: "Vendor ID", value: v.id },
-    { label: "Name", value: v.name },
-    { label: "City", value: v.city },
-    { label: "Category", value: v.category },
-    { label: "Rating", value: String(v.rating) },
-    { label: "POs YTD", value: String(v.poCount) },
-    { label: "YTD spend", value: fmtINR(v.ytd) },
-    { label: "Contact", value: v.contactPerson || "—" },
-    { label: "Phone", value: v.phone || "—" },
-    { label: "Email", value: v.email || "—" },
-    { label: "GSTIN", value: v.gstin || "—" },
-    { label: "Address", value: v.address || "—" },
-    { label: "Materials supplied", value: v.materialsSupplied || "—" },
-    { label: "Payment terms", value: v.paymentTerms ? `${v.paymentTerms} days` : "—" },
-    { label: "Lead time", value: v.leadTime != null ? `${v.leadTime} days` : "—" },
-    { label: "Status", value: v.status || "active" },
-  ];
 }
 
 function poDetailFields(po) {
@@ -149,6 +131,7 @@ const RawMaterialInventory = () => {
   const router = useRouter();
   const DATA = useDATA();
   const { refresh } = useErpData();
+  const { items: rawMaterials, reload: reloadRawMaterials } = useRawMaterials();
   const [viewItem, setViewItem] = useState(null);
   const [deletingCode, setDeletingCode] = useState(null);
 
@@ -162,6 +145,7 @@ const RawMaterialInventory = () => {
       if (json.error) throw new Error(json.error);
       message.success("Raw material deleted.");
       await refresh();
+      await reloadRawMaterials();
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Delete failed");
     } finally {
@@ -179,7 +163,7 @@ const RawMaterialInventory = () => {
   const [statusFilter, setStatusFilter] = useState("all");
 
   const filteredMaterials = useMemo(() => {
-    return DATA.RAW_MATERIALS.filter((r) => {
+    return rawMaterials.filter((r) => {
       if (categoryFilter !== "all" && r.category !== categoryFilter) return false;
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (search) {
@@ -190,11 +174,11 @@ const RawMaterialInventory = () => {
       }
       return true;
     });
-  }, [DATA.RAW_MATERIALS, search, categoryFilter, statusFilter]);
+  }, [rawMaterials, search, categoryFilter, statusFilter]);
 
-  const totalValue = DATA.RAW_MATERIALS.reduce((s, r) => s + r.value, 0);
-  const lowCount = DATA.RAW_MATERIALS.filter(r => r.status === "low").length;
-  const critCount = DATA.RAW_MATERIALS.filter(r => r.status === "critical").length;
+  const totalValue = rawMaterials.reduce((s, r) => s + r.value, 0);
+  const lowCount = rawMaterials.filter(r => r.status === "low").length;
+  const critCount = rawMaterials.filter(r => r.status === "critical").length;
 
   const columns = useMemo(
     () => [
@@ -283,7 +267,7 @@ const RawMaterialInventory = () => {
         <StatCard
           icon={AppstoreOutlined}
           label="Total SKUs"
-          value={DATA.RAW_MATERIALS.length}
+          value={rawMaterials.length}
           hint="6 minerals · 4 chemicals"
         />
         <StatCard
@@ -424,10 +408,10 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
   const router = useRouter();
   const DATA = useDATA();
   const { refresh } = useErpData();
+  const { items: vendors } = useVendors();
   const { user } = useSessionUser();
   const canApprovePo = isAdminOrOwner(user?.role);
   const [tab, setTab] = useState(defaultTab);
-  const [viewVendor, setViewVendor] = useState(null);
   const [viewPo, setViewPo] = useState(null);
   const [poActionId, setPoActionId] = useState(null);
 
@@ -460,7 +444,7 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
   );
 
   const filteredVendors = useMemo(() => {
-    return DATA.VENDORS.filter(v => {
+    return vendors.filter(v => {
       if (vendorRatingFilter === "4.5" && parseFloat(v.rating) < 4.5) return false;
       if (vendorRatingFilter === "4.0" && parseFloat(v.rating) < 4.0) return false;
       if (vendorSearch) {
@@ -469,7 +453,7 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       }
       return true;
     });
-  }, [DATA.VENDORS, vendorSearch, vendorRatingFilter]);
+  }, [vendors, vendorSearch, vendorRatingFilter]);
 
   const filteredPos = useMemo(() => {
     return DATA.PURCHASE_ORDERS.filter(p => {
@@ -557,11 +541,16 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       {
         title: "Actions",
         key: "actions",
-        width: 88,
+        width: 112,
         align: "center",
         render: (_, row) => (
           <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
-            <ErpViewAction label="View vendor" onClick={() => setViewVendor(row)} />
+            <ViewEditActions
+              viewHref={`/procurement/vendors/${row.id}`}
+              editHref={`/procurement/vendors/${row.id}/edit`}
+              viewLabel="View vendor"
+              editLabel="Edit vendor"
+            />
             <TableActionIcon
               icon={<DownloadOutlined />}
               label="Download vendor"
@@ -666,7 +655,7 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         <StatCard
           icon={TeamOutlined}
           label="Active vendors"
-          value={DATA.VENDORS.length}
+          value={vendors.length}
           hint="2 added this month"
         />
         <StatCard
@@ -696,7 +685,7 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
           <div className="tabs" style={{ border: "none", marginBottom: -1 }}>
             <span className={`tab ${tab === "vendors" ? "active" : ""}`} onClick={() => setTab("vendors")}>
-              Vendors <span className="tab-count">{DATA.VENDORS.length}</span>
+              Vendors <span className="tab-count">{vendors.length}</span>
             </span>
             <span className={`tab ${tab === "po" ? "active" : ""}`} onClick={() => setTab("po")}>
               Purchase Orders <span className="tab-count">{DATA.PURCHASE_ORDERS.length}</span>
@@ -784,20 +773,6 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       </div>
 
       <Modal
-        open={!!viewVendor}
-        onClose={() => setViewVendor(null)}
-        title={viewVendor?.name ?? "Vendor"}
-        sub={viewVendor ? `${viewVendor.id} · ${viewVendor.category}` : ""}
-        footer={
-          <Btn variant="ghost" onClick={() => setViewVendor(null)}>
-            Close
-          </Btn>
-        }
-      >
-        {viewVendor ? detailGrid(vendorDetailFields(viewVendor)) : null}
-      </Modal>
-
-      <Modal
         open={!!viewPo}
         onClose={() => setViewPo(null)}
         title={viewPo ? `Purchase order ${viewPo.id}` : "Purchase order"}
@@ -826,11 +801,12 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
    ============================================================ */
 const DispatchTracking = () => {
   const DATA = useDATA();
+  const { orders } = useOrders();
   const { append, saving, error, clearError } = useEntityMutation();
   const [openTrack, setOpenTrack] = useState(null);
   const [planOpen, setPlanOpen] = useState(false);
   const dispatchForm = useFormState({
-    orderId: DATA.ORDERS[0]?.id ?? "",
+    orderId: orders[0]?.id ?? "",
     dispatchId: nextDispatchId(DATA.DISPATCHES),
     vehicle: "RJ-27-GH-4521",
     driver: "Ramesh Kumar",
@@ -840,7 +816,7 @@ const DispatchTracking = () => {
   });
 
   const scheduleDispatch = async () => {
-    const order = DATA.ORDERS.find((o) => o.id === dispatchForm.values.orderId);
+    const order = orders.find((o) => o.id === dispatchForm.values.orderId);
     await append("dispatches", {
       id: dispatchForm.values.dispatchId || nextDispatchId(DATA.DISPATCHES),
       vehicle: dispatchForm.values.vehicle,
@@ -1112,7 +1088,7 @@ const DispatchTracking = () => {
         <FormGrid>
           <FormField label="Sales order">
             <FormSelect value={dispatchForm.values.orderId} onChange={(v) => dispatchForm.setField("orderId", v)}>
-              {DATA.ORDERS.map((o) => <option key={o.id} value={o.id}>{o.id} · {o.customer}</option>)}
+              {orders.map((o) => <option key={o.id} value={o.id}>{o.id} · {o.customer}</option>)}
             </FormSelect>
           </FormField>
           <FormField label="Dispatch #"><FormInput value={dispatchForm.values.dispatchId} onChange={(v) => dispatchForm.setField("dispatchId", v)} /></FormField>

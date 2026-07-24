@@ -95,7 +95,7 @@ async function generateSparePartCode(): Promise<string> {
 export async function listSpareParts(): Promise<SparePart[]> {
   await connectDB();
   await migrateLegacyIfEmpty();
-  const docs = await SparePartModel.find({}).sort({ name: 1 }).lean();
+  const docs = await SparePartModel.find({}).sort({ createdAt: -1 }).lean();
   return (docs as unknown as SparePartDoc[]).map(toDTO);
 }
 

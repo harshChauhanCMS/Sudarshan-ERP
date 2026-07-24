@@ -238,8 +238,6 @@ export type EntityKey =
   | "invoices"
   | "dispatches"
   | "employees"
-  | "permissions"
-  | "roles"
   | "notifications"
   | "revenueData"
   | "productionData"

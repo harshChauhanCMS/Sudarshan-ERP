@@ -6,9 +6,10 @@ import { message } from "antd";
 import { Icon } from "@/components/erp/icons";
 import { Btn } from "@/components/erp/ui";
 import { DashHead } from "@/components/erp/dashboards";
-import { useDATA } from "@/components/erp/data";
 import { useErpData } from "@/context/erp-data-provider";
 import { useFormState } from "@/components/forms";
+import { useRawMaterials } from "@/hooks/use-raw-materials";
+import { useVendors } from "@/hooks/use-vendors";
 
 const CATEGORY_LABELS: Record<string, string> = {
   minerals: "Minerals",
@@ -50,8 +51,9 @@ export default function RawMaterialMasterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editCode = searchParams.get("code")?.trim() ?? "";
-  const DATA = useDATA();
   const { refresh } = useErpData();
+  const { items: rawMaterials, reload: reloadRawMaterials } = useRawMaterials();
+  const { items: vendors } = useVendors();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const form = useFormState(INITIAL);
@@ -59,11 +61,11 @@ export default function RawMaterialMasterPage() {
   const editing = useMemo(
     () =>
       editCode
-        ? DATA.RAW_MATERIALS.find(
+        ? rawMaterials.find(
             (r) => r.code.toLowerCase() === editCode.toLowerCase()
           ) ?? null
         : null,
-    [DATA.RAW_MATERIALS, editCode]
+    [rawMaterials, editCode]
   );
 
   useEffect(() => {
@@ -73,7 +75,7 @@ export default function RawMaterialMasterPage() {
       router.replace("/inventory/raw-material");
       return;
     }
-    const vendor = DATA.VENDORS.find((v) => v.name === editing.preferredVendor);
+    const vendor = vendors.find((v) => v.name === editing.preferredVendor);
     form.setValues({
       materialName: editing.name,
       materialCode: editing.code,
@@ -90,8 +92,8 @@ export default function RawMaterialMasterPage() {
   }, [editCode, editing?.code]);
 
   const recentMaterials = useMemo(
-    () => [...DATA.RAW_MATERIALS].slice(-6).reverse(),
-    [DATA.RAW_MATERIALS]
+    () => [...rawMaterials].slice(-6).reverse(),
+    [rawMaterials]
   );
 
   const validate = (): string | null => {
@@ -104,7 +106,7 @@ export default function RawMaterialMasterPage() {
       return "Material code must be alphanumeric (hyphens allowed).";
     }
     if (
-      DATA.RAW_MATERIALS.some(
+      rawMaterials.some(
         (r) =>
           r.code.toLowerCase() === code.toLowerCase() &&
           r.code.toLowerCase() !== editing?.code.toLowerCase()
@@ -142,7 +144,7 @@ export default function RawMaterialMasterPage() {
     const minStock = form.values.minStock.trim()
       ? parseFloat(form.values.minStock)
       : 0;
-    const vendor = DATA.VENDORS.find((v) => v.id === form.values.preferredVendor);
+    const vendor = vendors.find((v) => v.id === form.values.preferredVendor);
 
     setSaving(true);
     try {
@@ -162,6 +164,7 @@ export default function RawMaterialMasterPage() {
           editing.code,
         );
         await refresh();
+        await reloadRawMaterials();
         message.success("Raw material updated.");
         if (!addAnother) {
           router.push("/inventory/raw-material");
@@ -182,6 +185,7 @@ export default function RawMaterialMasterPage() {
         notes: form.values.notes.trim(),
       });
       await refresh();
+      await reloadRawMaterials();
 
       message.success("Raw material master saved.");
 
@@ -348,7 +352,7 @@ export default function RawMaterialMasterPage() {
                       }
                     >
                       <option value="">Select vendor</option>
-                      {DATA.VENDORS.map((v) => (
+                      {vendors.map((v) => (
                         <option key={v.id} value={v.id}>
                           {v.name}
                         </option>
