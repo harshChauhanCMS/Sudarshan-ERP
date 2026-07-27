@@ -22,6 +22,7 @@ import CommonTable, {
 import ReportSection from "@/components/hrms/ReportSection";
 import { useEmployeeAttendanceReport } from "@/hooks/use-employee-attendance-report";
 import { downloadEmployeeAttendanceReportPdf } from "@/lib/employee-attendance-report-pdf";
+import { formatWorkedDuration } from "@/lib/format-duration";
 import type { EmployeeDailyReportRow } from "@/lib/employee-attendance-report";
 
 type Props = {
@@ -145,11 +146,11 @@ export default function EmployeeAttendanceReportView({
         ),
       },
       {
-        title: "Worked (h)",
+        title: "Worked",
         dataIndex: "workedHours",
         key: "worked",
         width: 96,
-        render: (v: number) => v.toFixed(2),
+        render: (v: number) => formatWorkedDuration(v),
       },
       {
         title: "Attendance",

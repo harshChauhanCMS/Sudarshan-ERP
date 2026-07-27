@@ -14,6 +14,7 @@ import AttendanceFilterPanel, {
 import { TableActionIcon } from "@/components/common/TableActionIcons";
 import { useAttendanceReport, type AttendanceDailyRow } from "@/hooks/use-attendance-report";
 import { downloadDailyAttendanceReportPdf } from "@/lib/daily-attendance-report-pdf";
+import { formatWorkedDuration } from "@/lib/format-duration";
 
 function buildEmployeeReportHref(employeeId: string) {
   const params = new URLSearchParams({
@@ -143,11 +144,11 @@ export default function DailyAttendancePage() {
       ),
     },
     {
-      title: "Worked (h)",
+      title: "Worked",
       dataIndex: "workedHours",
       key: "worked",
       width: 100,
-      render: (v: number) => v.toFixed(2),
+      render: (v: number) => formatWorkedDuration(v),
     },
     {
       title: "Status",

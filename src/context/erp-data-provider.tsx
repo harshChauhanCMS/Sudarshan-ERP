@@ -20,6 +20,8 @@ type ErpDataContextValue = {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  /** Triggers the initial /api/bootstrap fetch on first real consumption. */
+  ensureLoaded: () => void;
 };
 
 const ErpDataContext = createContext<ErpDataContextValue | null>(null);
@@ -36,6 +38,7 @@ export function ErpDataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const hasLoadedRef = useRef(false);
+  const hasRequestedRef = useRef(false);
 
   const refresh = useCallback(async () => {
     if (!hasLoadedRef.current) setLoading(true);
@@ -56,13 +59,18 @@ export function ErpDataProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
-    refresh();
+  // Lazy: do NOT fetch on mount. Only fetch when a component actually consumes
+  // the data via useErpData()/useDATA(). Pages fully migrated to dedicated APIs
+  // (e.g. HRMS salary) therefore never trigger /api/bootstrap.
+  const ensureLoaded = useCallback(() => {
+    if (hasRequestedRef.current) return;
+    hasRequestedRef.current = true;
+    void refresh();
   }, [refresh]);
 
   const value = useMemo(
-    () => ({ data, meta, loading, error, refresh }),
-    [data, meta, loading, error, refresh]
+    () => ({ data, meta, loading, error, refresh, ensureLoaded }),
+    [data, meta, loading, error, refresh, ensureLoaded]
   );
 
   return (
@@ -72,6 +80,10 @@ export function ErpDataProvider({ children }: { children: ReactNode }) {
 
 export function useErpData() {
   const ctx = useContext(ErpDataContext);
+  // Kick off the lazy bootstrap fetch the first time this data is consumed.
+  useEffect(() => {
+    ctx?.ensureLoaded();
+  }, [ctx]);
   if (!ctx) {
     throw new Error("useErpData must be used within ErpDataProvider");
   }

@@ -191,7 +191,12 @@ const DashHead = ({
         {title}
         {dateBadge ?? (
           <Badge tone="default" sq>
-            <Icon name="calendar" size={10} /> May 21, 2026 · Thu
+            <Icon name="calendar" size={10} />{" "}
+            {`${new Date().toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })} · ${new Date().toLocaleDateString("en-US", { weekday: "short" })}`}
           </Badge>
         )}
       </h1>
@@ -1478,7 +1483,15 @@ const AdminDashboard = ({ navigate }) => {
             </div>
           </div>
           <p className="admin-widget-footnote">
-            Of {totalUsers} users · Both companies. Marked as of May 21, 10:00.
+            Of {totalUsers} users · Both companies. Marked as of{" "}
+            {new Date().toLocaleString("en-IN", {
+              day: "2-digit",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+            })}
+            .
           </p>
         </AdminWidget>
 

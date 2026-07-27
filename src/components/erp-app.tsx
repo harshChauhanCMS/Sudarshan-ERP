@@ -23,6 +23,7 @@ import { useInvoices } from "@/hooks/use-invoices";
 import { useOrders } from "@/hooks/use-orders";
 import { useDispatches } from "@/hooks/use-dispatches";
 import { useSystemStatus } from "@/hooks/use-system-status";
+import { ErpDataProvider } from "@/context/erp-data-provider";
 import {
   GROUP_BRAND_TOAST_MESSAGE,
   isGroupBrandRoute,
@@ -346,6 +347,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   }
 
   return (
+    <ErpDataProvider>
     <div
       className={`app${mobileSidebarOpen ? " sidebar-mobile-open" : ""}`}
       style={{ "--sidebar-w": isSidebarCollapsed ? "72px" : `${sidebarWidth}px` } as any}
@@ -393,6 +395,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
         </div>
       </div>
     </div>
+    </ErpDataProvider>
   );
 }
 

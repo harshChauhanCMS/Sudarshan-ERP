@@ -3,6 +3,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
 import type { AttendanceDailyRow } from "@/hooks/use-attendance-report";
+import { formatWorkedDuration } from "@/lib/format-duration";
 
 const BRAND = { r: 55, g: 77, b: 149 };
 
@@ -94,7 +95,7 @@ export function downloadDailyAttendanceReportPdf(
     fmtTime(row.outAt),
     locationLabel(row.inAddress, row.inLat, row.inLng),
     locationLabel(row.outAddress, row.outLat, row.outLng),
-    row.workedHours.toFixed(2),
+    formatWorkedDuration(row.workedHours),
     statusLabel(row),
     row.shortfall > 0 ? `${row.shortfall.toFixed(2)}h` : "—",
     row.overtime > 0 ? `${row.overtime.toFixed(2)}h` : "—",
@@ -114,7 +115,7 @@ export function downloadDailyAttendanceReportPdf(
         "Out",
         "Punch In GPS",
         "Punch Out GPS",
-        "Worked (h)",
+        "Worked",
         "Status",
         "Shortfall",
         "OT",

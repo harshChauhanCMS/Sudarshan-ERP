@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Avatar, Button, Space, Tag } from "antd";
+import { Avatar, Button, Space, Tag, message } from "antd";
 import {
   CheckCircleOutlined,
   TeamOutlined,
@@ -98,7 +98,9 @@ function isDateInRange(date: Date, from: Date, to: Date) {
 export default function EmployeesPage() {
   const { isManager } = useSessionUser();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [rawEmployees, setRawEmployees] = useState<Record<string, any>[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [filters, setFilters] = useState<EmployeeFilterValues>(
     DEFAULT_EMPLOYEE_FILTERS,
   );
@@ -230,6 +232,7 @@ export default function EmployeesPage() {
         latePunches,
       });
       setEmployees(mapped);
+      setRawEmployees(data.data as Record<string, any>[]);
     } catch (e) {
       console.error("Failed to fetch employees:", e);
     } finally {
@@ -321,43 +324,107 @@ export default function EmployeesPage() {
     });
   }, [employees, filters.search, appliedFilters]);
 
-  const handleExport = () => {
-    const headers = [
-      "Employee ID",
-      "Name",
-      "Department",
-      "Role",
-      "Shift",
-      // "Location / Unit",
-      "Emp. Type",
-      "Phone",
-      "Attendance Status",
-      "Employment Status",
+  // Full employee master export (.xlsx) — respects the current search + applied
+  // filters (exports `dataSource`). Joins the mapped rows back to the raw
+  // employee documents so every stored field is included, not just the columns
+  // shown in the table.
+  const handleExport = async () => {
+    if (exporting) return;
+    if (dataSource.length === 0) {
+      message.info("No employees match the current filters to export.");
+      return;
+    }
+
+    const num = (v: unknown) => (typeof v === "number" ? v : Number(v) || 0);
+    const str = (v: unknown) => (v == null ? "" : String(v));
+
+    const exportColumns: {
+      header: string;
+      value: (m: Employee, r: Record<string, any>) => string | number;
+    }[] = [
+      { header: "Employee ID", value: (m) => m.id },
+      { header: "Full Name", value: (m, r) => str(r.fullName) || m.name },
+      { header: "Father's Name", value: (_m, r) => str(r.fatherName) },
+      { header: "Gender", value: (_m, r) => str(r.gender) },
+      { header: "Date of Birth", value: (_m, r) => str(r.dob) },
+      { header: "Qualification", value: (_m, r) => str(r.qualification) },
+      { header: "Experience", value: (_m, r) => str(r.experience) },
+      { header: "Department", value: (m) => m.department },
+      { header: "Designation", value: (m) => m.role },
+      { header: "Employment Type", value: (m) => m.empType },
+      { header: "Employment Status", value: (m) => m.employmentStatus },
+      { header: "Date of Joining", value: (_m, r) => str(r.dateJoining) },
+      { header: "Date of Confirmation", value: (_m, r) => str(r.dateConfirmation) },
+      { header: "Reporting Manager", value: (_m, r) => str(r.reportingManager) },
+      { header: "Location / Unit", value: (_m, r) => str(r.locationUnit) },
+      { header: "Primary Shift", value: (m) => m.primaryShiftRaw },
+      { header: "Weekly Off", value: (_m, r) => str(r.weeklyOff) },
+      { header: "Working Hours", value: (_m, r) => num(r.workingHours) },
+      { header: "Attendance (Today)", value: (m) => m.attendanceStatus },
+      { header: "Primary Contact", value: (m) => m.phone },
+      { header: "Alternate Contact", value: (_m, r) => str(r.alternateContact) },
+      { header: "Emergency Contact", value: (_m, r) => str(r.emergencyContact) },
+      { header: "Emergency Name / Relation", value: (_m, r) => str(r.emergencyNameRelation) },
+      { header: "Personal Email", value: (_m, r) => str(r.personalEmail) },
+      { header: "Official Email", value: (_m, r) => str(r.officialEmail) },
+      { header: "Current Address", value: (_m, r) => str(r.currentAddress) },
+      { header: "Current State / PIN", value: (_m, r) => str(r.currentStatePin) },
+      { header: "Permanent Address", value: (_m, r) => str(r.permanentAddress) },
+      { header: "Permanent State / PIN", value: (_m, r) => str(r.permanentStatePin) },
+      { header: "Aadhar", value: (_m, r) => str(r.aadhar) },
+      { header: "PAN", value: (_m, r) => str(r.pan) },
+      { header: "PF / UAN", value: (_m, r) => str(r.pfUan) },
+      { header: "ESI / IP", value: (_m, r) => str(r.esiIp) },
+      { header: "Bank Name", value: (_m, r) => str(r.bankName) },
+      { header: "Account No", value: (_m, r) => str(r.accountNo) },
+      { header: "IFSC Code", value: (_m, r) => str(r.ifscCode) },
+      { header: "Compensation Type", value: (_m, r) => str(r.compensationType) },
+      { header: "Annual CTC", value: (_m, r) => num(r.annualCtc) },
+      { header: "Monthly Gross", value: (_m, r) => num(r.monthlyGross) },
+      { header: "Basic Salary", value: (_m, r) => num(r.basicSalary) },
+      { header: "DA", value: (_m, r) => num(r.da) },
+      { header: "HRA", value: (_m, r) => num(r.hra) },
+      { header: "Other / Conveyance", value: (_m, r) => num(r.otherConveyance) },
+      { header: "Special Bonus", value: (_m, r) => num(r.specialBonus) },
+      { header: "Daily Wage Rate", value: (_m, r) => num(r.dailyWageRate) },
     ];
-    const rows = dataSource.map((e) =>
-      [
-        e.id,
-        e.name,
-        e.department,
-        e.role,
-        e.shift,
-        // e.locationUnit,
-        e.empType,
-        e.phone,
-        e.attendanceStatus,
-        e.employmentStatus,
-      ]
-        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-        .join(","),
-    );
-    const csv = [headers.join(","), ...rows].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `employees-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+
+    try {
+      setExporting(true);
+      const rawById = new Map(
+        rawEmployees.map((r) => [String(r.employeeId), r]),
+      );
+      const headers = exportColumns.map((c) => c.header);
+      const rows = dataSource.map((m) => {
+        const raw = rawById.get(m.id) ?? {};
+        return exportColumns.map((c) => c.value(m, raw));
+      });
+
+      const XLSX = await import("xlsx");
+      const aoa: (string | number)[][] = [headers, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = exportColumns.map((c, i) => {
+        let maxLen = c.header.length;
+        for (const row of rows) {
+          const len = String(row[i] ?? "").length;
+          if (len > maxLen) maxLen = len;
+        }
+        return { wch: Math.min(Math.max(maxLen + 2, 10), 42) };
+      });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Employees");
+      XLSX.writeFile(
+        wb,
+        `employees-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      );
+      message.success(`Exported ${rows.length} employees to Excel.`);
+    } catch (e) {
+      message.error(
+        e instanceof Error ? e.message : "Failed to export employees.",
+      );
+    } finally {
+      setExporting(false);
+    }
   };
 
   const columns: CommonTableColumn<Employee>[] = [
@@ -467,8 +534,13 @@ export default function EmployeesPage() {
         }
         actions={
           <Space>
-            <Button icon={<DownloadOutlined />} onClick={handleExport}>
-              Export
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() => void handleExport()}
+              loading={exporting}
+              disabled={loading}
+            >
+              Export Excel
             </Button>
             {!isManager ? (
               <Link href="/hrms/employees/add">
