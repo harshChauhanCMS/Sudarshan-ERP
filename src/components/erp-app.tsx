@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { message } from "antd";
-import { Login, Forgot, CompanySelect, ResetPassword } from "@/components/erp/auth";
+import { Login, Forgot, ResetPassword } from "@/components/erp/auth";
 import { Sidebar, Topbar } from "@/components/layout";
 import { renderErpRoute } from "@/components/erp/render-route";
 import { ERP_ROUTES, pathToRoute } from "@/lib/erp-routes";
@@ -72,7 +72,6 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   const route =
     pathname === "/login" ||
     pathname === "/forgot" ||
-    pathname === "/select-company" ||
     pathname === "/reset-password"
       ? pathname
       : pathname.startsWith("/hrms/") ||
@@ -206,7 +205,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   }, [route, sessionUser?.email, loadNotificationBadge]);
 
   useEffect(() => {
-    const authedRoute = !["/login", "/select-company", "/forgot"].includes(route);
+    const authedRoute = !["/login", "/forgot"].includes(route);
     if (authedRoute && !company && companies[0]) {
       setCompany(companies[0]);
     }
@@ -221,7 +220,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
 
   useEffect(() => {
     if (!sessionUser?.permissions) return;
-    if (["/login", "/select-company", "/forgot", "/reset-password", "/profile"].includes(route)) return;
+    if (["/login", "/forgot", "/reset-password", "/profile"].includes(route)) return;
     if (canAccessRoute(route, sessionUser.permissions, sessionUser.role)) return;
     const fallback = getDefaultLandingRoute(
       sessionUser.permissions,
@@ -234,7 +233,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   }, [route, sessionUser, navigate]);
 
   useEffect(() => {
-    if (["/login", "/select-company", "/forgot"].includes(route)) {
+    if (["/login", "/forgot"].includes(route)) {
       prevRouteRef.current = route;
       return;
     }
@@ -265,7 +264,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
     const json = await res.json();
     if (json.error) throw new Error(json.error);
     if (json.data?.user) setSessionUser(json.data.user);
-    navigate(json.data?.next ?? "/select-company");
+    navigate(json.data?.next ?? "/login");
   };
 
   const handleLogout = async () => {
@@ -307,27 +306,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
             prev ? { ...prev, mustResetPassword: false } : prev
           );
           message.success("Password updated successfully.");
-          navigate(next ?? "/select-company");
-        }}
-        onLogout={handleLogout}
-      />
-    );
-  }
-  if (route === "/select-company" || pathname === "/select-company") {
-    return (
-      <CompanySelect
-        companies={companies}
-        dataWarning={warning}
-        userEmail={sessionUser?.email}
-        userRole={sessionUser?.role}
-        onSelect={(c) => {
-          setCompany(c);
-          navigate(
-            getDefaultLandingRoute(
-              sessionUser?.permissions,
-              sessionUser?.role
-            )
-          );
+          navigate(next ?? "/login");
         }}
         onLogout={handleLogout}
       />
@@ -362,10 +341,6 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
         navigate={handleNavigate}
         company={activeCo}
         companies={companies}
-        onCompanyClick={() => {
-          navigate("/select-company");
-          setMobileSidebarOpen(false);
-        }}
         badgeMap={badgeMap}
         sidebarWidth={sidebarWidth}
         setSidebarWidth={setSidebarWidth}

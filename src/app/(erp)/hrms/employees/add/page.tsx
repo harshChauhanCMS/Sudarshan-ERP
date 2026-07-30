@@ -32,6 +32,7 @@ import {
 } from "@/lib/hrms-dob";
 import {
   departmentSkipsReportingManager,
+  EMPLOYEE_COMPANY_OPTIONS,
   EMPLOYEE_EXPERIENCE_OPTIONS,
   EMPLOYEE_LOCATION_UNIT_OPTIONS,
   EMPLOYEE_QUALIFICATION_OPTIONS,
@@ -49,11 +50,6 @@ function draftHasContent(formData: Record<string, unknown>): boolean {
     return true;
   });
 }
-
-const EMPLOYEE_COMPANY_OPTIONS = [
-  { value: "smi", label: "Sudarshan Minerals & Industries (SMI)" },
-  { value: "smic", label: "Sudarshan Microns" },
-];
 
 const digitsOnlyRule = { pattern: /^\d+$/, message: "Numbers only" };
 
@@ -665,7 +661,7 @@ export default function AddEmployeePage() {
               mode="multiple"
               style={{ width: "100%" }}
               placeholder="Select company access"
-              options={EMPLOYEE_COMPANY_OPTIONS}
+              options={[...EMPLOYEE_COMPANY_OPTIONS]}
               maxTagCount="responsive"
             />
           </Form.Item>

@@ -236,7 +236,6 @@ const Sidebar = ({
   navigate,
   company,
   companies = [],
-  onCompanyClick,
   badgeMap = {},
   sidebarWidth,
   setSidebarWidth,
@@ -469,15 +468,7 @@ const Sidebar = ({
       )}
       <div
         className="sb-brand"
-        onClick={(e) => {
-          e.stopPropagation();
-          onCompanyClick?.();
-        }}
-        title={
-          showGroupBrand
-            ? `${companies.map((c) => c.name).join(" · ")} — click to switch company`
-            : `${company.name} — click to switch company`
-        }
+        title={showGroupBrand ? companies.map((c) => c.name).join(" · ") : company.name}
       >
         <div className="sb-brand-text">
           {showGroupBrand ? (
@@ -518,9 +509,6 @@ const Sidebar = ({
             {company.mark === "gold" ? "M" : "S"}
           </div>
         )}
-        <div className="sb-brand-switch">
-          <Icon name="switch" size={14} />
-        </div>
       </div>
       {/* Collapse Toggle — desktop only */}
       <button

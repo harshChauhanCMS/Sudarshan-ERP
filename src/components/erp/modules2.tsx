@@ -4,7 +4,7 @@
 
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Select, DatePicker, Button as AntButton } from "antd";
+import { Select, DatePicker, Button as AntButton, message } from "antd";
 import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS, erpStatusBadge, customerStatusBadge, invoiceStatusBadge } from "@/components/common/erpStatusBadges";
 import { ErpViewAction, TableActionIcon } from "@/components/common/TableActionIcons";
@@ -17,6 +17,7 @@ import {
   FileTextOutlined,
   FilterOutlined,
   LineChartOutlined,
+  LoadingOutlined,
   ShoppingCartOutlined,
   TeamOutlined,
   ThunderboltOutlined,
@@ -278,6 +279,11 @@ const CustomerOrders = () => {
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
 
+  const handleRefresh = async () => {
+    await reload();
+    message.success("Refreshed");
+  };
+
   const ORDERS_EXT = orders;
   const openOrders = ORDERS_EXT.filter((o) => o.status !== "delivered").length;
   const bookValue = ORDERS_EXT.reduce((s, o) => s + (Number(o.value) || 0), 0);
@@ -365,8 +371,14 @@ const CustomerOrders = () => {
   return (
     <>
       <DashHead title="Customer Orders" sub="Sales orders loaded from database">
-        <Btn variant="secondary" size="sm" icon="refresh" onClick={() => void reload()} disabled={loading}>
-          Refresh
+        <Btn
+          variant="secondary"
+          size="sm"
+          icon={loading ? undefined : "refresh"}
+          onClick={() => void handleRefresh()}
+          disabled={loading}
+        >
+          {loading ? <LoadingOutlined spin /> : null} {loading ? "Refreshing…" : "Refresh"}
         </Btn>
         <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/orders/add")}>New order</Btn>
       </DashHead>

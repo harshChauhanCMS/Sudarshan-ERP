@@ -10,6 +10,7 @@ import { useErpData } from "@/context/erp-data-provider";
 import { useFormState } from "@/components/forms";
 import { useRawMaterials } from "@/hooks/use-raw-materials";
 import { useVendors } from "@/hooks/use-vendors";
+import { nextRawMaterialCode } from "@/lib/id-generators";
 
 const CATEGORY_LABELS: Record<string, string> = {
   minerals: "Minerals",
@@ -25,6 +26,8 @@ const INITIAL = {
   category: "",
   uom: "MT",
   preferredVendor: "",
+  currentStock: "",
+  stockValue: "",
   minStock: "",
   reorderLevel: "",
   storageLocation: "",
@@ -52,7 +55,11 @@ export default function RawMaterialMasterPage() {
   const searchParams = useSearchParams();
   const editCode = searchParams.get("code")?.trim() ?? "";
   const { refresh } = useErpData();
-  const { items: rawMaterials, reload: reloadRawMaterials } = useRawMaterials();
+  const {
+    items: rawMaterials,
+    loading: rawMaterialsLoading,
+    reload: reloadRawMaterials,
+  } = useRawMaterials();
   const { items: vendors } = useVendors();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +90,8 @@ export default function RawMaterialMasterPage() {
       category: editing.category ?? "",
       uom: editing.unit,
       preferredVendor: vendor?.id ?? "",
+      currentStock: editing.stock != null ? String(editing.stock) : "",
+      stockValue: editing.value != null ? String(editing.value) : "",
       minStock: editing.minStock != null ? String(editing.minStock) : "",
       reorderLevel: String(editing.reorder),
       storageLocation: editing.location === "—" ? "" : editing.location,
@@ -90,6 +99,15 @@ export default function RawMaterialMasterPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once when edit target resolves
   }, [editCode, editing?.code]);
+
+  // Auto-fill the next sequential code for new materials — stays editable.
+  // Waits for the real list to finish loading so it doesn't lock in a code
+  // computed from an empty/stale array.
+  useEffect(() => {
+    if (editCode || rawMaterialsLoading || form.values.materialCode) return;
+    form.setField("materialCode", nextRawMaterialCode(rawMaterials));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- compute once rawMaterials first loads
+  }, [editCode, rawMaterialsLoading, rawMaterials]);
 
   const recentMaterials = useMemo(
     () => [...rawMaterials].slice(-6).reverse(),
@@ -116,6 +134,18 @@ export default function RawMaterialMasterPage() {
     }
     if (!form.values.category) return "Category is required.";
     if (!form.values.uom) return "Unit of measure is required.";
+    const currentStock = form.values.currentStock.trim()
+      ? parseFloat(form.values.currentStock)
+      : 0;
+    if (Number.isNaN(currentStock) || currentStock < 0) {
+      return "Quantity must be a number ≥ 0.";
+    }
+    const stockValue = form.values.stockValue.trim()
+      ? parseFloat(form.values.stockValue)
+      : 0;
+    if (Number.isNaN(stockValue) || stockValue < 0) {
+      return "Value must be a number ≥ 0.";
+    }
     const reorder = parseFloat(form.values.reorderLevel);
     if (Number.isNaN(reorder) || reorder < 0) {
       return "Reorder level must be a number ≥ 0.";
@@ -144,6 +174,12 @@ export default function RawMaterialMasterPage() {
     const minStock = form.values.minStock.trim()
       ? parseFloat(form.values.minStock)
       : 0;
+    const stock = form.values.currentStock.trim()
+      ? parseFloat(form.values.currentStock)
+      : 0;
+    const value = form.values.stockValue.trim()
+      ? parseFloat(form.values.stockValue)
+      : 0;
     const vendor = vendors.find((v) => v.id === form.values.preferredVendor);
 
     setSaving(true);
@@ -155,6 +191,8 @@ export default function RawMaterialMasterPage() {
             grade: form.values.grade.trim() || "—",
             category: form.values.category,
             unit: form.values.uom,
+            stock,
+            value,
             reorder,
             minStock,
             location: form.values.storageLocation.trim() || "—",
@@ -178,6 +216,8 @@ export default function RawMaterialMasterPage() {
         grade: form.values.grade.trim() || "—",
         category: form.values.category,
         unit: form.values.uom,
+        stock,
+        value,
         reorder,
         minStock,
         location: form.values.storageLocation.trim() || "—",
@@ -273,7 +313,9 @@ export default function RawMaterialMasterPage() {
                       disabled={!!editing}
                     />
                     <span className="rm-master-hint rm-master-hint--req">
-                      Unique code. Alphanumeric.
+                      {editing
+                        ? "Unique code. Alphanumeric."
+                        : "Auto-generated. Unique code, alphanumeric — you can edit it."}
                     </span>
                   </div>
                 </div>
@@ -367,6 +409,44 @@ export default function RawMaterialMasterPage() {
 
               <div className="rm-master-section">
                 <div className="rm-master-section-title">Stock levels</div>
+                <div className="rm-master-row-2">
+                  <div className="field">
+                    <label className="field-label" htmlFor="currentStock">
+                      Quantity (Current Stock)
+                    </label>
+                    <input
+                      id="currentStock"
+                      className="input"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={form.values.currentStock}
+                      onChange={(e) => form.setField("currentStock", e.target.value)}
+                      placeholder="0"
+                    />
+                    <span className="rm-master-hint">
+                      Numeric. Min 0. Opening quantity in stock, in the selected unit.
+                    </span>
+                  </div>
+                  <div className="field">
+                    <label className="field-label" htmlFor="stockValue">
+                      Value (₹)
+                    </label>
+                    <input
+                      id="stockValue"
+                      className="input"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={form.values.stockValue}
+                      onChange={(e) => form.setField("stockValue", e.target.value)}
+                      placeholder="0"
+                    />
+                    <span className="rm-master-hint">
+                      Numeric. Min 0. Total value (₹) of the current stock.
+                    </span>
+                  </div>
+                </div>
                 <div className="rm-master-row-2">
                   <div className="field">
                     <label className="field-label" htmlFor="minStock">

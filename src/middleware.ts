@@ -125,6 +125,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(login);
   }
 
+  const permissions = session.user?.permissions;
+  const role = session.user?.role;
+
   if (
     session.user?.mustResetPassword &&
     pathname !== "/reset-password" &&
@@ -137,11 +140,9 @@ export async function middleware(request: NextRequest) {
     !session.user?.mustResetPassword &&
     pathname === "/reset-password"
   ) {
-    return NextResponse.redirect(new URL("/select-company", request.url));
+    const fallback = getDefaultLandingRoute(permissions, role);
+    return NextResponse.redirect(new URL(fallback, request.url));
   }
-
-  const permissions = session.user?.permissions;
-  const role = session.user?.role;
 
   if (
     isManagerRole(role) &&

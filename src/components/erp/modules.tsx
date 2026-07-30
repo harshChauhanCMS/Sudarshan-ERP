@@ -13,7 +13,11 @@ import { Icon } from "./icons";
 import { useDATA, useErpData } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import PageFilterPanel from "@/components/common/PageFilterPanel";
-import { Select, message } from "antd";
+import { Select, message, Dropdown } from "antd";
+import type { MenuProps } from "antd";
+import * as XLSX from "xlsx";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { useSessionUser } from "@/hooks/use-session-user";
@@ -255,11 +259,51 @@ const RawMaterialInventory = () => {
     [deletingCode, deleteMaterial]
   );
 
+  const handleExport = (type: 'xls' | 'pdf') => {
+    const headers = ["SKU", "Material", "Grade", "Location", "Category", "Stock", "Unit", "Reorder Level", "Value", "Status"];
+    const exportData = filteredMaterials.map(row => [
+      row.code,
+      row.name,
+      row.grade,
+      row.location,
+      row.category,
+      row.stock,
+      row.unit,
+      row.reorder,
+      row.value,
+      row.status
+    ]);
+    
+    if (type === 'xls') {
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...exportData]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Raw Materials");
+      XLSX.writeFile(wb, `raw_materials_${new Date().toISOString().split("T")[0]}.xlsx`);
+    } else if (type === 'pdf') {
+      const doc = new jsPDF();
+      doc.text("Raw Material Inventory", 14, 15);
+      autoTable(doc, {
+        head: [headers],
+        body: exportData,
+        startY: 20,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [37, 99, 235] }
+      });
+      doc.save(`raw_materials_${new Date().toISOString().split("T")[0]}.pdf`);
+    }
+  };
+
+  const exportMenuItems: MenuProps['items'] = [
+    { key: "xls", label: "Export as Excel (XLSX)", onClick: () => handleExport('xls') },
+    { key: "pdf", label: "Export as PDF", onClick: () => handleExport('pdf') }
+  ];
+
   return (
     <>
       <DashHead title="Raw Material Inventory" sub="Minerals and chemicals · live stock & alerts">
-        <Btn icon="filter" size="sm">Filters</Btn>
-        <Btn icon="download" size="sm">Export</Btn>
+        <Dropdown menu={{ items: exportMenuItems }} placement="bottomRight">
+          <Btn icon="download" size="sm">Export</Btn>
+        </Dropdown>
         <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/inventory/raw-material/add")}>Add stock</Btn>
       </DashHead>
 

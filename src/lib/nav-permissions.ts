@@ -54,7 +54,7 @@ export function getRoutePermission(path: string): {
   module: ModuleKey;
   action: keyof ModulePermission;
 } | null {
-  if (!path || path === "/login" || path === "/forgot" || path === "/select-company") {
+  if (!path || path === "/login" || path === "/forgot") {
     return null;
   }
 
@@ -176,5 +176,5 @@ export function getDefaultLandingRoute(
     if (canAccessRoute(path, permissions, role)) return path;
   }
 
-  return "/select-company";
+  return "/profile";
 }

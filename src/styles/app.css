@@ -10247,6 +10247,9 @@ button.owner-vendor-chart__row:focus-visible {
   border-radius: var(--radius, 8px);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .disp-dash-widget--wide {
@@ -10299,13 +10302,22 @@ button.owner-vendor-chart__row:focus-visible {
   border-bottom-right-radius: calc(var(--radius, 8px) - 1px);
 }
 
-.disp-dash .disp-dash-widget__body,
-.disp-dash .disp-dash-card .card-body {
+.disp-dash .owner-chart-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   background: linear-gradient(
     to bottom,
     var(--bg-elev) 0%,
     rgba(37, 99, 235, 0.09) 100%
   );
+}
+
+.disp-dash .owner-chart-panel__canvas {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 
 .disp-dash-card[class*="disp-dash-widget--"] .card-head {
@@ -10469,6 +10481,9 @@ button.owner-vendor-chart__row:focus-visible {
 
 .disp-dash-widget__body {
   padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 
 .disp-dash-widget__footnote {
@@ -10486,6 +10501,7 @@ button.owner-vendor-chart__row:focus-visible {
   list-style: none;
   padding: 0;
   margin: 0;
+  background: transparent;
 }
 
 .disp-dash-list li {

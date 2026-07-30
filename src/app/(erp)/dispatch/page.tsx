@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { message } from "antd";
 import {
   CarOutlined,
   CheckCircleOutlined,
@@ -21,6 +22,11 @@ export default function DispatchPlanningPage() {
 
   const goToPlan = (orderId: string) => {
     router.push(`/dispatch/new?order=${encodeURIComponent(orderId)}`);
+  };
+
+  const handleRefresh = async () => {
+    await reload();
+    message.success("Refreshed");
   };
 
   const hasData = Boolean(data?.hasData);
@@ -112,8 +118,13 @@ export default function DispatchPlanningPage() {
                 <div className="card-title">
                   <Icon name="clock" size={14} /> Orders awaiting dispatch planning
                 </div>
-                <Btn variant="secondary" size="sm" onClick={() => reload()}>
-                  Refresh
+                <Btn
+                  variant="secondary"
+                  size="sm"
+                  disabled={loading}
+                  onClick={() => void handleRefresh()}
+                >
+                  {loading ? "Refreshing…" : "Refresh"}
                 </Btn>
               </div>
               <div className="card-body flush">

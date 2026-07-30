@@ -36,6 +36,9 @@ function requireEntityAccess(
 ) {
   const module = moduleForEntityKey(key);
   if (!module) return fail("Unknown entity key", 404);
+  // Company directory is reference/branding metadata, not sensitive settings —
+  // any authenticated session may read it. Writes stay settings-gated below.
+  if (key === "companies" && action === "view") return null;
   if (["permissions", "roles"].includes(key) && !isAdminOrOwner(user.role)) {
     return requirePermission(user, "user_management", action);
   }

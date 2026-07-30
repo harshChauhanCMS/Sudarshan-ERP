@@ -41,6 +41,7 @@ interface Employee {
   locationUnit: string;
   empType: string;
   phone: string;
+  email: string;
   attendanceStatus: AttendanceStatus;
   employmentStatus: EmploymentStatus;
   primaryShiftRaw: string;
@@ -219,6 +220,7 @@ export default function EmployeesPage() {
             locationUnit: emp.locationUnit,
             empType: emp.employmentType,
             phone: emp.primaryContact,
+            email: emp.officialEmail || emp.personalEmail || "",
             attendanceStatus,
             employmentStatus,
             primaryShiftRaw,
@@ -273,6 +275,7 @@ export default function EmployeesPage() {
           emp.id,
           emp.name,
           emp.phone,
+          emp.email,
           emp.department,
           emp.role,
           // emp.locationUnit,
@@ -427,6 +430,28 @@ export default function EmployeesPage() {
     }
   };
 
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteEmployee = async (id: string) => {
+    if (deletingId) return;
+    try {
+      setDeletingId(id);
+      const res = await fetch(`/api/hrms/employees/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        throw new Error(json.error ?? "Failed to delete employee.");
+      }
+      message.success(`Deleted ${id}.`);
+      await loadEmployees();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Failed to delete employee.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const columns: CommonTableColumn<Employee>[] = [
     {
       title: "Employee ID",
@@ -458,6 +483,14 @@ export default function EmployeesPage() {
           <span className="font-semibold text-zinc-900">{record.name}</span>
         </div>
       ),
+    },
+    {
+      title: "Email",
+      dataIndex: "email",
+      key: "email",
+      width: 240,
+      ellipsis: true,
+      render: (email: string) => email || "—",
     },
     {
       title: "Department",
@@ -504,11 +537,14 @@ export default function EmployeesPage() {
       title: "Actions",
       key: "action",
       fixed: "right",
-      width: 88,
+      width: 120,
       render: (_, record: Employee) => (
         <ViewEditActions
           viewHref={`/hrms/employees/${record.id}`}
           editHref={isManager ? undefined : `/hrms/employees/${record.id}`}
+          showDelete={!isManager}
+          onDelete={() => void handleDeleteEmployee(record.id)}
+          deleteConfirmTitle={`Delete ${record.name} (${record.id})? This also removes their login.`}
         />
       ),
       align: "right" as const,
@@ -605,7 +641,7 @@ export default function EmployeesPage() {
           dataSource={dataSource}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 1520 }}
+          scroll={{ x: 1780 }}
           pagination={{
             pageSize: 15,
             showSizeChanger: true,

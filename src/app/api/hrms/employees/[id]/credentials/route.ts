@@ -11,6 +11,10 @@ import {
 } from "@/lib/hrms-employee-welcome";
 import { getSession } from "@/lib/session";
 
+// The status is time-sensitive (it flips when the temporary password expires),
+// so it must never be served from a cache.
+export const dynamic = "force-dynamic";
+
 function credentialErrorMessage(reason?: string): string {
   switch (reason) {
     case "no_account":
@@ -61,7 +65,10 @@ export async function GET(
     }
 
     const status = await getEmployeeCredentialStatus(id);
-    return NextResponse.json({ success: true, data: status });
+    return NextResponse.json(
+      { success: true, data: status },
+      { headers: { "Cache-Control": "no-store, max-age=0" } },
+    );
   } catch (error) {
     console.error("GET employee credentials status error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

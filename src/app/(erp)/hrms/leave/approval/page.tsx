@@ -90,14 +90,16 @@ export default function LeaveApprovalPage() {
       // Guard against HTML responses (auth redirect, 404 page, etc.)
       if (!res.headers.get("content-type")?.includes("application/json")) {
         setLeaves([]);
-        return;
+        return false;
       }
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed");
       setLeaves(json.data || []);
+      return true;
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Failed to load");
       setLeaves([]);
+      return false;
     } finally {
       setLoading(false);
     }
@@ -418,7 +420,7 @@ export default function LeaveApprovalPage() {
             )}
             <Button
               icon={<ReloadOutlined />}
-              onClick={() => load()}
+              onClick={() => void load().then((ok) => ok && message.success("Refreshed"))}
               loading={loading}
             >
               Refresh

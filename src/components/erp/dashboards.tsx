@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Calendar, Popover, Select, Spin } from "antd";
+import { Calendar, Popover, Select, Skeleton, message } from "antd";
 import {
   AlertOutlined,
   BarChartOutlined,
@@ -15,6 +15,7 @@ import {
   ExclamationCircleOutlined,
   FileExclamationOutlined,
   InboxOutlined,
+  LoadingOutlined,
   MessageOutlined,
   RiseOutlined,
   SendOutlined,
@@ -28,7 +29,7 @@ import dayjs from "dayjs";
 import StatCard, { mapDashStatTone } from "@/components/common/StatCard";
 import { AddDriverModal } from "@/components/dispatch/add-driver-modal";
 import { Icon } from "./icons";
-import { useDATA } from "./data";
+import { useDATA, useErpData } from "./data";
 import { usePackaging } from "@/hooks/use-packaging";
 import { useSpareParts } from "@/hooks/use-spare-parts";
 import { useRawMaterials } from "@/hooks/use-raw-materials";
@@ -963,6 +964,17 @@ const AdminWidget = ({ title, icon, badge, children }) => (
 
 const AdminDashboard = ({ navigate }) => {
   const DATA = useDATA();
+  const { refresh: refreshErp } = useErpData();
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshErp();
+      message.success("Refreshed");
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const { companies } = useCompanies();
   const { items: packagingItems } = usePackaging();
   const { items: spareParts } = useSpareParts();
@@ -1221,8 +1233,14 @@ const AdminDashboard = ({ navigate }) => {
         title="Admin Dashboard"
         sub="Overview for current company — access, alerts, invoices, field & operations"
       >
-        <Btn icon="refresh" size="sm">
-          Refresh
+        <Btn
+          icon={refreshing ? undefined : "refresh"}
+          size="sm"
+          disabled={refreshing}
+          style={{ background: "#e8a903", borderColor: "#e8a903", color: "#1a1a1a" }}
+          onClick={() => void handleRefresh()}
+        >
+          {refreshing ? <LoadingOutlined spin /> : null} {refreshing ? "Refreshing…" : "Refresh"}
         </Btn>
       </DashHead>
 
@@ -1948,38 +1966,73 @@ const OwnerDispatchDonut = ({ due, overdue }) => {
 
 const OwnerDashboard = ({ navigate }) => {
   const [dashboardDate, setDashboardDate] = useState(() => dayjs());
-  const { data, loading, error } = useOwnerDashboard({
+  const { data, loading, error, reload } = useOwnerDashboard({
     year: dashboardDate.year(),
     month: dashboardDate.month() + 1,
     day: dashboardDate.date(),
   });
+  const handleRefresh = async () => {
+    const ok = await reload();
+    if (ok) message.success("Refreshed");
+  };
 
-  if (loading) {
-    return (
-      <div
-        className="owner-dash"
-        style={{ display: "flex", justifyContent: "center", padding: "4rem 0" }}
+  const header = (
+    <>
+      <DashHead
+        title="Owner Dashboard"
+        sub={data?.subtitle ?? (loading ? "Loading…" : "Unable to load dashboard data")}
+        dateBadge={
+          <OwnerHoverCalendar
+            value={dashboardDate}
+            onChange={setDashboardDate}
+          >
+            <Badge tone="default" sq className="owner-dash-date-badge">
+              <Icon name="calendar" size={10} />{" "}
+              {dashboardDate.format("MMM D, YYYY")} · {dashboardDate.format("ddd")}
+            </Badge>
+          </OwnerHoverCalendar>
+        }
       >
-        <Spin size="large" />
-      </div>
-    );
-  }
+        <Btn
+          icon={loading ? undefined : "refresh"}
+          size="sm"
+          disabled={loading}
+          style={{ background: "#e8a903", borderColor: "#e8a903", color: "#1a1a1a" }}
+          onClick={() => void handleRefresh()}
+        >
+          {loading ? <LoadingOutlined spin /> : null} {loading ? "Refreshing…" : "Refresh"}
+        </Btn>
+        <OwnerHoverCalendar value={dashboardDate} onChange={setDashboardDate}>
+          <Btn icon="calendar" size="sm" type="button">
+            {dashboardDate.format("MMM YYYY")}
+          </Btn>
+        </OwnerHoverCalendar>
+        <Btn icon="download" size="sm">
+          Export PDF
+        </Btn>
+      </DashHead>
+      <DashboardBannerCarousel slides={OWNER_BANNER_SLIDES} navigate={navigate} />
+    </>
+  );
 
-  if (error || !data) {
+  if (!data) {
     return (
       <div className="owner-dash">
-        <DashHead title="Owner Dashboard" sub="Unable to load dashboard data" />
-        <div className="card" style={{ padding: 24 }}>
-          <p style={{ color: "var(--danger)", margin: 0 }}>
-            {error ?? "No data available"}
-          </p>
-        </div>
+        {header}
+        {loading ? (
+          <Skeleton active paragraph={{ rows: 10 }} style={{ marginTop: 16 }} />
+        ) : (
+          <div className="card" style={{ padding: 24 }}>
+            <p style={{ color: "var(--danger)", margin: 0 }}>
+              {error ?? "No data available"}
+            </p>
+          </div>
+        )}
       </div>
     );
   }
 
   const {
-    subtitle,
     companyTiles,
     stats,
     counts,
@@ -2029,32 +2082,7 @@ const OwnerDashboard = ({ navigate }) => {
 
   return (
     <div className="owner-dash">
-      <DashHead
-        title="Owner Dashboard"
-        sub={subtitle}
-        dateBadge={
-          <OwnerHoverCalendar
-            value={dashboardDate}
-            onChange={setDashboardDate}
-          >
-            <Badge tone="default" sq className="owner-dash-date-badge">
-              <Icon name="calendar" size={10} />{" "}
-              {dashboardDate.format("MMM D, YYYY")} · {dashboardDate.format("ddd")}
-            </Badge>
-          </OwnerHoverCalendar>
-        }
-      >
-        <OwnerHoverCalendar value={dashboardDate} onChange={setDashboardDate}>
-          <Btn icon="calendar" size="sm" type="button">
-            {dashboardDate.format("MMM YYYY")}
-          </Btn>
-        </OwnerHoverCalendar>
-        <Btn icon="download" size="sm">
-          Export PDF
-        </Btn>
-      </DashHead>
-
-      <DashboardBannerCarousel slides={OWNER_BANNER_SLIDES} navigate={navigate} />
+      {header}
 
       <OwnerEyebrow>Company summary</OwnerEyebrow>
       <div className="owner-company-switch">
@@ -2710,26 +2738,49 @@ function rmAvailLabel(stock, unit, status) {
 const ProductionDashboard = ({ navigate }) => {
   const { data, loading, error, reload } = useProductionDashboard();
 
-  if (loading) {
-    return (
-      <div
-        className="prod-dash"
-        style={{ display: "flex", justifyContent: "center", padding: "4rem 0" }}
-      >
-        <Spin size="large" />
-      </div>
-    );
-  }
+  const handleRefresh = async () => {
+    const ok = await reload();
+    if (ok) message.success("Refreshed");
+  };
 
-  if (error || !data) {
+  const header = (
+    <DashHead
+      title="Production Dashboard"
+      sub="Targets, active jobs, consumption, packaging & machines"
+    >
+      <Btn
+        icon={loading ? undefined : "refresh"}
+        size="sm"
+        disabled={loading}
+        style={{ background: "#e8a903", borderColor: "#e8a903", color: "#1a1a1a" }}
+        onClick={() => void handleRefresh()}
+      >
+        {loading ? <LoadingOutlined spin /> : null} {loading ? "Refreshing…" : "Refresh"}
+      </Btn>
+      <Btn
+        variant="primary"
+        size="sm"
+        icon="plus"
+        onClick={() => navigate && navigate("/orders/add")}
+      >
+        Plan batch
+      </Btn>
+    </DashHead>
+  );
+
+  if (!data) {
     return (
       <div className="prod-dash">
-        <DashHead title="Production Dashboard" sub="Unable to load dashboard data" />
-        <div className="card" style={{ padding: 24 }}>
-          <p style={{ color: "var(--danger)", margin: 0 }}>
-            {error ?? "No data available"}
-          </p>
-        </div>
+        {header}
+        {loading ? (
+          <Skeleton active paragraph={{ rows: 10 }} style={{ marginTop: 16 }} />
+        ) : (
+          <div className="card" style={{ padding: 24 }}>
+            <p style={{ color: "var(--danger)", margin: 0 }}>
+              {error ?? "No data available"}
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -2749,22 +2800,7 @@ const ProductionDashboard = ({ navigate }) => {
 
   return (
     <div className="prod-dash">
-      <DashHead
-        title="Production Dashboard"
-        sub="Targets, active jobs, consumption, packaging & machines"
-      >
-        <Btn icon="refresh" size="sm" onClick={() => reload(true)}>
-          Refresh
-        </Btn>
-        <Btn
-          variant="primary"
-          size="sm"
-          icon="plus"
-          onClick={() => navigate && navigate("/orders/add")}
-        >
-          Plan batch
-        </Btn>
-      </DashHead>
+      {header}
 
       <div className="prod-dash-stats">
         <ProdStatCard

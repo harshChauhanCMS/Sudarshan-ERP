@@ -90,9 +90,15 @@ export function nextSpareCode(parts: WithId[]) {
   return `SP-NEW-${String(n).padStart(3, "0")}`;
 }
 
-export function nextRawMaterialCode(items: WithId[]) {
-  const n = items.length + 1;
-  return `RM-NEW-${String(n).padStart(3, "0")}`;
+/** Next sequential raw material code (RM-0001, RM-0002, …) from existing records */
+export function nextRawMaterialCode(items: { code?: string }[]) {
+  let max = 0;
+  for (const item of items) {
+    const code = (item.code ?? "").trim().toUpperCase();
+    const m = code.match(/^RM-(\d+)$/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return `RM-${String(max + 1).padStart(4, "0")}`;
 }
 
 export function nextPackagingCode(items: WithId[]) {

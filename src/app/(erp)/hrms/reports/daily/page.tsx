@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
-import { Button, Tag } from "antd";
-import { DownloadOutlined, EyeOutlined } from "@ant-design/icons";
+import { useEffect, useState } from "react";
+import { Button, Space, Tag } from "antd";
+import { DownloadOutlined, EyeOutlined, FileExcelOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
 import RepHeader from "@/components/hrms/RepHeader";
@@ -37,6 +37,21 @@ function fmtTime(iso: string | null) {
   return dayjs(iso).format("HH:mm");
 }
 
+// "H:MM" (e.g. 8.25 -> "8:15") to match the attendance register template.
+function fmtHoursColon(decimalHours: number | null | undefined) {
+  const hours = typeof decimalHours === "number" && Number.isFinite(decimalHours) ? decimalHours : 0;
+  const totalMinutes = Math.max(0, Math.round(hours * 60));
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${h}:${String(m).padStart(2, "0")}`;
+}
+
+function attendanceStatusLabel(row: AttendanceDailyRow) {
+  if (row.absent) return "Absent";
+  if (!row.inAt || !row.outAt) return "Single Punch";
+  return "Present";
+}
+
 function PunchLocationCell({
   address,
   lat,
@@ -67,11 +82,71 @@ function PunchLocationCell({
 
 export default function DailyAttendancePage() {
   const r = useAttendanceReport({ variant: "daily" });
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   useEffect(() => {
     void r.handleApply();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleExportExcel = async () => {
+    if (exportingExcel || r.daily.length === 0) return;
+    try {
+      setExportingExcel(true);
+      const designationByEmployee = new Map(
+        r.summary.map((s) => [s.employeeId, s.designation]),
+      );
+
+      const headers = [
+        "Employee Id",
+        "Employee Name",
+        "Department",
+        "Designation",
+        "Location Unit",
+        "Shift",
+        "In Date",
+        "In time",
+        "Out Date",
+        "Out time",
+        "Working Hours",
+        "Over Time",
+        "Attendance Status",
+        "Approval Status",
+      ];
+      const rows = r.daily.map((row) => [
+        row.employeeId,
+        row.employeeName,
+        row.department,
+        designationByEmployee.get(row.employeeId) ?? "",
+        row.locationUnit ?? "",
+        row.primaryShift ?? "",
+        row.inAt ? dayjs(row.inAt).format("DD-MM-YYYY") : "",
+        row.inAt ? dayjs(row.inAt).format("H:mm") : "0:00",
+        row.outAt ? dayjs(row.outAt).format("DD-MM-YYYY") : "",
+        row.outAt ? dayjs(row.outAt).format("H:mm") : "0:00",
+        fmtHoursColon(row.workedHours),
+        fmtHoursColon(row.overtime),
+        attendanceStatusLabel(row),
+        "",
+      ]);
+
+      const XLSX = await import("xlsx");
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      ws["!cols"] = headers.map((h, i) => {
+        let maxLen = h.length;
+        for (const row of rows) {
+          const len = String(row[i] ?? "").length;
+          if (len > maxLen) maxLen = len;
+        }
+        return { wch: Math.min(Math.max(maxLen + 2, 10), 42) };
+      });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Attendance");
+      XLSX.writeFile(wb, `daily-attendance-${dayjs().format("YYYY-MM-DD")}.xlsx`);
+    } finally {
+      setExportingExcel(false);
+    }
+  };
 
   const columns: CommonTableColumn<AttendanceDailyRow>[] = [
     {
@@ -212,12 +287,22 @@ export default function DailyAttendancePage() {
         title="Daily Attendance"
         subtitle={`${r.rangeLabel} · in/out times, GPS locations, worked hours & status per day`}
         actions={
-          <Button
-            icon={<DownloadOutlined />}
-            onClick={() => downloadDailyAttendanceReportPdf(r.rangeLabel, r.daily)}
-          >
-            Export
-          </Button>
+          <Space>
+            <Button
+              icon={<FileExcelOutlined />}
+              onClick={() => void handleExportExcel()}
+              loading={exportingExcel}
+              disabled={r.daily.length === 0}
+            >
+              Export Excel
+            </Button>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() => downloadDailyAttendanceReportPdf(r.rangeLabel, r.daily)}
+            >
+              Export PDF
+            </Button>
+          </Space>
         }
       />
 

@@ -165,3 +165,53 @@ export async function PUT(
     );
   }
 }
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await connectDB();
+    const { id } = await params;
+    const session = await getSession();
+    if (!session.user || !canManageEmployees(session.user)) {
+      return NextResponse.json(
+        { error: "You are not authorized to delete employees." },
+        { status: 403 },
+      );
+    }
+    if (isManagerRole(session.user.role)) {
+      return NextResponse.json(
+        { error: "Managers can view team profiles but cannot delete employee records." },
+        { status: 403 },
+      );
+    }
+    const managerAccess = await assertManagerCanAccessEmployee(session.user, id);
+    if (!managerAccess.ok) {
+      return NextResponse.json({ error: managerAccess.message }, { status: 403 });
+    }
+    const access = await assertEmployeeVisibleToViewer(session.user.role, id);
+    if (!access.ok) {
+      return NextResponse.json({ error: access.message }, { status: 403 });
+    }
+
+    const employee = await Employee.findOneAndDelete({ employeeId: id });
+    if (!employee) {
+      return NextResponse.json(
+        { error: `Employee not found with ID: ${id}` },
+        { status: 404 }
+      );
+    }
+
+    // Remove the linked login account too, so a deleted employee can't still sign in.
+    await User.deleteOne({ employeeId: id });
+
+    return NextResponse.json({ success: true, data: { deleted: true } });
+  } catch (error: any) {
+    console.error("DELETE Employee API Error:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import {
   Form,
   Input,
@@ -37,6 +37,7 @@ import {
 } from "@/lib/hrms-dob";
 import {
   departmentSkipsReportingManager,
+  EMPLOYEE_COMPANY_OPTIONS,
   EMPLOYEE_EXPERIENCE_OPTIONS,
   EMPLOYEE_LOCATION_UNIT_OPTIONS,
   EMPLOYEE_QUALIFICATION_OPTIONS,
@@ -219,25 +220,68 @@ export default function EmployeeDetailsPage({
     loadEmployee();
   }, [id, form, messageApi]);
 
+  const refreshCredentialStatus = useCallback(async () => {
+    if (!canManageCredentials) return;
+    try {
+      const res = await fetch(`/api/hrms/employees/${id}/credentials`, {
+        cache: "no-store",
+      });
+      const json = await res.json();
+      if (res.ok && json.success && json.data) {
+        setCredentialStatus(json.data as CredentialStatus);
+      }
+    } catch {
+      // keep the last known status; a later refresh will correct it
+    }
+  }, [id, canManageCredentials]);
+
+  useEffect(() => {
+    void refreshCredentialStatus();
+  }, [refreshCredentialStatus]);
+
+  // The temporary password blocks resending only until its deadline passes.
+  // Without this the button would stay disabled on an open tab even after the
+  // hour elapsed, because the status was only fetched on mount.
+  useEffect(() => {
+    if (!canManageCredentials) return;
+    if (credentialStatus?.reason !== "not_expired") return;
+
+    const deadline = credentialStatus.passwordResetDeadline
+      ? new Date(credentialStatus.passwordResetDeadline).getTime()
+      : NaN;
+    if (Number.isNaN(deadline)) return;
+
+    // +1s guard so the server also sees the deadline as passed.
+    const delay = Math.max(deadline - Date.now() + 1000, 0);
+    const timer = setTimeout(() => {
+      void refreshCredentialStatus();
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [
+    canManageCredentials,
+    credentialStatus?.reason,
+    credentialStatus?.passwordResetDeadline,
+    refreshCredentialStatus,
+  ]);
+
+  // Re-check when the tab regains focus, so a page left in the background
+  // (where timers are throttled) still picks up the expiry.
   useEffect(() => {
     if (!canManageCredentials) return;
 
-    let cancelled = false;
-    void fetch(`/api/hrms/employees/${id}/credentials`)
-      .then((res) => res.json())
-      .then((json) => {
-        if (!cancelled && json.success && json.data) {
-          setCredentialStatus(json.data as CredentialStatus);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setCredentialStatus(null);
-      });
-
-    return () => {
-      cancelled = true;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshCredentialStatus();
+      }
     };
-  }, [id, canManageCredentials]);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [canManageCredentials, refreshCredentialStatus]);
 
   const handleResendCredentials = async () => {
     setResendingCredentials(true);
@@ -256,11 +300,7 @@ export default function EmployeeDetailsPage({
           : "New temporary password emailed successfully.",
       );
 
-      const statusRes = await fetch(`/api/hrms/employees/${id}/credentials`);
-      const statusJson = await statusRes.json();
-      if (statusRes.ok && statusJson.success && statusJson.data) {
-        setCredentialStatus(statusJson.data as CredentialStatus);
-      }
+      await refreshCredentialStatus();
     } catch (err: unknown) {
       messageApi.error(
         err instanceof Error ? err.message : "Failed to resend credentials",
@@ -796,6 +836,21 @@ export default function EmployeeDetailsPage({
               key="4"
             >
               <div className="emp-form-grid">
+                <Form.Item
+                  name="companies"
+                  label="Companies"
+                  className="emp-form-grid__full"
+                  rules={[{ required: true, type: "array", min: 1, message: "Select at least one company" }]}
+                >
+                  <Select
+                    disabled={!isEditing}
+                    mode="multiple"
+                    style={{ width: "100%" }}
+                    placeholder="Select company access"
+                    options={[...EMPLOYEE_COMPANY_OPTIONS]}
+                    maxTagCount="responsive"
+                  />
+                </Form.Item>
                 <Form.Item name="department" label="Department" rules={[{ required: true, message: "Required" }]}>
                   <Select
                     disabled={!isEditing}

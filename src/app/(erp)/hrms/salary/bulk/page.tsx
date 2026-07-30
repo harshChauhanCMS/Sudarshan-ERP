@@ -56,9 +56,11 @@ export default function PayrollBulkPage() {
       if (!res.ok) throw new Error(json?.error || "Failed to load payroll sheet");
       setRows(json.data || []);
       setSelectedRowKeys([]);
+      return true;
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Failed to load payroll sheet");
       setRows([]);
+      return false;
     } finally {
       setLoading(false);
     }
@@ -354,7 +356,11 @@ export default function PayrollBulkPage() {
         activeFilterCount={statusFilter !== "all" ? 1 : 0}
         trailing={
           <>
-            <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => void load().then((ok) => ok && message.success("Refreshed"))}
+              loading={loading}
+            >
               Refresh
             </Button>
             <Button

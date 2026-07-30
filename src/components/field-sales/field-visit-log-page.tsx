@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { message } from "antd";
+import { LoadingOutlined } from "@ant-design/icons";
 import { Icon } from "@/components/erp/icons";
 import { Btn } from "@/components/erp/ui";
 import { DashHead } from "@/components/erp/dashboards";
@@ -23,6 +24,11 @@ export function FieldVisitLogPage() {
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [viewVisit, setViewVisit] = useState<FieldVisitView | null>(null);
+
+  const handleRefresh = async () => {
+    await reload();
+    message.success("Refreshed");
+  };
 
   const myEmail = user?.email?.trim().toLowerCase();
   const myVisits = visits.filter(
@@ -92,8 +98,14 @@ export function FieldVisitLogPage() {
             : "Your assigned field visits — accept, complete, or cancel"
         }
       >
-        <Btn variant="secondary" size="sm" icon="refresh" onClick={() => void reload()}>
-          Refresh
+        <Btn
+          variant="secondary"
+          size="sm"
+          icon={loading ? undefined : "refresh"}
+          disabled={loading}
+          onClick={() => void handleRefresh()}
+        >
+          {loading ? <LoadingOutlined spin /> : null} {loading ? "Refreshing…" : "Refresh"}
         </Btn>
       </DashHead>
 
