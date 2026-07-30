@@ -39,6 +39,8 @@ import {
   EMPLOYEE_WORK_LOCATION_OPTIONS,
 } from "@/lib/hrms-employee-options";
 import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
+import { useShifts } from "@/hooks/use-shifts";
+import { shiftLabel } from "@/lib/shift-utils";
 
 const LEGACY_DRAFT_KEY = "hrms_employee_draft";
 
@@ -91,6 +93,9 @@ export default function AddEmployeePage() {
     Form.useWatch("compensationType", form) ?? "Monthly CTC";
   const department = Form.useWatch("department", form);
   const showReportingManager = !departmentSkipsReportingManager(department);
+  // Only active shifts are offered for new assignments; retired ones stay
+  // readable on existing employees but shouldn't be selectable here.
+  const { shifts, loading: shiftsLoading } = useShifts(true);
   const [departmentOptions, setDepartmentOptions] = useState<
     { value: string; label: string }[]
   >([]);
@@ -771,22 +776,25 @@ export default function AddEmployeePage() {
               ]}
             />
           </Form.Item>
-          <Form.Item name="primaryShift" label="Primary Shift">
+          <Form.Item
+            name="primaryShift"
+            label="Primary Shift"
+            extra={
+              !shiftsLoading && shifts.length === 0 ? (
+                <Link href="/hrms/shifts">No shifts defined — add one first</Link>
+              ) : undefined
+            }
+          >
             <Select
-              options={[
-                {
-                  value: "Shift A — 06:00 to 14:00",
-                  label: "Shift A — 06:00 to 14:00",
-                },
-                {
-                  value: "Shift B — 14:00 to 22:00",
-                  label: "Shift B — 14:00 to 22:00",
-                },
-                {
-                  value: "Shift C — 22:00 to 06:00",
-                  label: "Shift C — 22:00 to 06:00",
-                },
-              ]}
+              loading={shiftsLoading}
+              placeholder={shiftsLoading ? "Loading shifts…" : "Select shift"}
+              options={shifts.map((s) => ({
+                value: shiftLabel(s),
+                label: shiftLabel(s),
+              }))}
+              notFoundContent={
+                shiftsLoading ? "Loading…" : "No shifts defined yet"
+              }
             />
           </Form.Item>
           <Form.Item name="rotationPattern" label="Rotation Pattern">

@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Invoice } from "@/lib/entity-types";
 
+/**
+ * Reads the procurement endpoint rather than the raw entity store so statuses
+ * arrive normalised — legacy rows saved as "matched"/"awaiting" come back as
+ * the workflow's own vocabulary.
+ */
 export function useInvoices() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -12,7 +17,7 @@ export function useInvoices() {
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/entities/invoices", { cache: "no-store" });
+      const res = await fetch("/api/procurement/invoices", { cache: "no-store" });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
       if (!res.ok) throw new Error(json.error ?? "Failed to load invoices");
@@ -26,6 +31,8 @@ export function useInvoices() {
   }, []);
 
   useEffect(() => {
+    // Initial fetch on mount; `reload` is stable so this runs once.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void reload(false);
   }, [reload]);
 

@@ -9,6 +9,8 @@ import {
   scopeEmployeeFilter,
 } from "@/lib/hrms-access";
 import { getSession } from "@/lib/session";
+import { getHolidayMap } from "@/lib/holiday-service";
+import { resolveDayStatus } from "@/lib/holiday-rules";
 
 function parseDateParam(value: string | null): Date | null {
   if (!value) return null;
@@ -72,6 +74,12 @@ export async function GET(request: Request) {
 
     const punches = await AttendancePunch.find(query).sort({ punchedAt: 1 }).lean();
 
+    // Holidays are returned alongside the punches rather than materialised as
+    // attendance rows — no record is created just because a holiday exists.
+    // Consumers overlay them onto days that have no punch.
+    const holidayMap = await getHolidayMap(fromD, toD);
+    const holidays = Array.from(holidayMap.values());
+
     if (punches.length === 0) {
       return ok({
         from: `${fromD.getFullYear()}-${String(fromD.getMonth() + 1).padStart(2, "0")}-${String(fromD.getDate()).padStart(2, "0")}`,
@@ -79,6 +87,7 @@ export async function GET(request: Request) {
         employeeId,
         summary: [],
         daily: [],
+        holidays,
       });
     }
 
@@ -115,6 +124,7 @@ export async function GET(request: Request) {
       .map((x) => {
         const workedMs = x.inAt && x.outAt ? Math.max(0, x.outAt.getTime() - x.inAt.getTime()) : 0;
         const emp = empById.get(x.employeeId);
+        const holiday = holidayMap.get(x.day) ?? null;
         return {
           employeeId: x.employeeId,
           employeeName: emp?.fullName ?? null,
@@ -125,6 +135,10 @@ export async function GET(request: Request) {
           inAt: x.inAt?.toISOString() ?? null,
           outAt: x.outAt?.toISOString() ?? null,
           workedHours: workedMs ? msToHours(workedMs) : 0,
+          // A punch outranks the holiday, so someone who worked a holiday
+          // still reads as present — the holiday is reported alongside.
+          status: resolveDayStatus({ present: !!x.inAt, isHoliday: !!holiday }),
+          holiday: holiday ? { name: holiday.name, initials: holiday.initials } : null,
         };
       });
 
@@ -160,6 +174,7 @@ export async function GET(request: Request) {
       employeeId,
       summary: scopedSummary,
       daily: scopedDaily,
+      holidays,
     });
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Failed to build report", 500);

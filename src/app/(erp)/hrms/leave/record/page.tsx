@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, Select, Tag } from "antd";
+import { Button, Select, Tag, Dropdown, message } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
@@ -266,7 +266,47 @@ export default function LeaveRecordPage() {
         {...HRMS_BACK.dashboard}
         title="Leave Record"
         subtitle="Leave history for your team"
-        actions={<Button icon={<DownloadOutlined />}>Export</Button>}
+        actions={
+          <Dropdown
+            menu={{
+              items: [
+                { key: "xls", label: "Export as Excel (XLSX)" },
+                { key: "pdf", label: "Export as PDF" },
+              ],
+              onClick: async ({ key }) => {
+                const headers = ["Type", "From", "To", "Days", "Reason", "Approver", "Applied On", "Status"];
+                const body = filteredHistory.map(h => [
+                  h.type, h.from, h.to, h.days, h.reason, h.approver, h.appliedOn, h.status
+                ]);
+                const fileName = `leave_record_${new Date().toISOString().split("T")[0]}`;
+                if (key === "xls") {
+                  const XLSX = await import("xlsx");
+                  const ws = XLSX.utils.aoa_to_sheet([headers, ...body]);
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, ws, "Leave Record");
+                  XLSX.writeFile(wb, `${fileName}.xlsx`);
+                } else {
+                  const { jsPDF } = await import("jspdf");
+                  const { default: autoTable } = await import("jspdf-autotable");
+                  const doc = new jsPDF({ orientation: "landscape" });
+                  doc.text("Leave Record", 14, 15);
+                  autoTable(doc, {
+                    head: [headers],
+                    body,
+                    startY: 20,
+                    styles: { fontSize: 8 },
+                    headStyles: { fillColor: [37, 99, 235] },
+                  });
+                  doc.save(`${fileName}.pdf`);
+                }
+                message.success(`Exported as ${key === "xls" ? "Excel" : "PDF"}`);
+              },
+            }}
+            placement="bottomRight"
+          >
+            <Button icon={<DownloadOutlined />}>Export</Button>
+          </Dropdown>
+        }
       />
 
       <PageFilterPanel

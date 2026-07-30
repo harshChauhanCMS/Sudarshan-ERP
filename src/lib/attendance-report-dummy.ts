@@ -1,5 +1,7 @@
 /** Demo data for HR attendance reports UI */
 
+import type { DayStatus } from "@/lib/holiday-rules";
+
 export type AttendanceSummaryRow = {
   employeeId: string;
   employeeName: string;
@@ -41,6 +43,13 @@ export type AttendanceDailyRow = {
   outLat?: number | null;
   outLng?: number | null;
   workLocationType?: "Onsite" | "Field" | "Remote" | string;
+  /**
+   * Resolved day status from the API. Present on rows served by
+   * /api/hrms/attendance/report/extended; optional for older callers.
+   */
+  status?: DayStatus;
+  /** Set when the day is a company holiday, whether or not it was worked. */
+  holiday?: { name: string; initials: string } | null;
 };
 
 export type AttendanceReportKpi = {
@@ -48,6 +57,8 @@ export type AttendanceReportKpi = {
   presentDays: number;
   absentDays: number;
   lateDays: number;
+  /** Unworked company holidays — excluded from absentDays. */
+  holidayDays?: number;
   totalShortfall: number;
   totalOvertime: number;
 };

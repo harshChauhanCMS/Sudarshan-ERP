@@ -9,6 +9,7 @@ import {
   type EmployeeDailyReportRow,
   type EmployeeLeaveRow,
 } from "@/lib/employee-attendance-report";
+import type { HolidayInfo } from "@/lib/holiday-rules";
 
 export type EmployeeReportProfile = {
   employeeId: string;
@@ -24,6 +25,7 @@ export function useEmployeeAttendanceReport(
 ) {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<EmployeeDailyReportRow[]>([]);
+  const [holidays, setHolidays] = useState<HolidayInfo[]>([]);
   const [employee, setEmployee] = useState<EmployeeReportProfile | null>(null);
 
   useEffect(() => {
@@ -81,10 +83,12 @@ export function useEmployeeAttendanceReport(
               : { employeeId, employeeName: employeeId },
           );
           setRows(buildEmployeeDailyReport(daily, leaveByDay));
+          setHolidays(reportJson.data?.holidays ?? []);
         }
       } catch (e) {
         if (!cancelled) {
           setRows([]);
+          setHolidays([]);
           setEmployee(
             employeeId ? { employeeId, employeeName: employeeId } : null,
           );
@@ -103,15 +107,25 @@ export function useEmployeeAttendanceReport(
 
   const chartData = useMemo(() => buildEmployeeChartData(rows), [rows]);
 
+  const holidayDays = useMemo(
+    () => new Set(holidays.map((h) => h.date)),
+    [holidays],
+  );
+
   const summary = useMemo(
     () => ({
       present: rows.filter((r) => r.present).length,
-      absent: rows.filter((r) => r.absent && !r.onLeave).length,
+      // A holiday is never an absence, even when nothing was punched.
+      absent: rows.filter(
+        (r) => r.absent && !r.onLeave && !holidayDays.has(r.day),
+      ).length,
       late: rows.filter((r) => r.late).length,
-      leave: rows.filter((r) => r.onLeave).length,
+      // …and never counted as leave either.
+      leave: rows.filter((r) => r.onLeave && !holidayDays.has(r.day)).length,
+      holiday: holidays.length,
     }),
-    [rows],
+    [rows, holidays, holidayDays],
   );
 
-  return { loading, rows, chartData, summary, employee };
+  return { loading, rows, holidays, chartData, summary, employee };
 }

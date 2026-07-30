@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Space, Tag } from "antd";
+import { Button, Space, Tag, Tooltip } from "antd";
 import { DownloadOutlined, EyeOutlined, FileExcelOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
@@ -47,6 +47,9 @@ function fmtHoursColon(decimalHours: number | null | undefined) {
 }
 
 function attendanceStatusLabel(row: AttendanceDailyRow) {
+  // An unmarked holiday is a Holiday, never an Absent — the API already
+  // resolves this, so `row.absent` is false on holidays.
+  if (row.holiday && !row.present) return `Holiday — ${row.holiday.name}`;
   if (row.absent) return "Absent";
   if (!row.inAt || !row.outAt) return "Single Punch";
   return "Present";
@@ -231,8 +234,18 @@ export default function DailyAttendancePage() {
       width: 170,
       render: (_: unknown, row: AttendanceDailyRow) => (
         <div className="flex gap-1 flex-wrap">
+          {row.holiday && !row.present && (
+            <Tooltip title={row.holiday.name}>
+              <Tag color="blue">Holiday · {row.holiday.initials}</Tag>
+            </Tooltip>
+          )}
           {row.absent && <Tag color="red">Absent</Tag>}
           {row.present && <Tag color="green">Present</Tag>}
+          {row.present && row.holiday && (
+            <Tooltip title={`Worked on ${row.holiday.name}`}>
+              <Tag color="blue">On holiday</Tag>
+            </Tooltip>
+          )}
           {row.late && <Tag color="orange">Late</Tag>}
         </div>
       ),

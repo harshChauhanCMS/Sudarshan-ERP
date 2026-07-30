@@ -10523,6 +10523,87 @@ button.owner-vendor-chart__row:focus-visible {
   display: block;
 }
 
+/*
+ * Rows that open the record they describe (/dispatch/[id], /orders/[id]).
+ * The button fills the row and inherits the list's own flex layout, so the
+ * markup reads the same whether or not a row happens to be linkable.
+ */
+.disp-dash-row__btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.disp-dash-row--nav:hover {
+  background: var(--surface-hover, rgba(37, 99, 235, 0.06));
+}
+
+.disp-dash-row__btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/*
+ * Toolbar for the "Overdue & due orders" section, placed below the stat row.
+ * It is detached from the widget it drives, so the inline label is what tells
+ * you its scope — the KPI cards and calendar above/below it never react to it.
+ */
+.disp-dash-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  margin: 0 0 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.disp-dash-filter__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.disp-dash-filter__picker {
+  flex: 0 1 17rem;
+  min-width: 0;
+}
+
+.disp-dash-filter__count {
+  margin-left: auto;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+/*
+ * These lists are API-driven, so their length varies with the day's backlog.
+ * Grid rows stretch to their tallest card, so an unbounded list silently
+ * inflates every sibling widget in the row — cap them and scroll instead.
+ */
+.disp-dash-list--compact,
+.disp-dash-list--stack,
+.disp-dash-widget--blue .disp-dash-list,
+.disp-dash-vehicles,
+.disp-dash-delayed-panel ul {
+  max-height: 170px;
+  overflow-y: auto;
+}
+
 .disp-dash-tag {
   display: inline-block;
   padding: 0.15rem 0.4rem;
@@ -10650,6 +10731,27 @@ button.owner-vendor-chart__row:focus-visible {
 .disp-dash-track-row > div {
   flex: 1;
   min-width: 0;
+}
+
+/* Track rows render as <button> when they can open /dispatch/[id]. */
+.disp-dash-track-row--nav {
+  width: 100%;
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.disp-dash-track-row--nav:hover {
+  background: var(--surface-hover, rgba(37, 99, 235, 0.06));
+}
+
+.disp-dash-track-row--nav:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .disp-dash-track-row:last-of-type {
@@ -12202,4 +12304,268 @@ button.owner-vendor-chart__row:focus-visible {
   margin: 0;
   font-size: 13px;
   color: var(--success);
+}
+
+/* ============================================================
+   ATTENDANCE CALENDAR VIEW (HRMS employee report)
+   Status colours follow the shared vocabulary in holiday-rules.ts.
+   ============================================================ */
+.att-cal {
+  --att-present: #16a34a;
+  --att-absent: #dc2626;
+  --att-leave: #eab308;
+  --att-holiday: #2563eb;
+  --att-week-off: #9ca3af;
+  --att-half-day: #ea580c;
+}
+
+.att-cal__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.att-cal__title {
+  min-width: 10rem;
+  text-align: center;
+  font-size: 0.95rem;
+}
+
+.att-cal__totals {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.att-cal__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.att-cal__chip--present { background: var(--att-present); }
+.att-cal__chip--absent { background: var(--att-absent); }
+.att-cal__chip--leave { background: var(--att-leave); color: #422006; }
+.att-cal__chip--holiday { background: var(--att-holiday); }
+.att-cal__chip--week-off { background: var(--att-week-off); }
+.att-cal__chip--half-day { background: var(--att-half-day); }
+
+.att-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.att-cal__grid--head {
+  margin-bottom: 4px;
+}
+
+.att-cal__head {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--fg-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.att-cal__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2px;
+  width: 100%;
+  min-height: 62px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elev, transparent);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.att-cal__cell:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+
+.att-cal__cell:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.att-cal__cell--muted {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.att-cal__date {
+  font-size: 0.72rem;
+  color: var(--fg-subtle);
+}
+
+/* The status code sits in a filled pill so colour is never the only cue —
+   the letter carries the same information for colour-blind users. */
+.att-cal__code {
+  align-self: stretch;
+  text-align: center;
+  padding: 2px 4px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.att-cal__cell--present .att-cal__code { background: var(--att-present); }
+.att-cal__cell--absent .att-cal__code { background: var(--att-absent); }
+.att-cal__cell--leave .att-cal__code { background: var(--att-leave); color: #422006; }
+.att-cal__cell--holiday .att-cal__code { background: var(--att-holiday); }
+.att-cal__cell--week-off .att-cal__code { background: var(--att-week-off); }
+.att-cal__cell--half-day .att-cal__code { background: var(--att-half-day); }
+
+.att-cal__legend {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.4rem 1rem;
+}
+
+.att-cal__legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.76rem;
+}
+
+.att-cal__legend-note {
+  color: var(--fg-subtle);
+  font-size: 0.72rem;
+}
+
+.att-cal__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.att-cal__swatch--present { background: var(--att-present); }
+.att-cal__swatch--absent { background: var(--att-absent); }
+.att-cal__swatch--leave { background: var(--att-leave); }
+.att-cal__swatch--holiday { background: var(--att-holiday); }
+.att-cal__swatch--week-off { background: var(--att-week-off); }
+.att-cal__swatch--half-day { background: var(--att-half-day); }
+
+.att-cal__detail {
+  display: grid;
+  grid-template-columns: minmax(90px, 34%) 1fr;
+  gap: 8px 14px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.att-cal__detail dt { color: var(--fg-subtle); }
+.att-cal__detail dd { margin: 0; }
+
+@media (max-width: 640px) {
+  .att-cal__cell { min-height: 52px; padding: 4px; }
+  .att-cal__code { font-size: 0.66rem; }
+  .att-cal__totals { width: 100%; margin-left: 0; }
+}
+
+.att-cal__viewswitch {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px 0;
+}
+
+/* Company-holiday date cells on the attendance overview. */
+.hol-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.hol-strip li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 88px;
+}
+
+.hol-strip__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 6px 4px;
+  border-radius: 10px;
+  border: 1px solid var(--att-holiday, #2563eb);
+  background: color-mix(in srgb, #2563eb 10%, transparent);
+  cursor: default;
+}
+
+.hol-strip__cell:focus-visible {
+  outline: 2px solid var(--att-holiday, #2563eb);
+  outline-offset: 2px;
+}
+
+.hol-strip__dow,
+.hol-strip__mon {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-subtle);
+}
+
+.hol-strip__day {
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.hol-strip__code {
+  margin: 2px 0;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  background: var(--att-holiday, #2563eb);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.hol-strip__name {
+  font-size: 0.7rem;
+  text-align: center;
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+@media (max-width: 640px) {
+  .hol-strip li { width: 74px; }
 }

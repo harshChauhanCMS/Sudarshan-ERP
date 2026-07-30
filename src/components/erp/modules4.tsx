@@ -25,7 +25,11 @@ import { useSpareParts } from "@/hooks/use-spare-parts";
 import { useEntityList } from "@/hooks/use-entity-list";
 import { DashHead, SectionH } from "./dashboards";
 import PageFilterPanel from "@/components/common/PageFilterPanel";
-import { Select, message } from "antd";
+import { Select, message, Dropdown } from "antd";
+import type { MenuProps } from "antd";
+import * as XLSX from "xlsx";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 
 /* ============================================================
    MODULES PART 4 — Spare Parts + shared add modals
@@ -196,11 +200,46 @@ const SparePartsInventory = () => {
     [deletingCode, deleteSparePart]
   );
 
+  const handleExport = (type: 'xls' | 'pdf') => {
+    const headers = ["SKU", "Part", "Category", "Vendor", "Location", "Stock", "Unit", "Reorder At", "Value", "Last Issued", "Status", "Critical"];
+    const exportData = filtered.map(p => [
+      p.code, p.name, p.category, p.vendor, p.location, p.stock, p.unit,
+      p.reorder, p.value, p.lastIssued ?? "", p.status, p.critical ? "Yes" : "No"
+    ]);
+    const fileName = `spare_parts_${new Date().toISOString().split("T")[0]}`;
+
+    if (type === 'xls') {
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...exportData]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Spare Parts");
+      XLSX.writeFile(wb, `${fileName}.xlsx`);
+    } else {
+      const doc = new jsPDF({ orientation: "landscape" });
+      doc.text("Spare Parts Inventory", 14, 15);
+      autoTable(doc, {
+        head: [headers],
+        body: exportData,
+        startY: 20,
+        styles: { fontSize: 7 },
+        headStyles: { fillColor: [37, 99, 235] }
+      });
+      doc.save(`${fileName}.pdf`);
+    }
+    message.success(`Exported spare parts as ${type === 'xls' ? 'Excel' : 'PDF'}`);
+  };
+
+  const exportMenuItems: MenuProps['items'] = [
+    { key: "xls", label: "Export as Excel (XLSX)", onClick: () => handleExport('xls') },
+    { key: "pdf", label: "Export as PDF", onClick: () => handleExport('pdf') }
+  ];
+
   return (
     <>
       <DashHead title="Spare Parts Inventory" sub="Mechanical, electrical & instrumentation spares · reorder & breakdown alerts">
         <Btn size="sm" icon="filter">Filters</Btn>
-        <Btn size="sm" icon="download">Export</Btn>
+        <Dropdown menu={{ items: exportMenuItems }} placement="bottomRight">
+          <Btn size="sm" icon="download">Export</Btn>
+        </Dropdown>
         <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/inventory/spare-parts/add")}>Add spare part</Btn>
       </DashHead>
 

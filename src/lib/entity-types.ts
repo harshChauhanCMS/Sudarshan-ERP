@@ -50,6 +50,17 @@ export type Order = {
   specialInstructions?: string;
 };
 
+/** One entry in an invoice's audit trail — who moved it, when, and why. */
+export type InvoiceEvent = {
+  action: string;
+  at: string;
+  byEmail?: string;
+  byName?: string;
+  note?: string;
+  from?: string;
+  to?: string;
+};
+
 export type Invoice = {
   id: string;
   po: string;
@@ -59,6 +70,19 @@ export type Invoice = {
   poAmt: number;
   status: string;
   reason: string;
+  /** Vendor's own invoice number, distinct from our internal `id`. */
+  vendorInvoiceNo?: string;
+  notes?: string;
+  raisedAt?: string;
+  raisedByEmail?: string;
+  verifiedAt?: string;
+  verifiedByEmail?: string;
+  /** Verifier's mismatch note — what the vendor has to correct. */
+  mismatchNote?: string;
+  resubmittedAt?: string;
+  /** Counts how many times the vendor has corrected and resent this invoice. */
+  revision?: number;
+  history?: InvoiceEvent[];
 };
 
 export type Vendor = {
@@ -98,6 +122,20 @@ export type PurchaseOrder = {
   deliveryLocation?: string;
   notes?: string;
   poDate?: string;
+  createdByEmail?: string;
+  createdByName?: string;
+  createdByRole?: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  rejectionReason?: string;
+  /** Vendor-facing leg of the lifecycle — see `procurement-workflow.ts`. */
+  sentToVendorAt?: string;
+  sentToVendorBy?: string;
+  vendorRespondedAt?: string;
+  /** Vendor's reason when they decline, or their acknowledgement note. */
+  vendorResponseNote?: string;
+  /** Internal id of the invoice raised against this PO. */
+  invoiceId?: string;
 };
 
 export type RawMaterial = {

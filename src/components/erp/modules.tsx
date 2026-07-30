@@ -4,7 +4,7 @@
 
 import React, { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DownloadOutlined, AlertOutlined, AppstoreOutlined, CarOutlined, CheckCircleOutlined, CheckOutlined, CloseOutlined, ClockCircleOutlined, DollarOutlined, FileExclamationOutlined, ShoppingCartOutlined, TeamOutlined, ThunderboltOutlined, WarningOutlined } from "@ant-design/icons";
+import { DownloadOutlined, AlertOutlined, AppstoreOutlined, CarOutlined, CheckCircleOutlined, CheckOutlined, CloseOutlined, ClockCircleOutlined, DollarOutlined, FileExclamationOutlined, FileTextOutlined, SendOutlined, ShoppingCartOutlined, TeamOutlined, ThunderboltOutlined, WarningOutlined } from "@ant-design/icons";
 import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS, erpStatusBadge, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
 import { ErpViewAction, TableActionIcon, ViewEditActions } from "@/components/common/TableActionIcons";
@@ -29,6 +29,16 @@ import { DashHead, SectionH } from "./dashboards";
 import { useRawMaterials } from "@/hooks/use-raw-materials";
 import { useVendors } from "@/hooks/use-vendors";
 import { useOrders } from "@/hooks/use-orders";
+import {
+  PO_STATUS_LABELS,
+  canPoTransition,
+  normalizePoStatus,
+} from "@/lib/procurement-workflow";
+import {
+  raiseInvoice,
+  recordVendorResponse,
+  sendPoToVendor,
+} from "@/lib/procurement-api";
 
 function detailGrid(fields) {
   return (
@@ -458,6 +468,16 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
   const [tab, setTab] = useState(defaultTab);
   const [viewPo, setViewPo] = useState(null);
   const [poActionId, setPoActionId] = useState(null);
+  // { po, accepted } — vendor's answer is recorded by procurement on their behalf.
+  const [vendorResp, setVendorResp] = useState(null);
+  const [vendorRespNote, setVendorRespNote] = useState("");
+  const [invoicePo, setInvoicePo] = useState(null);
+  const [invoiceForm, setInvoiceForm] = useState({
+    invAmt: "",
+    vendorInvoiceNo: "",
+    invDate: "",
+    notes: "",
+  });
 
   const [vendorSearch, setVendorSearch] = useState("");
   const [vendorRatingFilter, setVendorRatingFilter] = useState("all");
@@ -486,6 +506,59 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
     },
     [refresh]
   );
+
+  /** Runs a workflow step and refreshes; every one reports its own failure. */
+  const runPoStep = useCallback(
+    async (id, fn, successMessage) => {
+      setPoActionId(id);
+      try {
+        await fn();
+        message.success(successMessage);
+        await refresh();
+        return true;
+      } catch (e) {
+        message.error(e instanceof Error ? e.message : "Action failed");
+        return false;
+      } finally {
+        setPoActionId(null);
+      }
+    },
+    [refresh]
+  );
+
+  const submitVendorResponse = async () => {
+    if (!vendorResp) return;
+    const { po, accepted } = vendorResp;
+    const done = await runPoStep(
+      po.id,
+      () => recordVendorResponse(po.id, accepted, vendorRespNote),
+      accepted ? "Vendor acceptance recorded." : "Vendor rejection recorded."
+    );
+    if (done) {
+      setVendorResp(null);
+      setVendorRespNote("");
+    }
+  };
+
+  const submitInvoice = async () => {
+    if (!invoicePo) return;
+    const done = await runPoStep(
+      invoicePo.id,
+      () =>
+        raiseInvoice({
+          poId: invoicePo.id,
+          invAmt: invoiceForm.invAmt,
+          vendorInvoiceNo: invoiceForm.vendorInvoiceNo,
+          invDate: invoiceForm.invDate,
+          notes: invoiceForm.notes,
+        }),
+      "Invoice recorded — pending verification."
+    );
+    if (done) {
+      setInvoicePo(null);
+      setInvoiceForm({ invAmt: "", vendorInvoiceNo: "", invDate: "", notes: "" });
+    }
+  };
 
   const filteredVendors = useMemo(() => {
     return vendors.filter(v => {
@@ -639,7 +712,11 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         title: "Status",
         dataIndex: "status",
         key: "status",
-        render: (status) => erpStatusBadge(status),
+        render: (status) => (
+          <span title={PO_STATUS_LABELS[normalizePoStatus(status)]}>
+            {erpStatusBadge(normalizePoStatus(status))}
+          </span>
+        ),
       },
       {
         title: "Invoice",
@@ -650,44 +727,154 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       {
         title: "Actions",
         key: "actions",
-        width: 132,
+        width: 190,
         align: "center",
-        render: (_, row) => (
-          <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
-            <ErpViewAction label="View purchase order" onClick={() => setViewPo(row)} />
-            <TableActionIcon
-              icon={<DownloadOutlined />}
-              label="Download purchase order"
-              onClick={() => downloadPoCsv(row)}
-            />
-            {canApprovePo && row.status === "pending_verification" ? (
-              <>
+        // Each step is offered only when the workflow actually allows it, so
+        // the table can't present a button the API would reject.
+        render: (_, row) => {
+          const busy = poActionId === row.id;
+          return (
+            <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
+              <ErpViewAction label="View purchase order" onClick={() => setViewPo(row)} />
+              <TableActionIcon
+                icon={<DownloadOutlined />}
+                label="Download purchase order"
+                onClick={() => downloadPoCsv(row)}
+              />
+              {canApprovePo && canPoTransition(row.status, "approve") ? (
+                <>
+                  <TableActionIcon
+                    icon={<CheckOutlined />}
+                    label="Approve purchase order"
+                    onClick={() => decidePo(row.id, "approve")}
+                    disabled={busy}
+                  />
+                  <TableActionIcon
+                    icon={<CloseOutlined />}
+                    label="Reject purchase order"
+                    onClick={() => decidePo(row.id, "reject")}
+                    disabled={busy}
+                  />
+                </>
+              ) : null}
+              {canPoTransition(row.status, "send") ? (
                 <TableActionIcon
-                  icon={<CheckOutlined />}
-                  label="Approve purchase order"
-                  onClick={() => decidePo(row.id, "approve")}
-                  disabled={poActionId === row.id}
+                  icon={<SendOutlined />}
+                  label="Send purchase order to vendor"
+                  onClick={() =>
+                    runPoStep(row.id, () => sendPoToVendor(row.id), "Purchase order sent to vendor.")
+                  }
+                  disabled={busy}
                 />
+              ) : null}
+              {canPoTransition(row.status, "vendor_accept") ? (
+                <>
+                  <TableActionIcon
+                    icon={<CheckCircleOutlined />}
+                    label="Vendor accepted this PO"
+                    onClick={() => setVendorResp({ po: row, accepted: true })}
+                    disabled={busy}
+                  />
+                  <TableActionIcon
+                    icon={<CloseOutlined />}
+                    label="Vendor declined this PO"
+                    onClick={() => setVendorResp({ po: row, accepted: false })}
+                    disabled={busy}
+                  />
+                </>
+              ) : null}
+              {canPoTransition(row.status, "invoice") ? (
                 <TableActionIcon
-                  icon={<CloseOutlined />}
-                  label="Reject purchase order"
-                  onClick={() => decidePo(row.id, "reject")}
-                  disabled={poActionId === row.id}
+                  icon={<FileTextOutlined />}
+                  label="Record vendor invoice against this PO"
+                  onClick={() => {
+                    setInvoicePo(row);
+                    setInvoiceForm({
+                      invAmt: String(row.total ?? ""),
+                      vendorInvoiceNo: "",
+                      invDate: "",
+                      notes: "",
+                    });
+                  }}
+                  disabled={busy}
                 />
-              </>
-            ) : null}
-          </div>
-        ),
+              ) : null}
+            </div>
+          );
+        },
       },
     ],
-    [canApprovePo, decidePo, poActionId]
+    [canApprovePo, decidePo, poActionId, runPoStep]
   );
+
+  const handleExport = (type: 'xls' | 'pdf') => {
+    if (tab === 'vendors') {
+      const headers = ["ID", "Name", "City", "Category", "Rating", "POs YTD", "YTD Spend", "Contact", "Phone", "Email", "GSTIN", "Status"];
+      const exportData = filteredVendors.map(v => [
+        v.id, v.name, v.city, v.category, v.rating, v.poCount, v.ytd,
+        v.contactPerson ?? "", v.phone ?? "", v.email ?? "", v.gstin ?? "", v.status ?? "active"
+      ]);
+      const fileName = `vendors_${new Date().toISOString().split("T")[0]}`;
+
+      if (type === 'xls') {
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...exportData]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Vendors");
+        XLSX.writeFile(wb, `${fileName}.xlsx`);
+      } else {
+        const doc = new jsPDF();
+        doc.text("Vendors", 14, 15);
+        autoTable(doc, {
+          head: [headers],
+          body: exportData,
+          startY: 20,
+          styles: { fontSize: 7 },
+          headStyles: { fillColor: [37, 99, 235] }
+        });
+        doc.save(`${fileName}.pdf`);
+      }
+    } else {
+      const headers = ["PO #", "Vendor", "Date", "Items", "Total", "Status", "Invoice", "Material", "Code", "Grade", "Quantity", "Unit", "Rate"];
+      const exportData = filteredPos.map(p => [
+        p.id, p.vendor, p.date, p.items, p.total, p.status, p.invoice,
+        p.materialName ?? "", p.materialCode ?? "", p.grade ?? "",
+        p.quantity ?? "", p.unit ?? "", p.rate ?? ""
+      ]);
+      const fileName = `purchase_orders_${new Date().toISOString().split("T")[0]}`;
+
+      if (type === 'xls') {
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...exportData]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Purchase Orders");
+        XLSX.writeFile(wb, `${fileName}.xlsx`);
+      } else {
+        const doc = new jsPDF({ orientation: "landscape" });
+        doc.text("Purchase Orders", 14, 15);
+        autoTable(doc, {
+          head: [headers],
+          body: exportData,
+          startY: 20,
+          styles: { fontSize: 7 },
+          headStyles: { fillColor: [37, 99, 235] }
+        });
+        doc.save(`${fileName}.pdf`);
+      }
+    }
+    message.success(`Exported ${tab === 'vendors' ? 'vendors' : 'purchase orders'} as ${type === 'xls' ? 'Excel' : 'PDF'}`);
+  };
+
+  const exportMenuItems: MenuProps['items'] = [
+    { key: "xls", label: "Export as Excel (XLSX)", onClick: () => handleExport('xls') },
+    { key: "pdf", label: "Export as PDF", onClick: () => handleExport('pdf') }
+  ];
 
   return (
     <>
       <DashHead title="Vendors & Procurement" sub="Manage vendors, purchase orders, and supplier history">
         <Btn icon="upload" size="sm">Import</Btn>
-        <Btn icon="download" size="sm">Export</Btn>
+        <Dropdown menu={{ items: exportMenuItems }} placement="bottomRight">
+          <Btn icon="download" size="sm">Export</Btn>
+        </Dropdown>
         {tab === "vendors" ? (
           <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/procurement/vendors/add")}>Add vendor</Btn>
         ) : (
@@ -835,6 +1022,129 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         }
       >
         {viewPo ? detailGrid(poDetailFields(viewPo)) : null}
+      </Modal>
+
+      <Modal
+        open={!!vendorResp}
+        onClose={() => setVendorResp(null)}
+        title={
+          vendorResp?.accepted
+            ? "Record vendor acceptance"
+            : "Record vendor rejection"
+        }
+        sub={vendorResp ? `${vendorResp.po.id} · ${vendorResp.po.vendor}` : ""}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setVendorResp(null)}>
+              Cancel
+            </Btn>
+            <Btn
+              variant="primary"
+              size="sm"
+              disabled={
+                poActionId === vendorResp?.po?.id ||
+                (!vendorResp?.accepted && !vendorRespNote.trim())
+              }
+              onClick={() => void submitVendorResponse()}
+            >
+              {vendorResp?.accepted ? "Mark accepted" : "Mark declined"}
+            </Btn>
+          </>
+        }
+      >
+        <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
+          Vendors don&apos;t log in here, so record their answer on their behalf
+          once they confirm.
+          {vendorResp?.accepted
+            ? " After acceptance you can record their invoice against this PO."
+            : " A reason is required so the PO history explains the decline."}
+        </p>
+        <FormField
+          label={vendorResp?.accepted ? "Note (optional)" : "Reason for decline"}
+        >
+          <textarea
+            className="input"
+            rows={3}
+            maxLength={500}
+            value={vendorRespNote}
+            onChange={(e) => setVendorRespNote(e.target.value)}
+            placeholder={
+              vendorResp?.accepted
+                ? "e.g. Confirmed by email, delivery in 5 days"
+                : "e.g. Rate not workable, material out of stock"
+            }
+          />
+        </FormField>
+      </Modal>
+
+      <Modal
+        open={!!invoicePo}
+        onClose={() => setInvoicePo(null)}
+        title="Record vendor invoice"
+        sub={invoicePo ? `Against ${invoicePo.id} · ${invoicePo.vendor}` : ""}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setInvoicePo(null)}>
+              Cancel
+            </Btn>
+            <Btn
+              variant="primary"
+              size="sm"
+              disabled={poActionId === invoicePo?.id || !invoiceForm.invAmt}
+              onClick={() => void submitInvoice()}
+            >
+              Save invoice
+            </Btn>
+          </>
+        }
+      >
+        <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
+          PO value {invoicePo ? fmtINRFull(invoicePo.total) : "—"}. The invoice
+          goes to <strong>pending verification</strong> — it is never
+          auto-approved, even when the amount matches.
+        </p>
+        <FormGrid>
+          <FormField label="Invoice amount (₹)" required>
+            <FormInput
+              type="number"
+              min={0}
+              step="0.01"
+              value={invoiceForm.invAmt}
+              onChange={(e) =>
+                setInvoiceForm((f) => ({ ...f, invAmt: e.target.value }))
+              }
+            />
+          </FormField>
+          <FormField label="Vendor invoice no.">
+            <FormInput
+              value={invoiceForm.vendorInvoiceNo}
+              onChange={(e) =>
+                setInvoiceForm((f) => ({ ...f, vendorInvoiceNo: e.target.value }))
+              }
+              placeholder="Vendor's own reference"
+            />
+          </FormField>
+          <FormField label="Invoice date">
+            <FormInput
+              type="date"
+              value={invoiceForm.invDate}
+              onChange={(e) =>
+                setInvoiceForm((f) => ({ ...f, invDate: e.target.value }))
+              }
+            />
+          </FormField>
+        </FormGrid>
+        <FormField label="Notes">
+          <textarea
+            className="input"
+            rows={2}
+            maxLength={1000}
+            value={invoiceForm.notes}
+            onChange={(e) =>
+              setInvoiceForm((f) => ({ ...f, notes: e.target.value }))
+            }
+          />
+        </FormField>
       </Modal>
     </>
   );

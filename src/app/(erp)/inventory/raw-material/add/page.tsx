@@ -58,9 +58,10 @@ export default function RawMaterialMasterPage() {
   const {
     items: rawMaterials,
     loading: rawMaterialsLoading,
+    error: rawMaterialsError,
     reload: reloadRawMaterials,
   } = useRawMaterials();
-  const { items: vendors } = useVendors();
+  const { items: vendors, loading: vendorsLoading } = useVendors();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const form = useFormState(INITIAL);
@@ -77,8 +78,15 @@ export default function RawMaterialMasterPage() {
 
   useEffect(() => {
     if (!editCode) return;
+    // Both lists load async — an empty array mid-fetch is not "not found", and
+    // vendors must be in hand before the preferred-vendor id can be resolved.
+    if (rawMaterialsLoading || vendorsLoading) return;
     if (!editing) {
-      message.error(`Material "${editCode}" not found.`);
+      message.error(
+        rawMaterialsError
+          ? `Could not load raw materials: ${rawMaterialsError}`
+          : `Material "${editCode}" not found.`
+      );
       router.replace("/inventory/raw-material");
       return;
     }
@@ -98,7 +106,7 @@ export default function RawMaterialMasterPage() {
       notes: editing.notes ?? "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once when edit target resolves
-  }, [editCode, editing?.code]);
+  }, [editCode, editing?.code, rawMaterialsLoading, vendorsLoading]);
 
   // Auto-fill the next sequential code for new materials — stays editable.
   // Waits for the real list to finish loading so it doesn't lock in a code

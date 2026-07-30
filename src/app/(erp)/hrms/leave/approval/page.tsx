@@ -11,6 +11,7 @@ import {
   message,
   Tabs,
   Tooltip,
+  Dropdown,
 } from "antd";
 import {
   CheckOutlined,
@@ -425,7 +426,53 @@ export default function LeaveApprovalPage() {
             >
               Refresh
             </Button>
-            <Button icon={<DownloadOutlined />}>Export</Button>
+            <Dropdown
+              menu={{
+                items: [
+                  { key: "xls", label: "Export as Excel (XLSX)" },
+                  { key: "pdf", label: "Export as PDF" },
+                ],
+                onClick: async ({ key }) => {
+                  const headers = ["Employee ID", "Name", "Department", "Leave Type", "From", "To", "Days", "Reason", "Status"];
+                  const body = tableData.map(row => [
+                    String(row.employeeId ?? ""),
+                    String(row.employeeName ?? ""),
+                    String(row.department ?? ""),
+                    LEAVE_TYPE_LABEL[String(row.leaveType ?? "")] ?? String(row.leaveType ?? ""),
+                    formatDate(row.fromDate),
+                    formatDate(row.toDate),
+                    String(row.days ?? ""),
+                    String(row.reason ?? ""),
+                    LEAVE_STATUS_LABEL[String(row.status ?? "")] ?? String(row.status ?? ""),
+                  ]);
+                  const fileName = `leave_approval_${new Date().toISOString().split("T")[0]}`;
+                  if (key === "xls") {
+                    const XLSX = await import("xlsx");
+                    const ws = XLSX.utils.aoa_to_sheet([headers, ...body]);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "Leave Approval");
+                    XLSX.writeFile(wb, `${fileName}.xlsx`);
+                  } else {
+                    const { jsPDF } = await import("jspdf");
+                    const { default: autoTable } = await import("jspdf-autotable");
+                    const doc = new jsPDF({ orientation: "landscape" });
+                    doc.text("Leave Approval", 14, 15);
+                    autoTable(doc, {
+                      head: [headers],
+                      body,
+                      startY: 20,
+                      styles: { fontSize: 7 },
+                      headStyles: { fillColor: [37, 99, 235] },
+                    });
+                    doc.save(`${fileName}.pdf`);
+                  }
+                  message.success(`Exported as ${key === "xls" ? "Excel" : "PDF"}`);
+                },
+              }}
+              placement="bottomRight"
+            >
+              <Button icon={<DownloadOutlined />}>Export</Button>
+            </Dropdown>
           </>
         }
       />

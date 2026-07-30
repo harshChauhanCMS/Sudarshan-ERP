@@ -5,6 +5,7 @@ import AttendancePunch from "@/lib/models/AttendancePunch";
 import LeaveRequest from "@/lib/models/LeaveRequest";
 import SalarySheet from "@/lib/models/SalarySheet";
 import { calcSalary } from "@/lib/salary-calc";
+import { getHolidayMap } from "@/lib/holiday-service";
 import { getSession } from "@/lib/session";
 import { canManagePayroll } from "@/lib/hrms-access";
 import { User } from "@/models/User";
@@ -63,6 +64,8 @@ export async function POST(request: Request) {
     }
 
     const workingDays = countWorkingDays(start, end);
+    // Same holiday source as attendance and reports — see holiday-service.
+    const holidayMap = await getHolidayMap(start, end);
 
     const employeeIds: string[] = Array.isArray(body.employeeIds)
       ? body.employeeIds.map((id: unknown) => String(id)).filter(Boolean)
@@ -116,18 +119,23 @@ export async function POST(request: Request) {
 
       let daysPresent = 0;
       let overtimeHours = 0;
+      let unworkedHolidays = 0;
 
       const cur = new Date(startOfDay(start));
       while (cur <= end) {
         if (cur.getDay() !== 0) {
-          const k = `${eid}|${dayKey(cur)}`;
-          const entry = punchDayMap.get(k);
+          const key = dayKey(cur);
+          const entry = punchDayMap.get(`${eid}|${key}`);
           if (entry?.inAt) {
             daysPresent++;
             if (entry.outAt && emp.overtimeApplicable) {
               const workedH = (entry.outAt.getTime() - entry.inAt.getTime()) / 36e5;
               if (workedH > expectedHours) overtimeHours += workedH - expectedHours;
             }
+          } else if (holidayMap.has(key)) {
+            // Counted only when *not* worked — a worked holiday is already in
+            // daysPresent, and double-counting would over-credit the employee.
+            unworkedHolidays++;
           }
         }
         cur.setDate(cur.getDate() + 1);
@@ -148,6 +156,7 @@ export async function POST(request: Request) {
         overtimeApplicable: emp.overtimeApplicable === true,
         approvedLeaveDays: leaveInfo.paid,
         unpaidLeaveDays: leaveInfo.unpaid,
+        holidayDays: unworkedHolidays,
       });
 
       const sheet = {
@@ -166,6 +175,8 @@ export async function POST(request: Request) {
         grossSalary: result.grossSalary,
         workingDays,
         daysPresent,
+        holidayDays: unworkedHolidays,
+        absentDays: result.absentDays,
         leaveDays: leaveInfo.paid,
         unpaidLeaveDays: leaveInfo.unpaid,
         leaveDeduction: result.leaveDeduction,

@@ -1628,11 +1628,34 @@ const PackagingInventory = () => {
     [deletingCode, deletePackaging]
   );
 
+  const handlePackExport = (type: 'xls' | 'pdf') => {
+    const title = "Packaging Inventory";
+    const subtitle = `Exported ${new Date().toISOString().split("T")[0]}`;
+    const head = ["SKU", "Description", "Stock", "Unit", "Reorder At", "Trend", "Status"];
+    const body = filteredPackaging.map(p => [
+      p.code, p.name, p.stock, p.unit, p.reorder,
+      `${p.trend > 0 ? "↑" : "↓"} ${Math.abs(p.trend)}%`, p.status
+    ]);
+    if (type === 'pdf') {
+      downloadGenericTablePdf(title, subtitle, head, body);
+    } else {
+      downloadGenericTableExcel(title, subtitle, head, body);
+    }
+    message.success(`Exported packaging as ${type === 'xls' ? 'Excel' : 'PDF'}`);
+  };
+
+  const packExportMenuItems = [
+    { key: "xls", label: "Export as Excel (XLSX)", onClick: () => handlePackExport('xls') },
+    { key: "pdf", label: "Export as PDF", onClick: () => handlePackExport('pdf') }
+  ];
+
   return (
     <>
       <DashHead title="Packaging Inventory" sub="FIBC, PP woven, BOPP — stock, bag auto-calc, alerts">
         <Btn size="sm" icon="bolt" onClick={() => setCalcOpen(true)}>Bag calc</Btn>
-        <Btn size="sm" icon="download">Export</Btn>
+        <Dropdown menu={{ items: packExportMenuItems }} placement="bottomRight">
+          <Btn size="sm" icon="download">Export</Btn>
+        </Dropdown>
         <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/inventory/packaging/add")}>Add packaging</Btn>
       </DashHead>
 

@@ -180,6 +180,17 @@ export default function CreateCustomerOrderPage() {
     }
   };
 
+  const validateDraft = (): string | null => {
+    if (!form.values.customer) return "Customer is required.";
+    if (!form.values.material) return "Material is required.";
+
+    if (form.values.specialInstructions.length > 500) {
+      return "Special instructions must be at most 500 characters.";
+    }
+
+    return null;
+  };
+
   const validate = (): string | null => {
     if (!form.values.customer) return "Customer is required.";
     if (!form.values.material) return "Material is required.";
@@ -204,7 +215,7 @@ export default function CreateCustomerOrderPage() {
 
   const saveOrder = async (asDraft: boolean) => {
     clearError();
-    const validationError = validate();
+    const validationError = asDraft ? validateDraft() : validate();
     if (validationError) {
       message.error(validationError);
       throw new Error(validationError);

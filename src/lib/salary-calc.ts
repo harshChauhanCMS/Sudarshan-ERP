@@ -22,6 +22,14 @@ export interface SalaryInputs {
   approvedLeaveDays: number;  // paid leaves (casual / sick / privilege) — do NOT deduct
   unpaidLeaveDays: number;    // explicitly unpaid approved leaves
 
+  /**
+   * Company holidays falling inside the period that the employee did not work.
+   * Paid days: they are neither leave nor absence, so they must never produce
+   * a deduction. Optional and defaulting to 0 so existing callers are
+   * unaffected. See `holiday-rules.ts` for the rule this implements.
+   */
+  holidayDays?: number;
+
   // Manual overrides (HR can set these)
   tds?: number;
   otherDeductions?: number;
@@ -30,7 +38,8 @@ export interface SalaryInputs {
 export interface SalaryResult {
   grossSalary: number;
   overtimeAmount: number;
-  absentDays: number;         // days neither present nor on paid leave
+  holidayDays: number;        // paid holidays credited in this period
+  absentDays: number;         // days neither present, on paid leave, nor a holiday
   totalDeductionDays: number; // unpaidLeaveDays + absentDays
   leaveDeduction: number;     // deduction for totalDeductionDays
   pfEmployee: number;
@@ -88,14 +97,21 @@ export function calcSalary(inputs: SalaryInputs): SalaryResult {
     workingDays, daysPresent, approvedLeaveDays,
     overtimeHours, workingHoursPerDay,
     overtimeApplicable, unpaidLeaveDays,
+    holidayDays = 0,
     tds = 0, otherDeductions: otherDed = 0,
   } = inputs;
 
   const grossSalary = round2(basicSalary + da + hra + otherConveyance + specialBonus);
 
-  // Days covered = present + paid leave (capped to workingDays)
-  const coveredDays = Math.min(daysPresent + approvedLeaveDays, workingDays);
-  // Absent = working days not covered by attendance or paid leave
+  // Days covered = present + paid leave + company holidays (capped to workingDays).
+  // Holidays are counted here — and nowhere else — so they are paid without
+  // being recorded as leave or absence, and without changing the per-day rate
+  // (gross / workingDays), which stays exactly as it was.
+  const coveredDays = Math.min(
+    daysPresent + approvedLeaveDays + holidayDays,
+    workingDays
+  );
+  // Absent = working days not covered by attendance, paid leave, or a holiday
   const absentDays = Math.max(0, workingDays - coveredDays);
   // Total days to deduct = absent + explicitly unpaid leaves
   const totalDeductionDays = round2(absentDays + unpaidLeaveDays);
@@ -121,6 +137,7 @@ export function calcSalary(inputs: SalaryInputs): SalaryResult {
   return {
     grossSalary,
     overtimeAmount,
+    holidayDays,
     absentDays,
     totalDeductionDays,
     leaveDeduction,

@@ -25,6 +25,9 @@ const SalarySheetSchema = new Schema(
     // Leave
     workingDays: { type: Number, default: 0 },
     daysPresent: { type: Number, default: 0 },
+    /** Paid company holidays — never deducted, never counted as leave/absence. */
+    holidayDays: { type: Number, default: 0 },
+    absentDays: { type: Number, default: 0 },
     leaveDays: { type: Number, default: 0 },
     unpaidLeaveDays: { type: Number, default: 0 },
     leaveDeduction: { type: Number, default: 0 },

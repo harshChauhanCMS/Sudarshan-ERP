@@ -9,6 +9,8 @@ import {
 } from "@/lib/hrms-access";
 import { getSession } from "@/lib/session";
 import { escapeRegex } from "@/lib/escape-regex";
+import { getHolidayMap } from "@/lib/holiday-service";
+import { resolveDayStatus } from "@/lib/holiday-rules";
 
 function parseDateParam(v: string | null): Date | null {
   if (!v) return null;
@@ -111,11 +113,19 @@ export async function GET(request: Request) {
 
     const punches = await AttendancePunch.find(punchQuery).sort({ punchedAt: 1 }).lean();
 
+    // Same source of truth as the base report and payroll — see holiday-service.
+    const holidayMap = await getHolidayMap(fromD, toD);
+    const holidays = Array.from(holidayMap.values());
+
     if (empIds.length === 0 || punches.length === 0) {
-      const workingDays = allDaysBetween(fromD, toD).filter(
+      const nonSundays = allDaysBetween(fromD, toD).filter(
         (d) => new Date(d).getDay() !== 0
-      ).length;
+      );
+      // Holidays are paid but not attendable, so they are not working days.
+      const workingDays = nonSundays.filter((d) => !holidayMap.has(d)).length;
       return ok({
+        holidays,
+        holidayDays: nonSundays.length - workingDays,
         from: `${fromD.getFullYear()}-${String(fromD.getMonth() + 1).padStart(2, "0")}-${String(fromD.getDate()).padStart(2, "0")}`,
         to: `${toD.getFullYear()}-${String(toD.getMonth() + 1).padStart(2, "0")}-${String(toD.getDate()).padStart(2, "0")}`,
         workingDays,
@@ -177,6 +187,12 @@ export async function GET(request: Request) {
         const k = `${eid}|${day}`;
         const entry = dayMap.get(k);
         const isPresent = !!entry?.inAt;
+        const holiday = holidayMap.get(day) ?? null;
+        // A punch outranks the holiday, so working a holiday still reads as
+        // present; only an *unmarked* holiday resolves to "holiday" instead
+        // of "absent". This is what stops holidays counting as absences.
+        const status = resolveDayStatus({ present: isPresent, isHoliday: !!holiday });
+        const isHolidayDay = status === "holiday";
 
         let isLate = false;
         let workedHours = 0;
@@ -210,7 +226,9 @@ export async function GET(request: Request) {
           inAt:  entry?.inAt?.toISOString()  ?? null,
           outAt: entry?.outAt?.toISOString() ?? null,
           present: isPresent,
-          absent: !isPresent,
+          absent: !isPresent && !isHolidayDay,
+          status,
+          holiday: holiday ? { name: holiday.name, initials: holiday.initials } : null,
           late: isLate,
           workedHours,
           expectedHours,
@@ -229,12 +247,20 @@ export async function GET(request: Request) {
           empType: emp.compensationType || "Regular",
           dateJoining: emp.dateJoining,
           workLocationType: emp.workLocationType || "Onsite",
-          totalDays: 0, presentDays: 0, absentDays: 0, lateDays: 0,
+          totalDays: 0, presentDays: 0, absentDays: 0, lateDays: 0, holidayDays: 0,
           totalWorkedHours: 0, totalShortfall: 0, totalOvertime: 0,
         };
-        s.totalDays++;
-        if (isPresent) { s.presentDays++; s.totalWorkedHours += workedHours; }
-        else s.absentDays++;
+        // An *unmarked* holiday is excluded from totalDays — that is the
+        // attendance-percentage denominator, and a holiday can be neither
+        // attended nor missed. Someone who worked the holiday resolves to
+        // "present" above, so they fall through to the normal branch.
+        if (isHolidayDay) {
+          s.holidayDays++;
+        } else {
+          s.totalDays++;
+          if (isPresent) { s.presentDays++; s.totalWorkedHours += workedHours; }
+          else s.absentDays++;
+        }
         if (isLate) s.lateDays++;
         s.totalShortfall += shortfall;
         s.totalOvertime  += overtime;
@@ -265,6 +291,8 @@ export async function GET(request: Request) {
       presentDays:  summary.reduce((a,s) => a + s.presentDays,  0),
       absentDays:   summary.reduce((a,s) => a + s.absentDays,   0),
       lateDays:     summary.reduce((a,s) => a + s.lateDays,     0),
+      // Reported so the UI can show holidays without them polluting absences.
+      holidayDays:  summary.reduce((a,s) => a + (s.holidayDays ?? 0), 0),
       totalShortfall: round2(summary.reduce((a,s) => a + s.totalShortfall, 0)),
       totalOvertime:  round2(summary.reduce((a,s) => a + s.totalOvertime,  0)),
     };
@@ -285,12 +313,16 @@ export async function GET(request: Request) {
       gpsPercent: Math.round(((gpsPunches + mobilePunches) / totalPunchEvents) * 100),
     };
 
-    const workingDays = allDays.filter((d) => new Date(d).getDay() !== 0).length;
+    const nonSundayDays = allDays.filter((d) => new Date(d).getDay() !== 0);
+    // Holidays are paid but not attendable, so they are not working days.
+    const workingDays = nonSundayDays.filter((d) => !holidayMap.has(d)).length;
 
     return ok({
       from: fromD.toISOString(),
       to: toD.toISOString(),
       workingDays,
+      holidayDays: nonSundayDays.length - workingDays,
+      holidays,
       kpi,
       gpsSummary,
       summary,

@@ -11,6 +11,7 @@ import {
   FilterOutlined,
   ReloadOutlined,
   CheckCircleOutlined,
+  CalendarOutlined,
 } from "@ant-design/icons";
 
 import RepHeader from "@/components/hrms/RepHeader";
@@ -19,6 +20,7 @@ import CommonTable, {
   type CommonTableColumn,
 } from "@/components/common/CommonTable";
 import ReportSection from "@/components/hrms/ReportSection";
+import HolidayStrip from "@/components/hrms/HolidayStrip";
 import AttendanceFilterPanel from "@/components/hrms/AttendanceFilterPanel";
 import {
   AttendanceTrendChart,
@@ -184,7 +186,14 @@ export default function AttendanceOverviewPage() {
               icon={TeamOutlined}
               label="Absent days (total)"
               value={String(r.kpi?.absentDays ?? 0)}
-              hint={`Across ${r.kpi?.totalEmployees ?? 0} employees`}
+              hint={`Across ${r.kpi?.totalEmployees ?? 0} employees · holidays excluded`}
+            />
+            <StatCard
+              icon={CalendarOutlined}
+              label="Company holidays"
+              value={String(r.holidays.length)}
+              hint="Paid · not leave, not absence"
+              hintTone="positive"
             />
             <StatCard
               icon={ClockCircleOutlined}
@@ -224,6 +233,8 @@ export default function AttendanceOverviewPage() {
               hintTone="positive"
             />
           </div>
+
+          <HolidayStrip holidays={r.holidays} rangeLabel={r.rangeLabel} />
 
           <ReportSection
             title="Attendance summary by unit"
