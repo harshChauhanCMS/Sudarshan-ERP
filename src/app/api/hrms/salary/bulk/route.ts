@@ -12,14 +12,12 @@ const MONTHLY_CTC = "Monthly CTC";
 function employeeGross(emp: {
   monthlyGross?: number;
   basicSalary?: number;
-  da?: number;
   hra?: number;
   otherConveyance?: number;
   specialBonus?: number;
 }): number {
   const fromParts =
     (emp.basicSalary || 0) +
-    (emp.da || 0) +
     (emp.hra || 0) +
     (emp.otherConveyance || 0) +
     (emp.specialBonus || 0);
@@ -33,7 +31,6 @@ function pendingRow(
     department?: string;
     designation?: string;
     basicSalary?: number;
-    da?: number;
     hra?: number;
     otherConveyance?: number;
     specialBonus?: number;
@@ -59,6 +56,7 @@ function pendingRow(
     pfEmployee: 0,
     esi: 0,
     tds: 0,
+    advance: 0,
     otherDeductions: 0,
     netPayable: gross,
     status: "pending",
@@ -95,7 +93,6 @@ export async function GET(request: Request) {
         ifscCode: 1,
         annualCtc: 1,
         basicSalary: 1,
-        da: 1,
         hra: 1,
         otherConveyance: 1,
         specialBonus: 1,

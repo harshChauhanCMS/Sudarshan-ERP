@@ -71,7 +71,7 @@ function SalarySlipContent({ params }: { params: Promise<{ id: string }> }) {
             <Button
               type="primary"
               icon={<DownloadOutlined />}
-              onClick={() => downloadSalarySlipPdf(sheet)}
+              onClick={() => void downloadSalarySlipPdf(sheet)}
               style={{ background: "#16a34a", border: "none" }}
             >
               Download PDF

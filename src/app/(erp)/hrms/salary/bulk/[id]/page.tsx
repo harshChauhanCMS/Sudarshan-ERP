@@ -30,7 +30,6 @@ type SalarySheetForm = {
   department: string;
   designation: string;
   basicSalary: number;
-  da: number;
   hra: number;
   otherConveyance: number;
   specialBonus: number;
@@ -46,6 +45,7 @@ type SalarySheetForm = {
   pfEmployer: number;
   esi: number;
   tds: number;
+  advance: number;
   otherDeductions: number;
   netPayable: number;
   notes: string;
@@ -131,7 +131,6 @@ function EditSalaryContent({
         department: sheet.department ?? "",
         designation: sheet.designation ?? "",
         basicSalary: sheet.basicSalary ?? 0,
-        da: sheet.da ?? 0,
         hra: sheet.hra ?? 0,
         otherConveyance: sheet.otherConveyance ?? 0,
         specialBonus: sheet.specialBonus ?? 0,
@@ -147,6 +146,7 @@ function EditSalaryContent({
         pfEmployer: sheet.pfEmployer ?? 0,
         esi: sheet.esi ?? 0,
         tds: sheet.tds ?? 0,
+        advance: sheet.advance ?? 0,
         otherDeductions: sheet.otherDeductions ?? 0,
         netPayable: sheet.netPayable ?? 0,
         notes: sheet.notes ?? "",
@@ -177,12 +177,14 @@ function EditSalaryContent({
   const esi = Form.useWatch("esi", form) ?? 0;
   const tds = Form.useWatch("tds", form) ?? 0;
   const leaveDeduction = Form.useWatch("leaveDeduction", form) ?? 0;
+  const advance = Form.useWatch("advance", form) ?? 0;
   const otherDeductions = Form.useWatch("otherDeductions", form) ?? 0;
   const totalDeductions =
     Number(leaveDeduction) +
     Number(pfEmployee) +
     Number(esi) +
     Number(tds) +
+    Number(advance) +
     Number(otherDeductions);
 
   const onFinish = async (values: SalarySheetForm) => {
@@ -416,9 +418,6 @@ function EditSalaryContent({
                 <Form.Item name="basicSalary" label="Basic salary">
                   <InputNumber min={0} style={{ width: "100%" }} />
                 </Form.Item>
-                <Form.Item name="da" label="DA">
-                  <InputNumber min={0} style={{ width: "100%" }} />
-                </Form.Item>
                 <Form.Item name="hra" label="HRA">
                   <InputNumber min={0} style={{ width: "100%" }} />
                 </Form.Item>
@@ -460,6 +459,9 @@ function EditSalaryContent({
                   <InputNumber min={0} style={{ width: "100%" }} />
                 </Form.Item>
                 <Form.Item name="tds" label="TDS">
+                  <InputNumber min={0} style={{ width: "100%" }} />
+                </Form.Item>
+                <Form.Item name="advance" label="Advance">
                   <InputNumber min={0} style={{ width: "100%" }} />
                 </Form.Item>
                 <Form.Item name="otherDeductions" label="Other deductions">

@@ -4,7 +4,9 @@ import Employee from "@/lib/models/Employee";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import LeaveRequest from "@/lib/models/LeaveRequest";
 import SalarySheet from "@/lib/models/SalarySheet";
+import Deduction from "@/lib/models/Deduction";
 import { calcSalary } from "@/lib/salary-calc";
+import { resolveEmployeeDeductions } from "@/lib/deduction-utils";
 import { getHolidayMap } from "@/lib/holiday-service";
 import { getSession } from "@/lib/session";
 import { canManagePayroll } from "@/lib/hrms-access";
@@ -75,6 +77,23 @@ export async function POST(request: Request) {
       employeeIds.length > 0 ? { employeeId: { $in: employeeIds } } : {}
     ).lean();
 
+    // Employees whose sheet for this cycle already exists are skipped, so a
+    // second "Generate All" can't rebuild — and reset to draft — sheets that
+    // were edited, approved or already disbursed. `regenerate: true` rebuilds
+    // them from current salary, attendance and deduction rules, but only while
+    // they are still drafts: an approved or disbursed sheet is a record of what
+    // was paid and is never rewritten.
+    const regenerate = body.regenerate === true;
+    const existingSheets = await SalarySheet.find({ cycle })
+      .select({ employeeId: 1, status: 1 })
+      .lean();
+    const existingByEmployee = new Map(
+      existingSheets.map((s) => [
+        String(s.employeeId),
+        { id: String(s._id), status: String(s.status || "draft") },
+      ]),
+    );
+
     // Build attendance map
     const punches = await AttendancePunch.find({
       punchedAt: { $gte: start, $lte: end },
@@ -110,10 +129,30 @@ export async function POST(request: Request) {
       leaveByEmp.set(eid, cur);
     }
 
+    // Deduction masters resolved once for the whole run; each employee applies
+    // the subset in their `deductionRates`. Inactive rules stay honoured for
+    // employees already assigned to them — retiring a rule shouldn't silently
+    // stop deducting mid-cycle.
+    const deductionDocs = await Deduction.find({}).lean();
+    const deductionById = new Map(
+      deductionDocs.map((d) => [String(d._id), d]),
+    );
+
     const results: { employeeId: string; action: string }[] = [];
 
     for (const emp of employees) {
       const eid = String(emp.employeeId);
+
+      const existing = existingByEmployee.get(eid);
+      if (existing && !regenerate) {
+        results.push({ employeeId: eid, action: "skipped" });
+        continue;
+      }
+      if (existing && existing.status !== "draft") {
+        results.push({ employeeId: eid, action: "locked" });
+        continue;
+      }
+
       const expectedHours = typeof emp.workingHours === "number" && emp.workingHours > 0
         ? emp.workingHours : 8;
 
@@ -143,9 +182,26 @@ export async function POST(request: Request) {
 
       const leaveInfo = leaveByEmp.get(eid) ?? { paid: 0, unpaid: 0 };
 
+      // The employee supplies the rate; the master supplies basis/cap/ceiling.
+      const appliedDeductions = resolveEmployeeDeductions(
+        (emp.deductionRates || [])
+          .map((r: { deductionId: string }) =>
+            deductionById.get(String(r.deductionId)),
+          )
+          .filter(Boolean)
+          .map((d: any) => ({
+            _id: String(d._id),
+            name: d.name,
+            percentage: d.percentage,
+            basis: d.basis === "basic" ? ("basic" as const) : ("gross" as const),
+            maxAmount: d.maxAmount,
+            applicableUpToGross: d.applicableUpToGross,
+          })),
+        emp.deductionRates || [],
+      );
+
       const result = calcSalary({
         basicSalary: emp.basicSalary || 0,
-        da: emp.da || 0,
         hra: emp.hra || 0,
         otherConveyance: emp.otherConveyance || 0,
         specialBonus: emp.specialBonus || 0,
@@ -157,6 +213,8 @@ export async function POST(request: Request) {
         approvedLeaveDays: leaveInfo.paid,
         unpaidLeaveDays: leaveInfo.unpaid,
         holidayDays: unworkedHolidays,
+        arrears: emp.arrears || 0,
+        deductions: appliedDeductions,
       });
 
       const sheet = {
@@ -168,10 +226,10 @@ export async function POST(request: Request) {
         locationUnit: emp.locationUnit,
         compensationType: emp.compensationType,
         basicSalary: emp.basicSalary || 0,
-        da: emp.da || 0,
         hra: emp.hra || 0,
         otherConveyance: emp.otherConveyance || 0,
         specialBonus: emp.specialBonus || 0,
+        arrears: emp.arrears || 0,
         grossSalary: result.grossSalary,
         workingDays,
         daysPresent,
@@ -186,14 +244,15 @@ export async function POST(request: Request) {
         pfEmployer: result.pfEmployer,
         esi: result.esi,
         tds: result.tds,
+        advance: result.advance,
         otherDeductions: result.otherDeductions,
+        deductionBreakdown: result.deductionLines,
         netPayable: result.netPayable,
         status: "draft",
       };
 
-      const existing = await SalarySheet.findOne({ cycle, employeeId: eid });
       if (existing) {
-        await SalarySheet.findByIdAndUpdate(existing._id, { $set: sheet });
+        await SalarySheet.findByIdAndUpdate(existing.id, { $set: sheet });
         results.push({ employeeId: eid, action: "updated" });
       } else {
         await SalarySheet.create(sheet);
@@ -201,7 +260,11 @@ export async function POST(request: Request) {
       }
     }
 
-    if (results.length > 0) {
+    const skipped = results.filter((r) => r.action === "skipped").length;
+    const locked = results.filter((r) => r.action === "locked").length;
+    const generated = results.length - skipped - locked;
+
+    if (generated > 0) {
       try {
         const targetRoles = ["admin", "owner", "master", "hr"];
         const admins = await User.find({ role: { $in: targetRoles } }).select("email").lean();
@@ -211,7 +274,7 @@ export async function POST(request: Request) {
             recipientEmail: admin.email,
             category: "system",
             type: "info",
-            message: `Monthly salary generated for ${cycle} (${results.length} employees).`,
+            message: `Monthly salary generated for ${cycle} (${generated} employees).`,
             target: "/hrms/salary/monthly",
             read: false,
           }));
@@ -227,7 +290,11 @@ export async function POST(request: Request) {
       from: start.toISOString().slice(0, 10),
       to: end.toISOString().slice(0, 10),
       workingDays,
-      generated: results.length,
+      generated,
+      skipped,
+      locked,
+      created: results.filter((r) => r.action === "created").length,
+      updated: results.filter((r) => r.action === "updated").length,
       results,
     });
   } catch (e) {

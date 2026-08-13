@@ -35,10 +35,10 @@ export async function GET(request: Request) {
 
     const header = [
       "employeeId", "employeeName", "department", "designation", "cycle",
-      "compensationType", "basicSalary", "da", "hra", "otherConveyance", "specialBonus",
+      "compensationType", "basicSalary", "hra", "otherConveyance", "specialBonus",
       "grossSalary", "workingDays", "daysPresent", "leaveDays", "unpaidLeaveDays",
       "leaveDeduction", "overtimeHours", "overtimeAmount",
-      "pfEmployee", "pfEmployer", "esi", "tds", "otherDeductions", "netPayable", "status",
+      "pfEmployee", "pfEmployer", "esi", "tds", "advance", "otherDeductions", "netPayable", "status",
     ];
 
     const lines = [header.join(",")];

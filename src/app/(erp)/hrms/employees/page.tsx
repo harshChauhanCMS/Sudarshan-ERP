@@ -385,7 +385,6 @@ export default function EmployeesPage() {
       { header: "Annual CTC", value: (_m, r) => num(r.annualCtc) },
       { header: "Monthly Gross", value: (_m, r) => num(r.monthlyGross) },
       { header: "Basic Salary", value: (_m, r) => num(r.basicSalary) },
-      { header: "DA", value: (_m, r) => num(r.da) },
       { header: "HRA", value: (_m, r) => num(r.hra) },
       { header: "Other / Conveyance", value: (_m, r) => num(r.otherConveyance) },
       { header: "Special Bonus", value: (_m, r) => num(r.specialBonus) },

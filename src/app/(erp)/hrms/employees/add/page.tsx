@@ -40,6 +40,7 @@ import {
 } from "@/lib/hrms-employee-options";
 import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
 import { useShifts } from "@/hooks/use-shifts";
+import EmployeeDeductionsPicker from "@/components/hrms/EmployeeDeductionsPicker";
 import { shiftLabel } from "@/lib/shift-utils";
 
 const LEGACY_DRAFT_KEY = "hrms_employee_draft";
@@ -96,6 +97,10 @@ export default function AddEmployeePage() {
   // Only active shifts are offered for new assignments; retired ones stay
   // readable on existing employees but shouldn't be selectable here.
   const { shifts, loading: shiftsLoading } = useShifts(true);
+  // Watched so the deduction preview re-prices as the salary is typed.
+  const watchedBasic = Form.useWatch("basicSalary", form);
+  const watchedGross = Form.useWatch("monthlyGross", form);
+  const watchedArrears = Form.useWatch("arrears", form);
   const [departmentOptions, setDepartmentOptions] = useState<
     { value: string; label: string }[]
   >([]);
@@ -838,11 +843,12 @@ export default function AddEmployeePage() {
         "annualCtc",
         "monthlyGross",
         "basicSalary",
-        "da",
         "hra",
         "otherConveyance",
         "specialBonus",
         "reimbursementCap",
+        "arrears",
+        "deductionRates",
         "dailyWageRate",
         "skillCategory",
         "tradeJobRole",
@@ -897,19 +903,6 @@ export default function AddEmployeePage() {
                   />
                 </Form.Item>
                 <Form.Item name="basicSalary" label="Basic Salary (₹/mo)">
-                  <InputNumber
-                    style={{ width: "100%" }}
-                    formatter={(v) =>
-                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                    }
-                    parser={(v) =>
-                      parseFloat(
-                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
-                      ) || 0
-                    }
-                  />
-                </Form.Item>
-                <Form.Item name="da" label="DA (₹/mo)">
                   <InputNumber
                     style={{ width: "100%" }}
                     formatter={(v) =>
@@ -980,9 +973,46 @@ export default function AddEmployeePage() {
                     }
                   />
                 </Form.Item>
+                <Form.Item
+                  name="arrears"
+                  label="Arrears (₹/mo)"
+                  tooltip="Pending dues paid out with this month's salary. Printed on the payslip's Arrears row."
+                >
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
+                </Form.Item>
               </div>
             </div>
           )}
+
+          <div className="emp-form-subpanel">
+            <div className="emp-form-subpanel__head">
+              <div className="emp-form-subpanel__head-main">
+                <CalculatorOutlined />
+                <span>Deductions</span>
+              </div>
+              <span className="emp-form-subpanel__badge">
+                Managed in Deduction Management
+              </span>
+            </div>
+            <Form.Item name="deductionRates" noStyle>
+              <EmployeeDeductionsPicker
+                autoSelectDefaults
+                basic={Number(watchedBasic) || 0}
+                gross={Number(watchedGross) || 0}
+                arrears={Number(watchedArrears) || 0}
+              />
+            </Form.Item>
+          </div>
 
           {compensationType === "Daily wage" && (
             <div className="emp-form-subpanel">

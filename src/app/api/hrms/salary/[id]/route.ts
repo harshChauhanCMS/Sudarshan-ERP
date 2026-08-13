@@ -13,18 +13,48 @@ const MONTHLY_CTC = "Monthly CTC";
 function employeeGross(emp: {
   monthlyGross?: number;
   basicSalary?: number;
-  da?: number;
   hra?: number;
   otherConveyance?: number;
   specialBonus?: number;
 }): number {
   const fromParts =
     (emp.basicSalary || 0) +
-    (emp.da || 0) +
     (emp.hra || 0) +
     (emp.otherConveyance || 0) +
     (emp.specialBonus || 0);
   return emp.monthlyGross || fromParts || 0;
+}
+
+/** Employee master fields printed on the salary slip letterhead. */
+function slipEmployeeFields(emp?: {
+  pfUan?: string;
+  esiIp?: string;
+  accountNo?: string;
+  dateJoining?: string;
+  annualCtc?: number;
+  monthlyGross?: number;
+  locationUnit?: string;
+} | null) {
+  return {
+    pfUan: emp?.pfUan || "",
+    esiIp: emp?.esiIp || "",
+    accountNo: emp?.accountNo || "",
+    dateJoining: emp?.dateJoining || "",
+    annualCtc: emp?.annualCtc || 0,
+    monthlyGross: emp?.monthlyGross || 0,
+  };
+}
+
+function withSlipFields<T extends object>(
+  sheet: T,
+  emp?: Parameters<typeof slipEmployeeFields>[0],
+) {
+  const sheetLocation = (sheet as { locationUnit?: string }).locationUnit;
+  return {
+    ...sheet,
+    ...slipEmployeeFields(emp),
+    locationUnit: sheetLocation || emp?.locationUnit || "",
+  };
 }
 
 function pendingSource(
@@ -34,10 +64,10 @@ function pendingSource(
     department?: string;
     designation?: string;
     basicSalary?: number;
-    da?: number;
     hra?: number;
     otherConveyance?: number;
     specialBonus?: number;
+    arrears?: number;
     monthlyGross?: number;
   },
   cycle: string,
@@ -52,10 +82,10 @@ function pendingSource(
     department: emp.department || "",
     designation: emp.designation || "",
     basicSalary: emp.basicSalary || 0,
-    da: emp.da || 0,
     hra: emp.hra || 0,
     otherConveyance: emp.otherConveyance || 0,
     specialBonus: emp.specialBonus || 0,
+    arrears: emp.arrears || 0,
     grossSalary: gross,
     workingDays: monthDays,
     daysPresent: 0,
@@ -68,6 +98,7 @@ function pendingSource(
     pfEmployer: 0,
     esi: 0,
     tds: 0,
+    advance: 0,
     otherDeductions: 0,
     netPayable: gross,
     status: "pending",
@@ -90,7 +121,7 @@ async function buildSheetPayload(id: string, cycle: string | null) {
     const existing = await SalarySheet.findOne({ cycle, employeeId }).lean();
     if (existing) {
       return {
-        sheet: { ...existing, _id: String(existing._id) },
+        sheet: withSlipFields({ ...existing, _id: String(existing._id) }, emp),
         payrollRow: mapToPayrollSheetRow(
           { ...existing, _id: String(existing._id) },
           emp,
@@ -103,7 +134,7 @@ async function buildSheetPayload(id: string, cycle: string | null) {
 
     const pending = pendingSource(emp, cycle);
     return {
-      sheet: pending,
+      sheet: withSlipFields(pending, emp),
       payrollRow: mapToPayrollSheetRow(pending, emp, cycle),
       editable: true,
       pending: true,
@@ -116,7 +147,7 @@ async function buildSheetPayload(id: string, cycle: string | null) {
   const emp = await Employee.findOne({ employeeId: sheet.employeeId }).lean();
   const sheetCycle = String(sheet.cycle);
   return {
-    sheet: { ...sheet, _id: String(sheet._id) },
+    sheet: withSlipFields({ ...sheet, _id: String(sheet._id) }, emp),
     payrollRow: mapToPayrollSheetRow(
       { ...sheet, _id: String(sheet._id) },
       emp ?? undefined,

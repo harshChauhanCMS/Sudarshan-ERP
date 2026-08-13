@@ -42,6 +42,7 @@ export type SalarySheetSource = {
   pfEmployee?: number;
   esi?: number;
   tds?: number;
+  advance?: number;
   otherDeductions?: number;
   overtimeAmount?: number;
   specialBonus?: number;
@@ -102,6 +103,7 @@ export function mapToPayrollSheetRow(
     (sheet.pfEmployee || 0) +
     (sheet.esi || 0) +
     (sheet.tds || 0) +
+    (sheet.advance || 0) +
     (sheet.leaveDeduction || 0) +
     (sheet.otherDeductions || 0);
 

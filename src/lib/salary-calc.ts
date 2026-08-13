@@ -3,10 +3,15 @@
  * All monetary values are in INR (rupees), rounded to 2 decimal places.
  */
 
+import {
+  computeDeductionLines,
+  type DeductionLine,
+  type DeductionRule,
+} from "./deduction-utils";
+
 export interface SalaryInputs {
   // Earnings from Employee record
   basicSalary: number;
-  da: number;
   hra: number;
   otherConveyance: number;
   specialBonus: number;
@@ -30,6 +35,17 @@ export interface SalaryInputs {
    */
   holidayDays?: number;
 
+  /** One-off dues paid with this cycle. Added to take-home, not to gross. */
+  arrears?: number;
+
+  /**
+   * Deduction masters applied to this employee (`Employee.deductionIds`
+   * resolved against the Deduction collection). This replaced the hardcoded
+   * PF/ESI calculation — an employee with none assigned has no statutory
+   * deductions, by design.
+   */
+  deductions?: DeductionRule[];
+
   // Manual overrides (HR can set these)
   tds?: number;
   otherDeductions?: number;
@@ -47,23 +63,66 @@ export interface SalaryResult {
   esi: number;
   tds: number;
   otherDeductions: number;
+  advance: number;
   totalDeductions: number;
   netPayable: number;
+  /** Per-rule amounts, in the order the rules were supplied. */
+  deductionLines: DeductionLine[];
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** PF is 12% of basic, employee share capped at ₹1800/month */
-export function calcPF(basicSalary: number): { employee: number; employer: number } {
-  const employee = round2(Math.min(basicSalary * 0.12, 1800));
-  const employer = round2(Math.min(basicSalary * 0.12, 1800));
-  return { employee, employer };
+/**
+ * The payslip prints a fixed set of deduction rows, so each applied rule is
+ * routed to its row by name; anything unrecognised lands in "Other deduction".
+ */
+const PF_NAME = /provident|^pf\b/i;
+const ESI_NAME = /^esic?\b|employee state insurance/i;
+const TDS_NAME = /\btds\b|tax deducted/i;
+const ADVANCE_NAME = /\badvance\b/i;
+
+/** The built-in "Other Deduction" rule — the fixed row itself, not a custom one. */
+const OTHER_NAME = /^other\s*deduction/i;
+
+export type DeductionBuckets = {
+  pf: number;
+  esi: number;
+  tds: number;
+  advance: number;
+  other: number;
+};
+
+/**
+ * Which fixed payslip row a rule's name belongs to. `"other"` covers both the
+ * built-in "Other Deduction" row and any custom rule HR defines, which the
+ * payslip tells apart with `isCustomDeductionName`.
+ */
+export function classifyDeductionName(name: string): keyof DeductionBuckets {
+  if (PF_NAME.test(name)) return "pf";
+  if (ESI_NAME.test(name)) return "esi";
+  if (TDS_NAME.test(name)) return "tds";
+  if (ADVANCE_NAME.test(name)) return "advance";
+  return "other";
 }
 
-/** ESI: 0.75% of gross if gross ≤ ₹21,000 */
-export function calcESI(grossSalary: number): number {
-  if (grossSalary > 21000) return 0;
-  return round2(grossSalary * 0.0075);
+/** True for a rule that has no fixed payslip row and needs one of its own. */
+export function isCustomDeductionName(name: string): boolean {
+  return classifyDeductionName(name) === "other" && !OTHER_NAME.test(name);
+}
+
+/** Splits computed deduction lines into the payslip's fixed rows. */
+export function bucketDeductionLines(lines: DeductionLine[]): DeductionBuckets {
+  const buckets: DeductionBuckets = { pf: 0, esi: 0, tds: 0, advance: 0, other: 0 };
+  for (const line of lines) {
+    buckets[classifyDeductionName(line.name || "")] += line.amount;
+  }
+  return {
+    pf: round2(buckets.pf),
+    esi: round2(buckets.esi),
+    tds: round2(buckets.tds),
+    advance: round2(buckets.advance),
+    other: round2(buckets.other),
+  };
 }
 
 /** OT rate = basic / (workingDays * workingHoursPerDay) * 2 per hour */
@@ -93,15 +152,17 @@ export function calcLeaveDeduction(
 
 export function calcSalary(inputs: SalaryInputs): SalaryResult {
   const {
-    basicSalary, da, hra, otherConveyance, specialBonus,
+    basicSalary, hra, otherConveyance, specialBonus,
     workingDays, daysPresent, approvedLeaveDays,
     overtimeHours, workingHoursPerDay,
     overtimeApplicable, unpaidLeaveDays,
     holidayDays = 0,
+    arrears = 0,
+    deductions = [],
     tds = 0, otherDeductions: otherDed = 0,
   } = inputs;
 
-  const grossSalary = round2(basicSalary + da + hra + otherConveyance + specialBonus);
+  const grossSalary = round2(basicSalary + hra + otherConveyance + specialBonus);
 
   // Days covered = present + paid leave + company holidays (capped to workingDays).
   // Holidays are counted here — and nowhere else — so they are paid without
@@ -125,13 +186,25 @@ export function calcSalary(inputs: SalaryInputs): SalaryResult {
   const earnedBasic = Math.max(0, basicSalary - calcLeaveDeduction(basicSalary, workingDays, totalDeductionDays));
   const earnedGross = Math.max(0, grossSalary - leaveDeduction);
 
-  const pf = calcPF(earnedBasic);
-  const esi = calcESI(earnedGross);
+  // Rules are priced on *earned* pay, so a month with unpaid days deducts
+  // proportionally rather than on the full contractual salary.
+  const { lines } = computeDeductionLines(deductions, {
+    gross: earnedGross,
+    basic: earnedBasic,
+  });
+  const buckets = bucketDeductionLines(lines);
 
-  const totalDeductions = round2(pf.employee + esi + tds + otherDed + leaveDeduction);
+  // Manual figures on the sheet add to the computed ones — HR can top up a
+  // rule-driven TDS without the rule silently overwriting their entry.
+  const tdsTotal = round2(buckets.tds + tds);
+  const otherTotal = round2(buckets.other + otherDed);
+
+  const totalDeductions = round2(
+    buckets.pf + buckets.esi + tdsTotal + buckets.advance + otherTotal + leaveDeduction
+  );
 
   const netPayable = round2(
-    Math.max(0, grossSalary + overtimeAmount - totalDeductions)
+    Math.max(0, grossSalary + overtimeAmount + arrears - totalDeductions)
   );
 
   return {
@@ -141,12 +214,16 @@ export function calcSalary(inputs: SalaryInputs): SalaryResult {
     absentDays,
     totalDeductionDays,
     leaveDeduction,
-    pfEmployee: pf.employee,
-    pfEmployer: pf.employer,
-    esi,
-    tds: round2(tds),
-    otherDeductions: round2(otherDed),
+    // Employer PF is not deducted from the employee; it mirrors the employee
+    // share so CTC figures elsewhere keep working.
+    pfEmployee: buckets.pf,
+    pfEmployer: buckets.pf,
+    esi: buckets.esi,
+    tds: tdsTotal,
+    advance: buckets.advance,
+    otherDeductions: otherTotal,
     totalDeductions,
     netPayable,
+    deductionLines: lines,
   };
 }

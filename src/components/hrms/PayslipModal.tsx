@@ -25,7 +25,7 @@ export default function PayslipModal({ open, onClose, salarySheet }: PayslipModa
           key="download"
           icon={<DownloadOutlined />}
           type="primary"
-          onClick={() => downloadSalarySlipPdf(salarySheet)}
+          onClick={() => void downloadSalarySlipPdf(salarySheet)}
         >
           Download PDF
         </Button>,

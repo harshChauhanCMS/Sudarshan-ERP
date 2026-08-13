@@ -54,10 +54,10 @@ export async function POST(request: Request) {
     const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: null });
 
     const NUMERIC_FIELDS = [
-      "basicSalary", "da", "hra", "otherConveyance", "specialBonus",
+      "basicSalary", "hra", "otherConveyance", "specialBonus",
       "grossSalary", "workingDays", "daysPresent", "leaveDays", "unpaidLeaveDays",
       "leaveDeduction", "overtimeHours", "overtimeAmount",
-      "pfEmployee", "pfEmployer", "esi", "tds", "otherDeductions", "netPayable",
+      "pfEmployee", "pfEmployer", "esi", "tds", "advance", "otherDeductions", "netPayable",
     ];
 
     const results: { employeeId: string; action: string; error?: string }[] = [];

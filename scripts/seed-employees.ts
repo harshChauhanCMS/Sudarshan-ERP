@@ -63,7 +63,6 @@ type SeedEmployee = {
   annualCtc?: number;
   monthlyGross?: number;
   basicSalary?: number;
-  da?: number;
   hra?: number;
   otherConveyance?: number;
   dailyWageRate?: number;
@@ -115,7 +114,6 @@ const SAMPLE_EMPLOYEES: SeedEmployee[] = [
     annualCtc: 0,
     monthlyGross: 0,
     basicSalary: 0,
-    da: 0,
     hra: 0,
     otherConveyance: 0,
   },
@@ -158,7 +156,6 @@ const SAMPLE_EMPLOYEES: SeedEmployee[] = [
     annualCtc: 480000,
     monthlyGross: 40000,
     basicSalary: 20000,
-    da: 8000,
     hra: 8000,
     otherConveyance: 4000,
   },
@@ -201,7 +198,6 @@ const SAMPLE_EMPLOYEES: SeedEmployee[] = [
     annualCtc: 420000,
     monthlyGross: 35000,
     basicSalary: 17500,
-    da: 7000,
     hra: 7000,
     otherConveyance: 3500,
   },
@@ -244,7 +240,6 @@ const SAMPLE_EMPLOYEES: SeedEmployee[] = [
     annualCtc: 360000,
     monthlyGross: 30000,
     basicSalary: 15000,
-    da: 6000,
     hra: 6000,
     otherConveyance: 3000,
   },
@@ -287,7 +282,6 @@ const SAMPLE_EMPLOYEES: SeedEmployee[] = [
     annualCtc: 336000,
     monthlyGross: 28000,
     basicSalary: 14000,
-    da: 5600,
     hra: 5600,
     otherConveyance: 2800,
   },
@@ -330,7 +324,6 @@ const SAMPLE_EMPLOYEES: SeedEmployee[] = [
     annualCtc: 396000,
     monthlyGross: 33000,
     basicSalary: 16500,
-    da: 6600,
     hra: 6600,
     otherConveyance: 3300,
   },
@@ -373,7 +366,6 @@ const SAMPLE_EMPLOYEES: SeedEmployee[] = [
     annualCtc: 450000,
     monthlyGross: 37500,
     basicSalary: 18750,
-    da: 7500,
     hra: 7500,
     otherConveyance: 3750,
   },
@@ -502,7 +494,6 @@ const SAMPLE_EMPLOYEES: SeedEmployee[] = [
     annualCtc: 384000,
     monthlyGross: 32000,
     basicSalary: 16000,
-    da: 6400,
     hra: 6400,
     otherConveyance: 3200,
   },
@@ -545,7 +536,6 @@ const SAMPLE_EMPLOYEES: SeedEmployee[] = [
     annualCtc: 372000,
     monthlyGross: 31000,
     basicSalary: 15500,
-    da: 6200,
     hra: 6200,
     otherConveyance: 3100,
   },

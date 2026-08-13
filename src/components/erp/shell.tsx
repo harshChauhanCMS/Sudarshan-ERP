@@ -113,6 +113,7 @@ const NAV = [
         items: [
           { id: "/hrms/employees", label: "Employees", icon: "user" },
           { id: "/hrms/shifts", label: "Shift management", icon: "clock" },
+          { id: "/hrms/deductions", label: "Deduction management", icon: "money" },
           { id: "/hrms/salary", label: "Salary", icon: "money" },
         ],
       },
@@ -706,6 +707,7 @@ const BREADCRUMB_MAP = {
   "/dispatch/new": ["Operations", "Dispatch Planning", "New dispatch plan"],
   "/hrms/employees": ["People", "HR Management", "Employees"],
   "/hrms/shifts": ["People", "HR Management", "Shift management"],
+  "/hrms/deductions": ["People", "HR Management", "Deduction management"],
   "/hrms/employees/add": [
     "People",
     "HR Management",

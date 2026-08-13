@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Form,
   Input,
@@ -29,6 +30,7 @@ import {
 import dayjs from "dayjs";
 import PageHeader from "@/components/common/PageHeader";
 import CompensationCategoryPicker from "@/components/hrms/CompensationCategoryPicker";
+import EmployeeDeductionsPicker from "@/components/hrms/EmployeeDeductionsPicker";
 import { HRMS_BACK } from "@/lib/hrms-nav";
 import {
   disableEmployeeDobUnder18,
@@ -97,11 +99,16 @@ export default function EmployeeDetailsPage({
       form.setFieldValue("reportingManager", undefined);
     }
   }, [showReportingManager, form]);
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
   const compensationType = Form.useWatch("compensationType", form) ?? "Monthly CTC";
+  // Watched so the deduction preview re-prices as the salary is edited.
+  const watchedBasic = Form.useWatch("basicSalary", form);
+  const watchedGross = Form.useWatch("monthlyGross", form);
+  const watchedArrears = Form.useWatch("arrears", form);
   const [originalData, setOriginalData] = useState<any>(null);
 
   // Profile banner state
@@ -366,7 +373,7 @@ export default function EmployeeDetailsPage({
       }
 
       messageApi.success({
-        content: "Employee records updated successfully!",
+        content: "Employee records updated successfully! Redirecting…",
         duration: 2,
       });
 
@@ -383,6 +390,12 @@ export default function EmployeeDetailsPage({
 
       setOriginalData(savedFormValues);
       setIsEditing(false);
+
+      // Back to the employee list, same as after creating one — the saved row
+      // is what HR wants to see next. Delayed so the success toast is readable.
+      setTimeout(() => {
+        router.push("/hrms/employees");
+      }, 1000);
     } catch (err: any) {
       messageApi.error({
         content: err.message || "An error occurred while updating.",
@@ -1018,14 +1031,6 @@ export default function EmployeeDetailsPage({
                           disabled={!isEditing}
                         />
                       </Form.Item>
-                      <Form.Item name="da" label="DA (₹/mo)">
-                        <InputNumber
-                          style={{ width: "100%" }}
-                          formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                          parser={v => parseFloat(v?.replace(/\₹\s?|(,*)/g, "") || "0") || 0}
-                          disabled={!isEditing}
-                        />
-                      </Form.Item>
                       <Form.Item name="hra" label="HRA (₹/mo)">
                         <InputNumber
                           style={{ width: "100%" }}
@@ -1058,9 +1063,42 @@ export default function EmployeeDetailsPage({
                           disabled={!isEditing}
                         />
                       </Form.Item>
+                      <Form.Item
+                        name="arrears"
+                        label="Arrears (₹/mo)"
+                        tooltip="Pending dues paid out with this month's salary. Printed on the payslip's Arrears row."
+                      >
+                        <InputNumber
+                          style={{ width: "100%" }}
+                          formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                          parser={v => parseFloat(v?.replace(/\₹\s?|(,*)/g, "") || "0") || 0}
+                          disabled={!isEditing}
+                        />
+                      </Form.Item>
                     </div>
                   </div>
                 )}
+
+                {/* Sub-Form: Deductions applied to this employee */}
+                <div className="emp-form-subpanel">
+                  <div className="emp-form-subpanel__head">
+                    <div className="emp-form-subpanel__head-main">
+                      <CalculatorOutlined />
+                      <span>Deductions</span>
+                    </div>
+                    <span className="emp-form-subpanel__badge">
+                      Managed in Deduction Management
+                    </span>
+                  </div>
+                  <Form.Item name="deductionRates" noStyle>
+                    <EmployeeDeductionsPicker
+                      disabled={!isEditing}
+                      basic={Number(watchedBasic) || 0}
+                      gross={Number(watchedGross) || 0}
+                      arrears={Number(watchedArrears) || 0}
+                    />
+                  </Form.Item>
+                </div>
 
                 {/* Sub-Form: Daily Wage Details */}
                 {compensationType === "Daily wage" && (
