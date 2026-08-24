@@ -154,3 +154,36 @@ export const WEEKLY_OFF_OPTIONS = [
   "Rotating",
   "None",
 ] as const;
+
+/** Every real calendar day an employee can pick as their weekly off. */
+export const EMPLOYEE_WEEKLY_OFF_OPTIONS = WEEKLY_OFF_OPTIONS.filter(
+  (d) => d !== "Rotating" && d !== "None"
+);
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+/**
+ * Resolves an employee/shift's `weeklyOff` string to a `Date#getDay()` index.
+ * "None" has no weekly-off day at all. Any unrecognized value — including the
+ * retired "Rotating" placeholder still sitting on older records — falls back
+ * to Sunday until it's edited to a real day.
+ */
+export function weeklyOffDayIndex(weeklyOff?: string | null): number | null {
+  const key = (weeklyOff || "").trim().toLowerCase();
+  if (key === "none") return null;
+  if (key in WEEKDAY_INDEX) return WEEKDAY_INDEX[key];
+  return 0;
+}
+
+export function isWeeklyOffDate(date: Date, weeklyOff?: string | null): boolean {
+  const idx = weeklyOffDayIndex(weeklyOff);
+  return idx !== null && date.getDay() === idx;
+}

@@ -246,6 +246,7 @@ export default function EmployeeAttendanceReportView({
               from={from}
               to={to}
               loading={loading}
+              weeklyOff={employee?.weeklyOff}
             />
           </div>
         ) : (

@@ -44,6 +44,7 @@ export async function GET(request: Request) {
         payFrequency: 1,
         workingHours: 1,
         overtimeApplicable: 1,
+        weeklyOff: 1,
       })
       .sort({ fullName: 1 })
       .lean();
@@ -89,7 +90,8 @@ export async function GET(request: Request) {
         range.start,
         range.end,
         expectedHours,
-        emp.overtimeApplicable === true
+        emp.overtimeApplicable === true,
+        emp.weeklyOff
       );
       return employeeToDailyWageWorker(emp, stats);
     });

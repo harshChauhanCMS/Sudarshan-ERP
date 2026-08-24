@@ -11,6 +11,7 @@ import { getSession } from "@/lib/session";
 import { escapeRegex } from "@/lib/escape-regex";
 import { getHolidayMap } from "@/lib/holiday-service";
 import { resolveDayStatus } from "@/lib/holiday-rules";
+import { isWeeklyOffDate } from "@/lib/shift-utils";
 
 function parseDateParam(v: string | null): Date | null {
   if (!v) return null;
@@ -100,7 +101,7 @@ export async function GET(request: Request) {
     const employees = await Employee.find(empQuery)
       .select({ employeeId:1, fullName:1, department:1, designation:1, locationUnit:1,
                 primaryShift:1, workingHours:1, overtimeApplicable:1, dateJoining:1,
-                workLocationType:1 })
+                workLocationType:1, weeklyOff:1 })
       .lean();
 
     const empIds = employees.map((e) => String(e.employeeId));
@@ -118,8 +119,13 @@ export async function GET(request: Request) {
     const holidays = Array.from(holidayMap.values());
 
     if (empIds.length === 0 || punches.length === 0) {
+      // No employees to key off of here, so this batch-level figure stays
+      // Sunday-based; per-employee weeklyOff is honoured in the daily loop
+      // below once there are employees/punches to compute against. Days
+      // after today haven't happened yet, so they're excluded here too.
+      const todayKeyEarly = dayKey(new Date());
       const nonSundays = allDaysBetween(fromD, toD).filter(
-        (d) => new Date(d).getDay() !== 0
+        (d) => new Date(d).getDay() !== 0 && d <= todayKeyEarly
       );
       // Holidays are paid but not attendable, so they are not working days.
       const workingDays = nonSundays.filter((d) => !holidayMap.has(d)).length;
@@ -167,7 +173,11 @@ export async function GET(request: Request) {
     // Build set of (employeeId, day) that have punches
     const punchedSet = new Set(dayMap.keys());
 
-    const allDays = allDaysBetween(fromD, toD);
+    // A day that hasn't happened yet can't be "absent" — it just hasn't been
+    // worked. Reports/calendars routinely default to the current month, which
+    // spans past today before the month is over.
+    const todayKey = dayKey(new Date());
+    const allDays = allDaysBetween(fromD, toD).filter((d) => d <= todayKey);
 
     const GRACE_MINUTES = 15;
 
@@ -181,8 +191,7 @@ export async function GET(request: Request) {
       const isOtApplicable = emp.overtimeApplicable === true;
 
       for (const day of allDays) {
-        const dow = new Date(day).getDay(); // 0=Sun
-        if (dow === 0) continue; // skip Sundays (simplest default)
+        if (isWeeklyOffDate(new Date(day), emp.weeklyOff)) continue;
 
         const k = `${eid}|${day}`;
         const entry = dayMap.get(k);
@@ -247,6 +256,7 @@ export async function GET(request: Request) {
           empType: emp.compensationType || "Regular",
           dateJoining: emp.dateJoining,
           workLocationType: emp.workLocationType || "Onsite",
+          weeklyOff: emp.weeklyOff || "Sunday",
           totalDays: 0, presentDays: 0, absentDays: 0, lateDays: 0, holidayDays: 0,
           totalWorkedHours: 0, totalShortfall: 0, totalOvertime: 0,
         };
@@ -313,6 +323,10 @@ export async function GET(request: Request) {
       gpsPercent: Math.round(((gpsPunches + mobilePunches) / totalPunchEvents) * 100),
     };
 
+    // Batch-level figure spanning every scoped employee, so it stays
+    // Sunday-based rather than picking one employee's weeklyOff; the
+    // per-employee `daily`/`summary` rows above already honour each
+    // employee's own weeklyOff.
     const nonSundayDays = allDays.filter((d) => new Date(d).getDay() !== 0);
     // Holidays are paid but not attendable, so they are not working days.
     const workingDays = nonSundayDays.filter((d) => !holidayMap.has(d)).length;

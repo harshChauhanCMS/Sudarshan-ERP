@@ -12,6 +12,7 @@ import { getSession } from "@/lib/session";
 import { canManagePayroll } from "@/lib/hrms-access";
 import { User } from "@/models/User";
 import Notification from "@/lib/models/Notification";
+import { isWeeklyOffDate } from "@/lib/shift-utils";
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function endOfDay(d: Date)   { const x = new Date(d); x.setHours(23,59,59,999); return x; }
@@ -22,11 +23,11 @@ function dayKey(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
-function countWorkingDays(from: Date, to: Date): number {
+function countWorkingDays(from: Date, to: Date, weeklyOff?: string): number {
   let count = 0;
   const cur = new Date(startOfDay(from));
   while (cur <= to) {
-    if (cur.getDay() !== 0) count++; // exclude Sundays
+    if (!isWeeklyOffDate(cur, weeklyOff)) count++;
     cur.setDate(cur.getDate() + 1);
   }
   return count;
@@ -65,6 +66,9 @@ export async function POST(request: Request) {
       cycle = c;
     }
 
+    // Informational only — each employee's actual working-day count below
+    // honours their own `weeklyOff`; this is the Sunday-based figure shown
+    // as the batch-level summary when employees don't share one schedule.
     const workingDays = countWorkingDays(start, end);
     // Same holiday source as attendance and reports — see holiday-service.
     const holidayMap = await getHolidayMap(start, end);
@@ -155,6 +159,7 @@ export async function POST(request: Request) {
 
       const expectedHours = typeof emp.workingHours === "number" && emp.workingHours > 0
         ? emp.workingHours : 8;
+      const empWorkingDays = countWorkingDays(start, end, emp.weeklyOff);
 
       let daysPresent = 0;
       let overtimeHours = 0;
@@ -162,7 +167,7 @@ export async function POST(request: Request) {
 
       const cur = new Date(startOfDay(start));
       while (cur <= end) {
-        if (cur.getDay() !== 0) {
+        if (!isWeeklyOffDate(cur, emp.weeklyOff)) {
           const key = dayKey(cur);
           const entry = punchDayMap.get(`${eid}|${key}`);
           if (entry?.inAt) {
@@ -205,7 +210,7 @@ export async function POST(request: Request) {
         hra: emp.hra || 0,
         otherConveyance: emp.otherConveyance || 0,
         specialBonus: emp.specialBonus || 0,
-        workingDays,
+        workingDays: empWorkingDays,
         daysPresent,
         overtimeHours: Math.round(overtimeHours * 100) / 100,
         workingHoursPerDay: expectedHours,
@@ -231,7 +236,7 @@ export async function POST(request: Request) {
         specialBonus: emp.specialBonus || 0,
         arrears: emp.arrears || 0,
         grossSalary: result.grossSalary,
-        workingDays,
+        workingDays: empWorkingDays,
         daysPresent,
         holidayDays: unworkedHolidays,
         absentDays: result.absentDays,

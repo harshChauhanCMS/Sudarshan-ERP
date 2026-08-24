@@ -28,6 +28,8 @@ import { downloadCsv } from "@/lib/download-csv";
 import { DashHead, SectionH } from "./dashboards";
 import { useRawMaterials } from "@/hooks/use-raw-materials";
 import { useVendors } from "@/hooks/use-vendors";
+import { usePurchaseOrders } from "@/hooks/use-purchase-orders";
+import { useInvoices } from "@/hooks/use-invoices";
 import { useOrders } from "@/hooks/use-orders";
 import {
   PO_STATUS_LABELS,
@@ -460,9 +462,13 @@ const RawMaterialInventory = () => {
    ============================================================ */
 const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) => {
   const router = useRouter();
-  const DATA = useDATA();
-  const { refresh } = useErpData();
   const { items: vendors } = useVendors();
+  const { purchaseOrders, reload: reloadPurchaseOrders } = usePurchaseOrders();
+  const { invoices, reload: reloadInvoices } = useInvoices();
+  const refresh = useCallback(
+    () => Promise.all([reloadPurchaseOrders(), reloadInvoices()]),
+    [reloadPurchaseOrders, reloadInvoices]
+  );
   const { user } = useSessionUser();
   const canApprovePo = isAdminOrOwner(user?.role);
   const [tab, setTab] = useState(defaultTab);
@@ -573,7 +579,7 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
   }, [vendors, vendorSearch, vendorRatingFilter]);
 
   const filteredPos = useMemo(() => {
-    return DATA.PURCHASE_ORDERS.filter(p => {
+    return purchaseOrders.filter(p => {
       if (poStatusFilter !== "all" && p.status !== poStatusFilter) return false;
       if (poSearch) {
         const t = poSearch.toLowerCase();
@@ -581,7 +587,7 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       }
       return true;
     });
-  }, [DATA.PURCHASE_ORDERS, poSearch, poStatusFilter]);
+  }, [purchaseOrders, poSearch, poStatusFilter]);
 
   const vendorColumns = useMemo(
     () => [
@@ -892,21 +898,21 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         <StatCard
           icon={ShoppingCartOutlined}
           label="Open POs"
-          value={DATA.PURCHASE_ORDERS.filter((p) => p.status !== "received").length}
-          hint={`${DATA.PURCHASE_ORDERS.filter((p) => p.status === "pending_verification").length} awaiting verification`}
+          value={purchaseOrders.filter((p) => p.status !== "received").length}
+          hint={`${purchaseOrders.filter((p) => p.status === "pending_verification").length} awaiting verification`}
           hintTone="accent"
         />
         <StatCard
           icon={DollarOutlined}
           label="PO spend · MTD"
-          value={fmtINR(DATA.PURCHASE_ORDERS.reduce((s, p) => s + p.total, 0))}
+          value={fmtINR(purchaseOrders.reduce((s, p) => s + p.total, 0))}
           hint="From database"
           hintTone="positive"
         />
         <StatCard
           icon={FileExclamationOutlined}
           label="Invoice mismatches"
-          value={DATA.INVOICES.filter((i) => i.status === "mismatch").length}
+          value={invoices.filter((i) => i.status === "mismatch").length}
           hint="Needs verification"
           hintTone="negative"
         />
@@ -919,7 +925,7 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
               Vendors <span className="tab-count">{vendors.length}</span>
             </span>
             <span className={`tab ${tab === "po" ? "active" : ""}`} onClick={() => setTab("po")}>
-              Purchase Orders <span className="tab-count">{DATA.PURCHASE_ORDERS.length}</span>
+              Purchase Orders <span className="tab-count">{purchaseOrders.length}</span>
             </span>
           </div>
         </div>

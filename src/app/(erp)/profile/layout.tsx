@@ -1,5 +1,5 @@
-import { ErpApp } from "@/components/erp-app";
+import type { ReactNode } from "react";
 
-export default function ProfileLayout({ children }: { children: React.ReactNode }) {
-  return <ErpApp>{children}</ErpApp>;
+export default function ProfileLayout({ children }: { children: ReactNode }) {
+  return <>{children}</>;
 }

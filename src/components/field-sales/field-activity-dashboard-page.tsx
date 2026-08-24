@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { message, Skeleton } from "antd";
+import { message, Spin } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import { Icon } from "@/components/erp/icons";
 import { Btn } from "@/components/erp/ui";
@@ -103,7 +103,9 @@ export function FieldActivityDashboardPage() {
       <FieldVisitDetailModal visit={viewVisit} onClose={() => setViewVisit(null)} />
 
       {loading && !data ? (
-        <Skeleton active paragraph={{ rows: 8 }} style={{ marginTop: 16 }} />
+        <div style={{ display: "grid", placeItems: "center", minHeight: 320, padding: 24 }}>
+          <Spin size="large" description="Loading field activity…" />
+        </div>
       ) : null}
       {error ? <p style={{ color: "var(--danger)", fontSize: 13 }}>{error}</p> : null}
 

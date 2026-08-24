@@ -49,7 +49,7 @@ import {
 import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
 import { useSessionUser } from "@/hooks/use-session-user";
 import { useShifts } from "@/hooks/use-shifts";
-import { shiftLabel } from "@/lib/shift-utils";
+import { shiftLabel, EMPLOYEE_WEEKLY_OFF_OPTIONS } from "@/lib/shift-utils";
 
 const { Panel } = Collapse;
 
@@ -968,27 +968,13 @@ export default function EmployeeDetailsPage({
                     }
                   />
                 </Form.Item>
-                <Form.Item name="rotationPattern" label="Rotation Pattern">
-                  <Select
-                    disabled={!isEditing}
-                    options={[
-                      { value: "None", label: "None" },
-                      { value: "Weekly rotation", label: "Weekly rotation" },
-                      { value: "Fortnightly rotation", label: "Fortnightly rotation" },
-                    ]}
-                  />
-                </Form.Item>
-                <Form.Item name="workingHours" label="Working Hours / Day">
-                  <InputNumber style={{ width: "100%" }} min={1} max={24} disabled={!isEditing} />
-                </Form.Item>
                 <Form.Item name="weeklyOff" label="Weekly Off Day">
                   <Select
                     disabled={!isEditing}
-                    options={[
-                      { value: "Sunday", label: "Sunday" },
-                      { value: "Saturday", label: "Saturday" },
-                      { value: "Rotating", label: "Rotating" },
-                    ]}
+                    options={EMPLOYEE_WEEKLY_OFF_OPTIONS.map((d) => ({
+                      value: d,
+                      label: d,
+                    }))}
                   />
                 </Form.Item>
                 <Form.Item name="overtimeApplicable" label="Overtime Applicability" valuePropName="checked">

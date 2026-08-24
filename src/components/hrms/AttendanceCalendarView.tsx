@@ -14,6 +14,7 @@ import {
   type HolidayInfo,
 } from "@/lib/holiday-rules";
 import { formatWorkedDuration } from "@/lib/format-duration";
+import { isWeeklyOffDate } from "@/lib/shift-utils";
 
 export type CalendarDayRow = {
   day: string;
@@ -34,6 +35,8 @@ type Props = {
   from: string;
   to: string;
   loading?: boolean;
+  /** The employee's weekly-off day (defaults to Sunday when unset). */
+  weeklyOff?: string;
 };
 
 type Cell = {
@@ -47,22 +50,25 @@ type Cell = {
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const LEGEND: { status: DayStatus; note: string }[] = [
-  { status: "present", note: "Punched in" },
-  { status: "absent", note: "No punch, not a holiday or leave" },
-  { status: "leave", note: "Approved leave" },
-  { status: "holiday", note: "Company holiday — paid, not leave" },
-  { status: "week-off", note: "Weekly off (Sunday)" },
-  { status: "half-day", note: "Worked under half the shift" },
-];
-
 export default function AttendanceCalendarView({
   rows,
   holidays,
   from,
   to,
   loading = false,
+  weeklyOff,
 }: Props) {
+  const legend: { status: DayStatus; note: string }[] = useMemo(
+    () => [
+      { status: "present", note: "Punched in" },
+      { status: "absent", note: "No punch, not a holiday or leave" },
+      { status: "leave", note: "Approved leave" },
+      { status: "holiday", note: "Company holiday — paid, not leave" },
+      { status: "week-off", note: `Weekly off (${weeklyOff?.trim() || "Sunday"})` },
+      { status: "half-day", note: "Worked under half the shift" },
+    ],
+    [weeklyOff],
+  );
   const rangeStart = useMemo(() => dayjs(from).startOf("day"), [from]);
   const rangeEnd = useMemo(() => dayjs(to).endOf("day"), [to]);
 
@@ -111,12 +117,12 @@ export default function AttendanceCalendarView({
           present: !!row?.present,
           onLeave: !!row?.onLeave,
           isHoliday: !!holiday,
-          isWeekOff: d.day() === 0,
+          isWeekOff: isWeeklyOffDate(d.toDate(), weeklyOff),
         }),
       });
     }
     return out;
-  }, [month, rowByDay, holidayByDay, rangeStart, rangeEnd]);
+  }, [month, rowByDay, holidayByDay, rangeStart, rangeEnd, weeklyOff]);
 
   const canPrev = month.startOf("month").isAfter(rangeStart, "day");
   const canNext = month.endOf("month").isBefore(rangeEnd, "day");
@@ -149,7 +155,7 @@ export default function AttendanceCalendarView({
           aria-label="Next month"
         />
         <span className="att-cal__totals">
-          {LEGEND.filter((l) => monthTotals[l.status]).map((l) => (
+          {legend.filter((l) => monthTotals[l.status]).map((l) => (
             <span key={l.status} className={`att-cal__chip att-cal__chip--${l.status}`}>
               {DAY_STATUS_LABELS[l.status]} {monthTotals[l.status]}
             </span>
@@ -207,7 +213,7 @@ export default function AttendanceCalendarView({
       </div>
 
       <ul className="att-cal__legend">
-        {LEGEND.map((l) => (
+        {legend.map((l) => (
           <li key={l.status}>
             <span className={`att-cal__swatch att-cal__swatch--${l.status}`} />
             <strong>{DAY_STATUS_CODES[l.status]}</strong>

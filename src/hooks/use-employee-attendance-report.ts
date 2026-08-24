@@ -16,6 +16,7 @@ export type EmployeeReportProfile = {
   employeeName: string;
   department?: string;
   primaryShift?: string;
+  weeklyOff?: string;
 };
 
 export function useEmployeeAttendanceReport(
@@ -79,6 +80,7 @@ export function useEmployeeAttendanceReport(
                   employeeName: summaryRow.employeeName,
                   department: summaryRow.department,
                   primaryShift: summaryRow.primaryShift,
+                  weeklyOff: summaryRow.weeklyOff,
                 }
               : { employeeId, employeeName: employeeId },
           );

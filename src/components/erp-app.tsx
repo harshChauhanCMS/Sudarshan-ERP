@@ -7,7 +7,7 @@ import { message } from "antd";
 import { Login, Forgot, ResetPassword } from "@/components/erp/auth";
 import { Sidebar, Topbar } from "@/components/layout";
 import { renderErpRoute } from "@/components/erp/render-route";
-import { ERP_ROUTES, pathToRoute } from "@/lib/erp-routes";
+import { ERP_ROUTES, isLegacyRenderRoute, pathToRoute } from "@/lib/erp-routes";
 import {
   canAccessRoute,
   getDefaultLandingRoute,
@@ -365,7 +365,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
         />
         <div className="content">
           <PageShell loading={loading} error={error} warning={warning} warningTone={warningTone} showSeedHint={warningTone === "empty" && Boolean(status?.dbConfigured)}>
-            {children ? children : renderErpRoute(route, navigate)}
+            {isLegacyRenderRoute(route) ? renderErpRoute(route, navigate) : children}
           </PageShell>
         </div>
       </div>

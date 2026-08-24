@@ -7022,6 +7022,10 @@ select.input {
   margin-bottom: 1.25rem;
 }
 
+.admin-dash-grid--two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
 .admin-dash-grid--single {
   grid-template-columns: 1fr;
 }
@@ -7029,6 +7033,12 @@ select.input {
 @media (max-width: 1100px) {
   .admin-dash-grid {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .admin-dash-grid--two {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -7139,7 +7149,11 @@ select.input {
 }
 
 .admin-alert-mod-section {
-  margin-bottom: 1rem;
+  margin-bottom: 0.65rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
 }
 
 .admin-alert-mod-section:last-child {
@@ -7553,11 +7567,7 @@ select.input {
 
 .owner-dash .owner-widget-body,
 .owner-dash .card.owner-card .card-body {
-  background: linear-gradient(
-    to bottom,
-    var(--bg-elev) 0%,
-    rgba(37, 99, 235, 0.09) 100%
-  );
+  background: var(--bg-elev);
 }
 
 .owner-card--green {
@@ -7730,14 +7740,25 @@ button.owner-dash-nav.card.owner-card--nav {
 .owner-employees-field__row,
 .owner-top-list__row,
 .owner-risks-list__row,
-.owner-price-var-list__row,
-.owner-dispatch-list__item--nav {
+.owner-price-var-list__row {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
   width: 100%;
   padding: 0.5rem 0.25rem;
   text-align: left;
+}
+
+.owner-dispatch-list__item--nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 0.5rem;
+  text-align: left;
+  font-size: 0.95rem;
+  font-weight: 500;
 }
 
 .owner-price-var-list__row {
@@ -8445,12 +8466,12 @@ button.owner-vendor-chart__row:focus-visible {
 }
 
 .owner-dispatch-summary__heading {
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: 0.92rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--primary);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.65rem;
 }
 
 .owner-dispatch-summary__heading.overdue {
@@ -8544,13 +8565,15 @@ button.owner-vendor-chart__row:focus-visible {
 }
 
 .owner-dispatch-list__item {
-  font-size: 0.82rem;
-  padding: 0.4rem 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 0.75rem 0.5rem;
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  line-height: 1.45;
 }
 
 .owner-dispatch-list__item:last-child {
@@ -12351,12 +12374,25 @@ button.owner-vendor-chart__row:focus-visible {
   white-space: nowrap;
 }
 
-.att-cal__chip--present { background: var(--att-present); }
-.att-cal__chip--absent { background: var(--att-absent); }
-.att-cal__chip--leave { background: var(--att-leave); color: #422006; }
-.att-cal__chip--holiday { background: var(--att-holiday); }
-.att-cal__chip--week-off { background: var(--att-week-off); }
-.att-cal__chip--half-day { background: var(--att-half-day); }
+.att-cal__chip--present {
+  background: var(--att-present);
+}
+.att-cal__chip--absent {
+  background: var(--att-absent);
+}
+.att-cal__chip--leave {
+  background: var(--att-leave);
+  color: #422006;
+}
+.att-cal__chip--holiday {
+  background: var(--att-holiday);
+}
+.att-cal__chip--week-off {
+  background: var(--att-week-off);
+}
+.att-cal__chip--half-day {
+  background: var(--att-half-day);
+}
 
 .att-cal__grid {
   display: grid;
@@ -12429,12 +12465,25 @@ button.owner-vendor-chart__row:focus-visible {
   white-space: nowrap;
 }
 
-.att-cal__cell--present .att-cal__code { background: var(--att-present); }
-.att-cal__cell--absent .att-cal__code { background: var(--att-absent); }
-.att-cal__cell--leave .att-cal__code { background: var(--att-leave); color: #422006; }
-.att-cal__cell--holiday .att-cal__code { background: var(--att-holiday); }
-.att-cal__cell--week-off .att-cal__code { background: var(--att-week-off); }
-.att-cal__cell--half-day .att-cal__code { background: var(--att-half-day); }
+.att-cal__cell--present .att-cal__code {
+  background: var(--att-present);
+}
+.att-cal__cell--absent .att-cal__code {
+  background: var(--att-absent);
+}
+.att-cal__cell--leave .att-cal__code {
+  background: var(--att-leave);
+  color: #422006;
+}
+.att-cal__cell--holiday .att-cal__code {
+  background: var(--att-holiday);
+}
+.att-cal__cell--week-off .att-cal__code {
+  background: var(--att-week-off);
+}
+.att-cal__cell--half-day .att-cal__code {
+  background: var(--att-half-day);
+}
 
 .att-cal__legend {
   list-style: none;
@@ -12466,12 +12515,24 @@ button.owner-vendor-chart__row:focus-visible {
   flex-shrink: 0;
 }
 
-.att-cal__swatch--present { background: var(--att-present); }
-.att-cal__swatch--absent { background: var(--att-absent); }
-.att-cal__swatch--leave { background: var(--att-leave); }
-.att-cal__swatch--holiday { background: var(--att-holiday); }
-.att-cal__swatch--week-off { background: var(--att-week-off); }
-.att-cal__swatch--half-day { background: var(--att-half-day); }
+.att-cal__swatch--present {
+  background: var(--att-present);
+}
+.att-cal__swatch--absent {
+  background: var(--att-absent);
+}
+.att-cal__swatch--leave {
+  background: var(--att-leave);
+}
+.att-cal__swatch--holiday {
+  background: var(--att-holiday);
+}
+.att-cal__swatch--week-off {
+  background: var(--att-week-off);
+}
+.att-cal__swatch--half-day {
+  background: var(--att-half-day);
+}
 
 .att-cal__detail {
   display: grid;
@@ -12481,13 +12542,25 @@ button.owner-vendor-chart__row:focus-visible {
   font-size: 13px;
 }
 
-.att-cal__detail dt { color: var(--fg-subtle); }
-.att-cal__detail dd { margin: 0; }
+.att-cal__detail dt {
+  color: var(--fg-subtle);
+}
+.att-cal__detail dd {
+  margin: 0;
+}
 
 @media (max-width: 640px) {
-  .att-cal__cell { min-height: 52px; padding: 4px; }
-  .att-cal__code { font-size: 0.66rem; }
-  .att-cal__totals { width: 100%; margin-left: 0; }
+  .att-cal__cell {
+    min-height: 52px;
+    padding: 4px;
+  }
+  .att-cal__code {
+    font-size: 0.66rem;
+  }
+  .att-cal__totals {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 
 .att-cal__viewswitch {
@@ -12567,5 +12640,7 @@ button.owner-vendor-chart__row:focus-visible {
 }
 
 @media (max-width: 640px) {
-  .hol-strip li { width: 74px; }
+  .hol-strip li {
+    width: 74px;
+  }
 }

@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Calendar, DatePicker, Popover, Select, Skeleton, message } from "antd";
+import { Calendar, DatePicker, Popover, Select, Spin, message } from "antd";
 import {
   AlertOutlined,
   BarChartOutlined,
@@ -1161,30 +1161,48 @@ const AdminDashboard = ({ navigate }) => {
   }, [DATA, orders, employees]);
 
   const fieldAlerts = useMemo(() => {
-    const fromVisits = fieldVisits.slice(0, 2).map((v) => ({
-      icon: "pin",
-      tone: "primary",
-      text: (
-        <>
-          <strong>{v.assignedEmployeeName}</strong> —{" "}
-          {v.status === "completed" ? "Visit logged" : "Check-in"} at{" "}
-          {v.partyName}. {v.startTime}.
-        </>
-      ),
-    }));
-    return [
-      ...fromVisits,
-      {
-        icon: "alert",
-        tone: "danger",
+    const alerts = [];
+    // Show latest completed visits
+    const completed = fieldVisits
+      .filter((v) => v.status === "completed")
+      .slice(0, 3);
+    for (const v of completed) {
+      alerts.push({
+        icon: "check",
+        tone: "success",
         text: (
           <>
-            <strong>Lotus Herbals</strong> — Follow-up not yet logged. Due May
-            22. Escalate?
+            <strong>{v.assignedEmployeeName}</strong> — Visit completed at{" "}
+            {v.partyName}.{v.completedAt ? ` ${new Date(v.completedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })}` : ""}
           </>
         ),
-      },
-    ];
+      });
+    }
+    // Show not-completed visits (pending, accepted, in-progress)
+    const notCompleted = fieldVisits
+      .filter((v) => v.status === "pending" || v.status === "accepted" || v.status === "in-progress")
+      .slice(0, 3);
+    for (const v of notCompleted) {
+      const statusLabel = v.status === "in-progress" ? "In progress" : v.status === "accepted" ? "Accepted" : "Pending";
+      alerts.push({
+        icon: v.status === "in-progress" ? "pin" : "alert",
+        tone: v.status === "in-progress" ? "primary" : "warning",
+        text: (
+          <>
+            <strong>{v.assignedEmployeeName}</strong> — {statusLabel} visit at{" "}
+            {v.partyName}.{v.startTime ? ` Scheduled ${v.startTime}.` : ""}
+          </>
+        ),
+      });
+    }
+    if (alerts.length === 0) {
+      alerts.push({
+        icon: "check",
+        tone: "default",
+        text: <span className="muted">No field visits recorded today.</span>,
+      });
+    }
+    return alerts;
   }, [fieldVisits]);
 
   const dispatchDelayAlerts = useMemo(() => {
@@ -1218,15 +1236,35 @@ const AdminDashboard = ({ navigate }) => {
     return alerts;
   }, [DATA.DISPATCHES, dispatchDelays]);
 
-  const ordersWeekData = [
-    { day: "Mon", orders: 8 },
-    { day: "Tue", orders: 12 },
-    { day: "Wed", orders: 10 },
-    { day: "Thu", orders: 15 },
-    { day: "Fri", orders: 13 },
-    { day: "Sat", orders: 7 },
-    { day: "Sun", orders: 4 },
-  ];
+  const ordersWeekData = useMemo(() => {
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    // Build a map of ISO day -> count
+    const dayCounts = new Map();
+    // Initialize the last 7 days with 0
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      dayCounts.set(key, { day: dayNames[d.getDay()], orders: 0 });
+    }
+    // Count orders by date
+    for (const o of orders) {
+      // Try orderDate first (ISO "YYYY-MM-DD"), then fall back to due ("May 24")
+      let dateStr = o.orderDate;
+      if (!dateStr && o.due) {
+        dateStr = o.due + ", " + currentYear;
+      }
+      if (!dateStr) continue;
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) continue;
+      const key = d.toISOString().slice(0, 10);
+      const entry = dayCounts.get(key);
+      if (entry) entry.orders += 1;
+    }
+    return [...dayCounts.values()];
+  }, [orders]);
 
   return (
     <div className="admin-dash">
@@ -1358,43 +1396,7 @@ const AdminDashboard = ({ navigate }) => {
         </Btn>
       </div>
 
-      <div className="admin-dash-grid">
-        <AdminWidget
-          title="User access issues"
-          icon="shield"
-          badge={<Badge tone="warning">3</Badge>}
-        >
-          <ul className="admin-issue-list">
-            <li>
-              <span className="admin-issue-list__icon danger">
-                <Icon name="user" size={13} />
-              </span>
-              <div>
-                <strong>Arun Nair</strong> — account disabled. Last login 28
-                Feb. Re-enable or archive.
-              </div>
-            </li>
-            <li>
-              <span className="admin-issue-list__icon warning">
-                <Icon name="shield" size={13} />
-              </span>
-              <div>
-                <strong>Kiran Desai</strong> — password reset requested. Pending
-                since 8 Mar.
-              </div>
-            </li>
-            <li>
-              <span className="admin-issue-list__icon warning">
-                <Icon name="check" size={13} />
-              </span>
-              <div>
-                <strong>2 new users</strong> — awaiting role assignment (Stores,
-                Microns).
-              </div>
-            </li>
-          </ul>
-        </AdminWidget>
-
+      <div className="admin-dash-grid admin-dash-grid--two">
         <AdminWidget title="Low stock alerts by module" icon="box">
           <div className="admin-alert-mod-section">
             <div className="admin-alert-mod-title">
@@ -2021,7 +2023,9 @@ const OwnerDashboard = ({ navigate }) => {
       <div className="owner-dash">
         {header}
         {loading ? (
-          <Skeleton active paragraph={{ rows: 10 }} style={{ marginTop: 16 }} />
+          <div style={{ display: "grid", placeItems: "center", minHeight: 320, padding: 24 }}>
+            <Spin size="large" description="Loading owner dashboard…" />
+          </div>
         ) : (
           <div className="card" style={{ padding: 24 }}>
             <p style={{ color: "var(--danger)", margin: 0 }}>
@@ -2280,31 +2284,7 @@ const OwnerDashboard = ({ navigate }) => {
         </OwnerWidget>
       </div>
 
-      <div className="owner-dash-grid owner-dash-grid--dispatch">
-        <OwnerWidget
-          title="Vendor price change alerts"
-          icon="money"
-          titleHref="/procurement/vendors"
-          navigate={navigate}
-          badge={
-            counts.vendorPriceAlerts > 0 ? (
-              <Badge tone="warning">{counts.vendorPriceAlerts}</Badge>
-            ) : null
-          }
-          theme={OWNER_CHART_THEMES.vendor.container}
-        >
-          <p className="owner-chart-caption">
-            Recent vendor quote changes (% vs last order)
-          </p>
-          <OwnerVendorPriceChart
-            items={vendorPriceAlerts}
-            navigate={navigate}
-          />
-          <p className="owner-widget-footnote">
-            Review margin impact. Both companies.
-          </p>
-        </OwnerWidget>
-
+      <div className="owner-dash-grid owner-dash-grid--single">
         <OwnerWidget
           title="Dispatch due & overdue summary"
           icon="truck"
@@ -2361,7 +2341,7 @@ const OwnerDashboard = ({ navigate }) => {
         </OwnerWidget>
       </div>
 
-      <div className="owner-dash-grid">
+      <div className="owner-dash-grid owner-dash-grid--two">
         <OwnerWidget
           title="Production overview"
           icon="factory"
@@ -2454,42 +2434,6 @@ const OwnerDashboard = ({ navigate }) => {
           {fieldVisits[0]?.key !== "none" ? (
             <p className="owner-widget-footnote">
               Live from today&apos;s field visit assignments (IST).
-            </p>
-          ) : null}
-        </OwnerWidget>
-
-        <OwnerWidget
-          title="Employees in field today"
-          icon="users"
-          titleHref="/field-sales/activity-dashboard"
-          navigate={navigate}
-        >
-          <ul className="owner-employees-field">
-            {employeesInField.map((e) => (
-              <li key={e.key}>
-                <OwnerNavButton
-                  navigate={navigate}
-                  href={e.href}
-                  className="owner-employees-field__row"
-                  disabled={e.key === "none" || e.key.startsWith("extra-")}
-                >
-                  <span className="owner-employees-field__avatar">
-                    {e.name
-                      .split(" ")
-                      .map((p) => p[0])
-                      .join("")
-                      .slice(0, 2)}
-                  </span>
-                  <span>{e.name}</span>
-                  <span className="owner-employees-field__role">{e.role}</span>
-                </OwnerNavButton>
-              </li>
-            ))}
-          </ul>
-          {employeesInField[0]?.key !== "none" ? (
-            <p className="owner-widget-footnote">
-              Live from mobile field punch-in with GPS. Hidden after punch-out
-              today.
             </p>
           ) : null}
         </OwnerWidget>
@@ -2774,7 +2718,9 @@ const ProductionDashboard = ({ navigate }) => {
       <div className="prod-dash">
         {header}
         {loading ? (
-          <Skeleton active paragraph={{ rows: 10 }} style={{ marginTop: 16 }} />
+          <div style={{ display: "grid", placeItems: "center", minHeight: 320, padding: 24 }}>
+            <Spin size="large" description="Loading production dashboard…" />
+          </div>
         ) : (
           <div className="card" style={{ padding: 24 }}>
             <p style={{ color: "var(--danger)", margin: 0 }}>
@@ -3589,7 +3535,9 @@ const DispatchDashboard = ({ navigate }) => {
       <div className="disp-dash">
         {header}
         {loading ? (
-          <Skeleton active paragraph={{ rows: 10 }} style={{ marginTop: 16 }} />
+          <div style={{ display: "grid", placeItems: "center", minHeight: 320, padding: 24 }}>
+            <Spin size="large" description="Loading dispatch dashboard…" />
+          </div>
         ) : (
           <div className="card" style={{ padding: 24 }}>
             <p style={{ color: "var(--danger)", margin: 0 }}>
