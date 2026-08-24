@@ -28,6 +28,7 @@ import {
   MailOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import Link from "next/link";
 import PageHeader from "@/components/common/PageHeader";
 import CompensationCategoryPicker from "@/components/hrms/CompensationCategoryPicker";
 import EmployeeDeductionsPicker from "@/components/hrms/EmployeeDeductionsPicker";
@@ -47,6 +48,8 @@ import {
 } from "@/lib/hrms-employee-options";
 import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
 import { useSessionUser } from "@/hooks/use-session-user";
+import { useShifts } from "@/hooks/use-shifts";
+import { shiftLabel } from "@/lib/shift-utils";
 
 const { Panel } = Collapse;
 
@@ -87,6 +90,7 @@ export default function EmployeeDetailsPage({
   const { user, isManager } = useSessionUser();
   const canManageCredentials = canResendCredentials(user?.role);
   const [form] = Form.useForm();
+  const { shifts, loading: shiftsLoading } = useShifts(true);
   const department = Form.useWatch("department", form);
   const showReportingManager = !departmentSkipsReportingManager(department);
 
@@ -942,14 +946,26 @@ export default function EmployeeDetailsPage({
                     ]}
                   />
                 </Form.Item>
-                <Form.Item name="primaryShift" label="Primary Shift">
+                <Form.Item
+                  name="primaryShift"
+                  label="Primary Shift"
+                  extra={
+                    isEditing && !shiftsLoading && shifts.length === 0 ? (
+                      <Link href="/hrms/shifts">No shifts defined — add one first</Link>
+                    ) : undefined
+                  }
+                >
                   <Select
                     disabled={!isEditing}
-                    options={[
-                      { value: "Shift A — 06:00 to 14:00", label: "Shift A — 06:00 to 14:00" },
-                      { value: "Shift B — 14:00 to 22:00", label: "Shift B — 14:00 to 22:00" },
-                      { value: "Shift C — 22:00 to 06:00", label: "Shift C — 22:00 to 06:00" },
-                    ]}
+                    loading={shiftsLoading}
+                    placeholder={shiftsLoading ? "Loading shifts…" : "Select shift"}
+                    options={shifts.map((s) => ({
+                      value: shiftLabel(s),
+                      label: shiftLabel(s),
+                    }))}
+                    notFoundContent={
+                      shiftsLoading ? "Loading…" : "No shifts defined yet"
+                    }
                   />
                 </Form.Item>
                 <Form.Item name="rotationPattern" label="Rotation Pattern">
