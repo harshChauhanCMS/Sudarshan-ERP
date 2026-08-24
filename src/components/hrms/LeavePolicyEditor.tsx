@@ -8,7 +8,7 @@ import { ERP_TABLE_PROPS } from "@/components/common/erpStatusBadges";
 import PageFilterPanel from "@/components/common/PageFilterPanel";
 
 const LEAVE_TYPE_LABEL: Record<string, string> = {
-  casual: "Casual", sick: "Sick", privilege: "Privilege", unpaid: "Unpaid",
+  casual: "Casual", sick: "Sick", privilege: "Privilege", compOff: "Comp Off", unpaid: "Unpaid",
 };
 
 export function LeavePolicyEditor() {

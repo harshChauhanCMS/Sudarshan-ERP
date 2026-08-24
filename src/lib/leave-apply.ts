@@ -1,12 +1,13 @@
 import dayjs, { type Dayjs } from "dayjs";
 
-export const APPLY_LEAVE_TYPES = ["PL", "CL", "SL", "LWP"] as const;
+export const APPLY_LEAVE_TYPES = ["PL", "CL", "SL", "Comp.Off", "LWP"] as const;
 export type ApplyLeaveUiType = (typeof APPLY_LEAVE_TYPES)[number];
 
 export const UI_LEAVE_TO_API: Record<ApplyLeaveUiType, string> = {
   PL: "privilege",
   CL: "casual",
   SL: "sick",
+  "Comp.Off": "compOff",
   LWP: "unpaid",
 };
 
@@ -14,6 +15,7 @@ export const API_LEAVE_TO_UI: Record<string, ApplyLeaveUiType> = {
   privilege: "PL",
   casual: "CL",
   sick: "SL",
+  compOff: "Comp.Off",
   unpaid: "LWP",
 };
 
@@ -21,6 +23,7 @@ export const API_LEAVE_LABELS: Record<string, string> = {
   privilege: "Privilege Leave (PL)",
   casual: "Casual Leave (CL)",
   sick: "Sick Leave (SL)",
+  compOff: "Compensatory Off (Comp.Off)",
   unpaid: "Leave Without Pay (LWP)",
 };
 
@@ -56,10 +59,12 @@ const LEAVE_TYPE_TAG_COLORS: Record<string, string> = {
   privilege: "green",
   casual: "blue",
   sick: "red",
+  compOff: "orange",
   unpaid: "default",
   PL: "green",
   CL: "blue",
   SL: "red",
+  "Comp.Off": "orange",
   LWP: "default",
 };
 

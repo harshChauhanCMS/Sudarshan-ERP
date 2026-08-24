@@ -41,6 +41,7 @@ const LEAVE_TYPE_LABEL: Record<string, string> = {
   casual: "CL",
   sick: "SL",
   privilege: "PL",
+  compOff: "Comp.Off",
   unpaid: "Unpaid",
 };
 

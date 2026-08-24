@@ -4027,6 +4027,12 @@ button.owner-stat-card--nav .sc-card {
   color: #fff;
 }
 
+.lv-apply-chip--active:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  color: #fff;
+}
+
 .lv-apply-preview-card {
   border: 1px solid var(--primary-soft-2);
   border-radius: 12px;

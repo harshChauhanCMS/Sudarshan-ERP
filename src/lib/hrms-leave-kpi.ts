@@ -15,6 +15,7 @@ const LEAVE_TYPE_SHORT: Record<string, string> = {
   casual: "CL",
   sick: "SL",
   privilege: "PL",
+  compOff: "Comp.Off",
   unpaid: "Unpaid",
   privilege_leave: "PL",
 };
