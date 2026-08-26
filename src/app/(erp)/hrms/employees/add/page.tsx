@@ -789,6 +789,7 @@ export default function AddEmployeePage() {
       fields: [
         "shiftMode",
         "primaryShift",
+        "eligibleShifts",
         "weeklyOff",
         "overtimeApplicable",
       ],
@@ -820,6 +821,28 @@ export default function AddEmployeePage() {
             <Select
               loading={shiftsLoading}
               placeholder={shiftsLoading ? "Loading shifts…" : "Select shift"}
+              options={shifts.map((s) => ({
+                value: shiftLabel(s),
+                label: shiftLabel(s),
+              }))}
+              notFoundContent={
+                shiftsLoading ? "Loading…" : "No shifts defined yet"
+              }
+            />
+          </Form.Item>
+          <Form.Item
+            name="eligibleShifts"
+            label="Eligible Shifts"
+            extra="Every shift this employee can be rostered on. Leave empty to use the primary shift only."
+          >
+            <Select
+              mode="multiple"
+              allowClear
+              loading={shiftsLoading}
+              placeholder={
+                shiftsLoading ? "Loading shifts…" : "Select one or more shifts"
+              }
+              maxTagCount="responsive"
               options={shifts.map((s) => ({
                 value: shiftLabel(s),
                 label: shiftLabel(s),
@@ -1017,7 +1040,6 @@ export default function AddEmployeePage() {
             </div>
             <Form.Item name="deductionRates" noStyle>
               <EmployeeDeductionsPicker
-                autoSelectDefaults
                 basic={Number(watchedBasic) || 0}
                 gross={Number(watchedGross) || 0}
                 arrears={Number(watchedArrears) || 0}

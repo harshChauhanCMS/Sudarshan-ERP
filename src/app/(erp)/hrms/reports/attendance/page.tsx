@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { Button, Tag } from "antd";
+import { useEffect, useState } from "react";
+import { Button, Space, Tag } from "antd";
 import {
   DownloadOutlined,
+  FileExcelOutlined,
   BankOutlined,
   EnvironmentOutlined,
   TeamOutlined,
@@ -27,14 +28,26 @@ import {
   DepartmentBreakdownChart,
 } from "@/components/hrms/AttendanceReportCharts";
 import { useAttendanceReport } from "@/hooks/use-attendance-report";
+import { downloadDailyAttendanceReportExcel } from "@/lib/daily-attendance-report-excel";
 
 export default function AttendanceOverviewPage() {
   const r = useAttendanceReport();
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   useEffect(() => {
     void r.handleApply();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleExportDailyExcel = async () => {
+    if (exportingExcel || r.daily.length === 0) return;
+    try {
+      setExportingExcel(true);
+      await downloadDailyAttendanceReportExcel(r.daily, r.summary);
+    } finally {
+      setExportingExcel(false);
+    }
+  };
 
   const presentAvg =
     r.kpi && r.kpi.totalEmployees
@@ -132,16 +145,26 @@ export default function AttendanceOverviewPage() {
         title="Attendance Overview"
         subtitle={`${r.rangeLabel} · KPIs, weekly trends & department compliance`}
         actions={
-          <Button
-            icon={<DownloadOutlined />}
-            onClick={() => {
-              import("@/lib/department-attendance-report-pdf").then((m) =>
-                m.downloadDepartmentAttendanceReportPdf(r.rangeLabel, r.deptCompliance, r.kpi)
-              );
-            }}
-          >
-            Export
-          </Button>
+          <Space>
+            <Button
+              icon={<FileExcelOutlined />}
+              onClick={() => void handleExportDailyExcel()}
+              loading={exportingExcel}
+              disabled={r.daily.length === 0}
+            >
+              Export Daily Excel
+            </Button>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() => {
+                import("@/lib/department-attendance-report-pdf").then((m) =>
+                  m.downloadDepartmentAttendanceReportPdf(r.rangeLabel, r.deptCompliance, r.kpi)
+                );
+              }}
+            >
+              Export PDF
+            </Button>
+          </Space>
         }
       />
 

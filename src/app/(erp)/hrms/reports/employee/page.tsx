@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, message } from "antd";
+import { Button, Space, message } from "antd";
 import dayjs from "dayjs";
 import * as XLSX from "xlsx";
 import {
@@ -29,6 +29,7 @@ import {
   useAttendanceReport,
   type AttendanceSummaryRow,
 } from "@/hooks/use-attendance-report";
+import { downloadDailyAttendanceReportExcel } from "@/lib/daily-attendance-report-excel";
 
 type ReportType = "monthly" | "absent" | "late" | "short" | "overtime";
 type GroupBy = "employee" | "department" | "shift" | "unit" | "empType";
@@ -119,6 +120,52 @@ export default function EmployeeReportPage() {
   const [reportType, setReportType] = useState<ReportType>("monthly");
   const [groupBy, setGroupBy] = useState<GroupBy>("employee");
   const [musterLoading, setMusterLoading] = useState(false);
+  const [exportingDailyExcel, setExportingDailyExcel] = useState(false);
+  const filtered = useMemo<AttendanceSummaryRow[]>(() => {
+    switch (reportType) {
+      case "absent":
+        return r.summary.filter((s) => s.absentDays > 0);
+      case "late":
+        return r.summary.filter((s) => s.lateDays > 0);
+      case "short":
+        return r.summary.filter((s) => s.totalShortfall > 0);
+      case "overtime":
+        return r.summary.filter((s) => s.totalOvertime > 0);
+      default:
+        return r.summary;
+    }
+  }, [r.summary, reportType]);
+
+  const filteredDaily = useMemo(() => {
+    const validEmpIds = new Set(filtered.map((s) => s.employeeId));
+    let rows = r.daily.filter((d) => validEmpIds.has(d.employeeId));
+    switch (reportType) {
+      case "absent":
+        return rows.filter((d) => d.absent);
+      case "late":
+        return rows.filter((d) => d.late);
+      case "short":
+        return rows.filter((d) => d.shortfall > 0);
+      case "overtime":
+        return rows.filter((d) => d.overtime > 0);
+      default:
+        return rows;
+    }
+  }, [r.daily, filtered, reportType]);
+
+  const handleExportDailyExcel = async () => {
+    if (exportingDailyExcel || filteredDaily.length === 0) return;
+    try {
+      setExportingDailyExcel(true);
+      await downloadDailyAttendanceReportExcel(
+        filteredDaily,
+        r.summary,
+        `employee-attendance-${reportType}`
+      );
+    } finally {
+      setExportingDailyExcel(false);
+    }
+  };
 
   const buildReportHref = (row: AttendanceSummaryRow) => {
     const params = new URLSearchParams({
@@ -197,20 +244,7 @@ export default function EmployeeReportPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filtered = useMemo<AttendanceSummaryRow[]>(() => {
-    switch (reportType) {
-      case "absent":
-        return r.summary.filter((s) => s.absentDays > 0);
-      case "late":
-        return r.summary.filter((s) => s.lateDays > 0);
-      case "short":
-        return r.summary.filter((s) => s.totalShortfall > 0);
-      case "overtime":
-        return r.summary.filter((s) => s.totalOvertime > 0);
-      default:
-        return r.summary;
-    }
-  }, [r.summary, reportType]);
+
 
   const groupedData = useMemo(() => {
     if (groupBy === "employee") return filtered;
@@ -391,7 +425,15 @@ export default function EmployeeReportPage() {
         title="Employee Report"
         subtitle={`${r.rangeLabel} · monthly summary, absent, late, short hours & overtime`}
         actions={
-          <>
+          <Space>
+            <Button
+              icon={<FileExcelOutlined />}
+              onClick={() => void handleExportDailyExcel()}
+              loading={exportingDailyExcel}
+              disabled={filteredDaily.length === 0}
+            >
+              Export Daily Excel
+            </Button>
             <Button
               icon={<FileExcelOutlined />}
               loading={musterLoading}
@@ -410,7 +452,7 @@ export default function EmployeeReportPage() {
             >
               Export
             </Button>
-          </>
+          </Space>
         }
       />
 

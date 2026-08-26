@@ -28,9 +28,9 @@ import {
   type PermissionAction,
   type PermissionsMap,
 } from "@/lib/permission-types";
-import { useEffect, useCallback } from "react";
-import { Button, Drawer, Checkbox, Spin, Tag, message, Tooltip, Divider, Modal, Input } from "antd";
-import { LockOutlined, CheckCircleFilled, MinusCircleFilled, SafetyCertificateOutlined, CrownOutlined, EyeOutlined, IdcardOutlined, PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import { useEffect, useCallback, useMemo } from "react";
+import { Button, Drawer, Checkbox, Spin, Tag, message, Tooltip, Divider, Modal, Input, Table, Empty, AutoComplete } from "antd";
+import { LockOutlined, CheckCircleFilled, MinusCircleFilled, SafetyCertificateOutlined, CrownOutlined, EyeOutlined, IdcardOutlined, PlusOutlined, DeleteOutlined, UserSwitchOutlined, SearchOutlined } from "@ant-design/icons";
 import StatCard from "@/components/common/StatCard";
 /* ============================================================
    ADMIN — Users, Permissions, Design System, Placeholders
@@ -47,6 +47,17 @@ interface Role {
   description: string;
   isSystem: boolean;
   permissions: PermissionsMap;
+}
+
+/** One row of the "assign role" picker — an employee and the role they hold now. */
+interface RoleAssignee {
+  employeeId: string;
+  fullName: string;
+  designation: string;
+  department: string;
+  role: string;
+  email: string;
+  hasAccount: boolean;
 }
 
 // ─── Role Badge Color Map ─────────────────────────────────────────────────────
@@ -66,6 +77,9 @@ const ROLE_COLORS: Record<string, string> = {
 const getRoleColor = (key: string) => ROLE_COLORS[key] ?? "#374d95";
 
 const PROTECTED_ROLE_KEYS = new Set(["owner", "admin"]);
+
+/** A role is just a string on the user account, but it must be a slug-safe one. */
+const ROLE_KEY_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function isRoleDeletable(role: Role): boolean {
   return !PROTECTED_ROLE_KEYS.has(role.roleKey.toLowerCase());
@@ -196,6 +210,16 @@ const UserManagement = () => {
   const [newDescription, setNewDescription] = useState("");
   const [newPerms, setNewPerms] = useState<PermissionsMap>(() => emptyPermissionsMap());
   const [deletingRoleKey, setDeletingRoleKey] = useState<string | null>(null);
+  const [assignRole, setAssignRole] = useState<Role | null>(null);
+  /** The role key actually being assigned — seeded from the card, then free text. */
+  const [assignRoleKey, setAssignRoleKey] = useState("");
+  /** The selected employee's designation — a plain job-title string. */
+  const [assignDesignation, setAssignDesignation] = useState("");
+  const [assignees, setAssignees] = useState<RoleAssignee[]>([]);
+  const [assigneesLoading, setAssigneesLoading] = useState(false);
+  const [assignSearch, setAssignSearch] = useState("");
+  const [assignSelectedId, setAssignSelectedId] = useState<string | null>(null);
+  const [assignSaving, setAssignSaving] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
 
   const loadData = useCallback(async () => {
@@ -332,7 +356,7 @@ const UserManagement = () => {
       messageApi.error("Role name is required");
       return;
     }
-    if (!roleKey || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(roleKey)) {
+    if (!roleKey || !ROLE_KEY_PATTERN.test(roleKey)) {
       messageApi.error("Role key must use lowercase letters, numbers, and hyphens only");
       return;
     }
@@ -425,6 +449,162 @@ const UserManagement = () => {
     });
   };
 
+  // ─── Assign role to employee ──────────────────────────────────────────────
+  const roleLabelFor = useCallback(
+    (roleKey?: string) => {
+      const key = String(roleKey ?? "").trim();
+      if (!key) return "Not assigned";
+      return roles.find((r) => r.roleKey === key.toLowerCase())?.label ?? key;
+    },
+    [roles],
+  );
+
+  const loadAssignees = useCallback(async () => {
+    setAssigneesLoading(true);
+    try {
+      const res = await fetch("/api/system/role-assignments", { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        throw new Error(json.error || "Failed to load employees");
+      }
+      setAssignees(Array.isArray(json.data) ? json.data : []);
+    } catch (err) {
+      setAssignees([]);
+      messageApi.error(err instanceof Error ? err.message : "Failed to load employees");
+    } finally {
+      setAssigneesLoading(false);
+    }
+  }, [messageApi]);
+
+  const openAssign = (role: Role) => {
+    setAssignRole(role);
+    setAssignRoleKey(role.roleKey);
+    setAssignSearch("");
+    setAssignSelectedId(null);
+    setAssignDesignation("");
+    void loadAssignees();
+  };
+
+  const closeAssign = () => {
+    if (assignSaving) return;
+    setAssignRole(null);
+    setAssignRoleKey("");
+    setAssignSelectedId(null);
+    setAssignSearch("");
+    setAssignDesignation("");
+  };
+
+  /** The role key being assigned, normalized the way the API stores it. */
+  const targetRoleKey = assignRoleKey.trim().toLowerCase();
+  const targetRoleIsKnown = roles.some((r) => r.roleKey === targetRoleKey);
+  const targetRoleLabel = roleLabelFor(targetRoleKey);
+  const targetRoleKeyValid = ROLE_KEY_PATTERN.test(targetRoleKey);
+  const selectedAssignee =
+    assignees.find((row) => row.employeeId === assignSelectedId) ?? null;
+  const roleWillChange =
+    Boolean(selectedAssignee) && selectedAssignee!.role?.toLowerCase() !== targetRoleKey;
+  const designationWillChange =
+    Boolean(selectedAssignee) &&
+    assignDesignation.trim() !== (selectedAssignee!.designation ?? "").trim();
+  const hasAssignChanges = roleWillChange || designationWillChange;
+  const roleKeyOptions = useMemo(
+    () =>
+      roles.map((r) => ({
+        value: r.roleKey,
+        label: (
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+            <span>{r.label}</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--fg-muted)" }}>
+              {r.roleKey}
+            </span>
+          </div>
+        ),
+      })),
+    [roles],
+  );
+
+  const filteredAssignees = useMemo(() => {
+    const q = assignSearch.trim().toLowerCase();
+    if (!q) return assignees;
+    return assignees.filter(
+      (row) =>
+        row.fullName.toLowerCase().includes(q) ||
+        row.employeeId.toLowerCase().includes(q) ||
+        roleLabelFor(row.role).toLowerCase().includes(q),
+    );
+  }, [assignees, assignSearch, roleLabelFor]);
+
+  /** Picking an employee seeds the designation box with what they hold today. */
+  const selectAssignee = (employeeId: string | null) => {
+    setAssignSelectedId(employeeId);
+    const row = assignees.find((r) => r.employeeId === employeeId);
+    setAssignDesignation(row?.designation ?? "");
+  };
+
+  const assignSelected = async () => {
+    if (!assignRole || !assignSelectedId) return;
+    if (!targetRoleKeyValid) {
+      messageApi.error("Role key must use lowercase letters, numbers, and hyphens only");
+      return;
+    }
+    if (!assignDesignation.trim()) {
+      messageApi.error("Designation cannot be empty");
+      return;
+    }
+    if (!hasAssignChanges) return;
+    const target = assignees.find((row) => row.employeeId === assignSelectedId);
+
+    setAssignSaving(true);
+    try {
+      const res = await fetch("/api/system/role-assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employeeId: assignSelectedId,
+          roleKey: targetRoleKey,
+          designation: assignDesignation.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        throw new Error(json.error || "Failed to assign role");
+      }
+
+      const name = json.data?.fullName || target?.fullName || assignSelectedId;
+      const notified = json.data?.notified;
+      const savedDesignation = String(json.data?.designation ?? assignDesignation.trim());
+      const what = json.data?.roleChanged
+        ? json.data?.designationChanged
+          ? `is now ${targetRoleLabel}, designated ${savedDesignation}`
+          : `is now ${targetRoleLabel}`
+        : `is now designated ${savedDesignation}`;
+      messageApi.success(
+        notified?.employeeNotified
+          ? `${name} ${what} — notified by email, along with owners and admins.`
+          : `${name} ${what}. Email notification could not be sent.`,
+      );
+      if (json.data?.isCustomRole) {
+        messageApi.warning(
+          `"${targetRoleKey}" has no permissions defined — create a role with this key, or ${name} will sign in with no access.`,
+          6,
+        );
+      }
+
+      setAssignees((prev) =>
+        prev.map((row) =>
+          row.employeeId === assignSelectedId
+            ? { ...row, role: targetRoleKey, designation: savedDesignation }
+            : row,
+        ),
+      );
+      selectAssignee(null);
+    } catch (err) {
+      messageApi.error(err instanceof Error ? err.message : "Failed to assign role");
+    } finally {
+      setAssignSaving(false);
+    }
+  };
+
   return (
     <div className="attendance-reports-page">
       {contextHolder}
@@ -488,6 +668,20 @@ const UserManagement = () => {
                         </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        {canEditRoles ? (
+                          <Tooltip title={`Assign ${role.label} to an employee`}>
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<UserSwitchOutlined />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openAssign(role);
+                              }}
+                              aria-label={`Assign ${role.label} to an employee`}
+                            />
+                          </Tooltip>
+                        ) : null}
                         {deletable ? (
                           <Tooltip title="Delete role">
                             <Button
@@ -716,6 +910,209 @@ const UserManagement = () => {
           </div>
         </div>
       </Drawer>
+
+      <Modal
+        title={
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <div
+              style={{
+                background: assignRole ? getRoleColor(targetRoleKey) : "#374d95",
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "white",
+              }}
+            >
+              <UserSwitchOutlined />
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>
+                Assign {targetRoleKey ? targetRoleLabel : "role"}
+              </div>
+              <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--fg-muted)", marginTop: 2 }}>
+                {targetRoleKey || "no role key"}
+              </div>
+            </div>
+          </div>
+        }
+        open={Boolean(assignRole)}
+        onCancel={closeAssign}
+        width={760}
+        destroyOnHidden
+        footer={
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 12, color: "var(--fg-muted)", textAlign: "left" }}>
+              The employee, and every owner and admin, are notified by email.
+            </span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button onClick={closeAssign} disabled={assignSaving} style={{ fontWeight: 500 }}>
+                Close
+              </Button>
+              <Button
+                type="primary"
+                onClick={() => void assignSelected()}
+                loading={assignSaving}
+                disabled={
+                  !assignSelectedId ||
+                  !targetRoleKeyValid ||
+                  !assignDesignation.trim() ||
+                  !hasAssignChanges
+                }
+              >
+                {roleWillChange && designationWillChange
+                  ? "Save changes"
+                  : designationWillChange && !roleWillChange
+                    ? "Update designation"
+                    : "Assign role"}
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", textTransform: "uppercase" }}>
+              Role to assign
+            </label>
+            <AutoComplete
+              value={assignRoleKey}
+              options={roleKeyOptions}
+              onChange={(value) => setAssignRoleKey(String(value ?? ""))}
+              filterOption={(input, option) =>
+                String(option?.value ?? "").toLowerCase().includes(input.trim().toLowerCase())
+              }
+              disabled={assignSaving}
+              style={{ width: "100%" }}
+              placeholder="Pick an existing role, or type any role key"
+            />
+            {!targetRoleKey ? (
+              <span style={{ fontSize: 11, color: "var(--danger)" }}>
+                Enter a role key to assign.
+              </span>
+            ) : !targetRoleKeyValid ? (
+              <span style={{ fontSize: 11, color: "var(--danger)" }}>
+                Use lowercase letters, numbers, and hyphens only — e.g. field-sales-lead.
+              </span>
+            ) : targetRoleIsKnown ? (
+              <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>
+                Defaults to the card you opened. Change it to assign a different role.
+              </span>
+            ) : (
+              <span style={{ fontSize: 11, color: "var(--warning)" }}>
+                No role named &quot;{targetRoleKey}&quot; exists yet — it will be saved as a plain role
+                string, granting no permissions until you create a role with this key.
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", textTransform: "uppercase" }}>
+              Designation
+            </label>
+            <Input
+              value={assignDesignation}
+              onChange={(e) => setAssignDesignation(e.target.value)}
+              disabled={assignSaving || !assignSelectedId}
+              placeholder={
+                assignSelectedId
+                  ? "e.g. Shift Supervisor"
+                  : "Select an employee below to edit their designation"
+              }
+            />
+            {assignSelectedId && !assignDesignation.trim() ? (
+              <span style={{ fontSize: 11, color: "var(--danger)" }}>
+                Designation is required.
+              </span>
+            ) : (
+              <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>
+                Free text job title. Edit it on its own, or together with the role above.
+              </span>
+            )}
+          </div>
+
+          <Input
+            allowClear
+            prefix={<SearchOutlined style={{ color: "var(--fg-muted)" }} />}
+            placeholder="Search by name, employee code, or current role"
+            value={assignSearch}
+            onChange={(e) => setAssignSearch(e.target.value)}
+            disabled={assigneesLoading}
+          />
+
+          <Table<RoleAssignee>
+            size="small"
+            rowKey="employeeId"
+            loading={assigneesLoading}
+            dataSource={filteredAssignees}
+            pagination={{ pageSize: 8, size: "small", showSizeChanger: false }}
+            scroll={{ y: 320 }}
+            locale={{ emptyText: <Empty description="No employees found" /> }}
+            onRow={(row) => ({
+              onClick: () => {
+                if (assignSaving) return;
+                selectAssignee(row.employeeId);
+              },
+              style: { cursor: "pointer" },
+            })}
+            rowSelection={{
+              type: "radio",
+              selectedRowKeys: assignSelectedId ? [assignSelectedId] : [],
+              onChange: (keys) => selectAssignee(keys[0] ? String(keys[0]) : null),
+              getCheckboxProps: () => ({ disabled: assignSaving }),
+            }}
+            columns={[
+              {
+                title: "Employee",
+                dataIndex: "fullName",
+                render: (_: unknown, row: RoleAssignee) => (
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: "var(--fg)" }}>{row.fullName}</div>
+                    {row.designation ? (
+                      <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{row.designation}</div>
+                    ) : null}
+                  </div>
+                ),
+              },
+              {
+                title: "Employee code",
+                dataIndex: "employeeId",
+                width: 150,
+                render: (value: string) => (
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{value}</span>
+                ),
+              },
+              {
+                title: "Current role",
+                dataIndex: "role",
+                width: 220,
+                render: (value: string, row: RoleAssignee) => {
+                  const isCurrent = value?.toLowerCase() === targetRoleKey;
+                  return (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Tag
+                        color={isCurrent ? "green" : "default"}
+                        style={{ margin: 0, fontSize: 11, borderRadius: 4 }}
+                      >
+                        {roleLabelFor(value)}
+                      </Tag>
+                      {!row.hasAccount ? (
+                        <Tooltip title="No login account yet — the role applies when their account is created.">
+                          <Tag color="orange" style={{ margin: 0, fontSize: 10, borderRadius: 4 }}>
+                            No login
+                          </Tag>
+                        </Tooltip>
+                      ) : null}
+                    </div>
+                  );
+                },
+              },
+            ]}
+          />
+        </div>
+      </Modal>
     </div>
   );
 };

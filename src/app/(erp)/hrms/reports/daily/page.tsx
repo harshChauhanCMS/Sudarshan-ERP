@@ -16,6 +16,8 @@ import { useAttendanceReport, type AttendanceDailyRow } from "@/hooks/use-attend
 import { downloadDailyAttendanceReportPdf } from "@/lib/daily-attendance-report-pdf";
 import { formatWorkedDuration } from "@/lib/format-duration";
 
+import { downloadDailyAttendanceReportExcel } from "@/lib/daily-attendance-report-excel";
+
 function buildEmployeeReportHref(employeeId: string) {
   const params = new URLSearchParams({
     from: dayjs().startOf("month").format("YYYY-MM-DD"),
@@ -29,30 +31,13 @@ const DAILY_PERIOD_OPTIONS: PeriodOption[] = [
   { value: "date", label: "Pick a date" },
   { value: "month", label: "This month" },
   { value: "last", label: "Last month" },
-  { value: "custom", label: "Pick month…" },
+  { value: "custom_month", label: "Pick month…" },
+  { value: "custom", label: "Custom date range (From – To)" },
 ];
 
 function fmtTime(iso: string | null) {
   if (!iso) return "—";
   return dayjs(iso).format("HH:mm");
-}
-
-// "H:MM" (e.g. 8.25 -> "8:15") to match the attendance register template.
-function fmtHoursColon(decimalHours: number | null | undefined) {
-  const hours = typeof decimalHours === "number" && Number.isFinite(decimalHours) ? decimalHours : 0;
-  const totalMinutes = Math.max(0, Math.round(hours * 60));
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  return `${h}:${String(m).padStart(2, "0")}`;
-}
-
-function attendanceStatusLabel(row: AttendanceDailyRow) {
-  // An unmarked holiday is a Holiday, never an Absent — the API already
-  // resolves this, so `row.absent` is false on holidays.
-  if (row.holiday && !row.present) return `Holiday — ${row.holiday.name}`;
-  if (row.absent) return "Absent";
-  if (!row.inAt || !row.outAt) return "Single Punch";
-  return "Present";
 }
 
 function PunchLocationCell({
@@ -96,56 +81,7 @@ export default function DailyAttendancePage() {
     if (exportingExcel || r.daily.length === 0) return;
     try {
       setExportingExcel(true);
-      const designationByEmployee = new Map(
-        r.summary.map((s) => [s.employeeId, s.designation]),
-      );
-
-      const headers = [
-        "Employee Id",
-        "Employee Name",
-        "Department",
-        "Designation",
-        "Location Unit",
-        "Shift",
-        "In Date",
-        "In time",
-        "Out Date",
-        "Out time",
-        "Working Hours",
-        "Over Time",
-        "Attendance Status",
-        "Approval Status",
-      ];
-      const rows = r.daily.map((row) => [
-        row.employeeId,
-        row.employeeName,
-        row.department,
-        designationByEmployee.get(row.employeeId) ?? "",
-        row.locationUnit ?? "",
-        row.primaryShift ?? "",
-        row.inAt ? dayjs(row.inAt).format("DD-MM-YYYY") : "",
-        row.inAt ? dayjs(row.inAt).format("H:mm") : "0:00",
-        row.outAt ? dayjs(row.outAt).format("DD-MM-YYYY") : "",
-        row.outAt ? dayjs(row.outAt).format("H:mm") : "0:00",
-        fmtHoursColon(row.workedHours),
-        fmtHoursColon(row.overtime),
-        attendanceStatusLabel(row),
-        "",
-      ]);
-
-      const XLSX = await import("xlsx");
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws["!cols"] = headers.map((h, i) => {
-        let maxLen = h.length;
-        for (const row of rows) {
-          const len = String(row[i] ?? "").length;
-          if (len > maxLen) maxLen = len;
-        }
-        return { wch: Math.min(Math.max(maxLen + 2, 10), 42) };
-      });
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Attendance");
-      XLSX.writeFile(wb, `daily-attendance-${dayjs().format("YYYY-MM-DD")}.xlsx`);
+      await downloadDailyAttendanceReportExcel(r.daily, r.summary);
     } finally {
       setExportingExcel(false);
     }

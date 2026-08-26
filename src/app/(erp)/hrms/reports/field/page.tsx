@@ -18,7 +18,8 @@ const FIELD_PERIOD_OPTIONS: PeriodOption[] = [
   { value: "date", label: "Pick a date" },
   { value: "month", label: "This month" },
   { value: "last", label: "Last month" },
-  { value: "custom", label: "Pick month…" },
+  { value: "custom_month", label: "Pick month…" },
+  { value: "custom", label: "Custom date range (From – To)" },
 ];
 
 export default function FieldAttendancePage() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Form,
@@ -32,6 +32,7 @@ import Link from "next/link";
 import PageHeader from "@/components/common/PageHeader";
 import CompensationCategoryPicker from "@/components/hrms/CompensationCategoryPicker";
 import EmployeeDeductionsPicker from "@/components/hrms/EmployeeDeductionsPicker";
+import FieldValueCursorTip from "@/components/hrms/FieldValueCursorTip";
 import { HRMS_BACK } from "@/lib/hrms-nav";
 import {
   disableEmployeeDobUnder18,
@@ -107,6 +108,7 @@ export default function EmployeeDetailsPage({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const formRef = useRef<HTMLDivElement | null>(null);
   const [messageApi, contextHolder] = message.useMessage();
   const compensationType = Form.useWatch("compensationType", form) ?? "Monthly CTC";
   // Watched so the deduction preview re-prices as the salary is edited.
@@ -573,6 +575,8 @@ export default function EmployeeDetailsPage({
         />
 
         {/* ID Card & Form Layout */}
+        <div ref={formRef}>
+        <FieldValueCursorTip form={form} containerRef={formRef} enabled={isEditing} />
         <Form
           form={form}
           layout="vertical"
@@ -968,6 +972,33 @@ export default function EmployeeDetailsPage({
                     }
                   />
                 </Form.Item>
+                <Form.Item
+                  name="eligibleShifts"
+                  label="Eligible Shifts"
+                  extra={
+                    isEditing
+                      ? "Every shift this employee can be rostered on. Leave empty to use the primary shift only."
+                      : undefined
+                  }
+                >
+                  <Select
+                    mode="multiple"
+                    allowClear
+                    disabled={!isEditing}
+                    loading={shiftsLoading}
+                    placeholder={
+                      shiftsLoading ? "Loading shifts…" : "Select one or more shifts"
+                    }
+                    maxTagCount="responsive"
+                    options={shifts.map((s) => ({
+                      value: shiftLabel(s),
+                      label: shiftLabel(s),
+                    }))}
+                    notFoundContent={
+                      shiftsLoading ? "Loading…" : "No shifts defined yet"
+                    }
+                  />
+                </Form.Item>
                 <Form.Item name="weeklyOff" label="Weekly Off Day">
                   <Select
                     disabled={!isEditing}
@@ -1181,6 +1212,7 @@ export default function EmployeeDetailsPage({
           </Collapse>
         </div>
         </Form>
+        </div>
       </div> {/* End main flex-col pb-12 */}
     </ConfigProvider>
   );

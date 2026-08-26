@@ -11,7 +11,8 @@ export type PeriodOption = { value: string; label: string };
 const DEFAULT_PERIOD_OPTIONS: PeriodOption[] = [
   { value: "month", label: "This month" },
   { value: "last", label: "Last month" },
-  { value: "custom", label: "Pick month…" },
+  { value: "custom_month", label: "Pick month…" },
+  { value: "custom", label: "Custom date range" },
 ];
 
 interface Props {
@@ -132,7 +133,7 @@ export default function AttendanceFilterPanel({
           </div>
         )}
 
-        {period === "custom" && (
+        {period === "custom_month" && (
           <div className="arf-item">
             <label htmlFor="arf-month" className="arf-label">
               Month
@@ -146,6 +147,26 @@ export default function AttendanceFilterPanel({
                 if (d) setRange([d.startOf("month"), d.endOf("month")]);
               }}
               allowClear={false}
+            />
+          </div>
+        )}
+
+        {(period === "custom" || period === "custom_range") && (
+          <div className="arf-item">
+            <label htmlFor="arf-range" className="arf-label">
+              Date Range (From – To)
+            </label>
+            <DatePicker.RangePicker
+              id="arf-range"
+              className="w-full"
+              value={range}
+              onChange={(dates) => {
+                if (dates && dates[0] && dates[1]) {
+                  setRange([dates[0].startOf("day"), dates[1].endOf("day")]);
+                }
+              }}
+              allowClear={false}
+              format="DD/MM/YYYY"
             />
           </div>
         )}

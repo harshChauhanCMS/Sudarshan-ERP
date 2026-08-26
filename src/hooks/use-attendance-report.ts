@@ -256,6 +256,12 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
     } else if (period === "month") {
       newRange = [dayjs().startOf("month"), dayjs().endOf("month")];
       setRange(newRange);
+    } else if (period === "custom_month") {
+      newRange = [range[0].startOf("month"), range[0].endOf("month")];
+      setRange(newRange);
+    } else if (period === "custom" || period === "custom_range") {
+      newRange = [range[0].startOf("day"), range[1].endOf("day")];
+      setRange(newRange);
     }
     void load({ dept, shift, unit, employeeId, range: newRange });
   };

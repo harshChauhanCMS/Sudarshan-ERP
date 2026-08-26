@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
-import { Empty, InputNumber, Spin, Tag } from "antd";
+import { Button, Empty, InputNumber, Spin, Tag } from "antd";
 
 import { useDeductions } from "@/hooks/use-deductions";
 import {
@@ -17,10 +17,12 @@ const inr = (n: number) =>
 /**
  * Sets this employee's deduction percentages.
  *
- * Every deduction defined in Deduction Management gets a row with its own
- * percentage box, so HR types the rate that applies to this person — the master
- * only supplies the basis (gross/basic), any monthly cap and any eligibility
- * ceiling. A blank or 0 rate means the deduction doesn't apply to them.
+ * Every deduction defined in Deduction Management gets a row here. Until HR
+ * types a rate for this specific employee, a "Default" row just follows that
+ * deduction's current master percentage — so editing the rate on Deduction
+ * Management re-rates every employee who hasn't customized it, on their next
+ * payroll run. Typing a value pins a "Custom" rate to this employee only,
+ * which then stops following the master; "Reset to default" un-pins it.
  *
  * A controlled field (`value`/`onChange`) so it drops straight into
  * `<Form.Item name="deductionRates">` on both the add and edit employee forms.
@@ -32,7 +34,6 @@ export default function EmployeeDeductionsPicker({
   basic = 0,
   arrears = 0,
   disabled = false,
-  autoSelectDefaults = false,
 }: {
   value?: EmployeeDeductionRate[];
   onChange?: (rates: EmployeeDeductionRate[]) => void;
@@ -40,25 +41,9 @@ export default function EmployeeDeductionsPicker({
   basic?: number;
   arrears?: number;
   disabled?: boolean;
-  /** Pre-fill rows flagged "apply to new employees" with their default rate. */
-  autoSelectDefaults?: boolean;
 }) {
   const { deductions, loading } = useDeductions(true);
   const rates = useMemo(() => value ?? [], [value]);
-  const seededRef = useRef(false);
-
-  useEffect(() => {
-    if (!autoSelectDefaults || seededRef.current || loading) return;
-    if (!deductions.length) return;
-    seededRef.current = true;
-    // Only seed an untouched field — never overwrite an explicit choice.
-    if (value === undefined) {
-      const defaults = deductions
-        .filter((d) => d.isDefault && d.percentage > 0)
-        .map((d) => ({ deductionId: d._id, percentage: d.percentage }));
-      if (defaults.length) onChange?.(defaults);
-    }
-  }, [autoSelectDefaults, deductions, loading, onChange, value]);
 
   const rateById = useMemo(
     () => new Map(rates.map((r) => [String(r.deductionId), Number(r.percentage) || 0])),
@@ -68,10 +53,12 @@ export default function EmployeeDeductionsPicker({
   const rows = useMemo(
     () =>
       deductions.map((d) => {
-        const percentage = rateById.get(d._id) ?? 0;
+        const overridden = rateById.has(d._id);
+        const percentage = overridden ? rateById.get(d._id)! : d.isDefault ? d.percentage : 0;
         return {
           ...d,
           percentage,
+          overridden,
           amount:
             percentage > 0
               ? calcDeductionAmount({ ...d, percentage }, { gross, basic })
@@ -86,8 +73,13 @@ export default function EmployeeDeductionsPicker({
   const setRate = (id: string, percentage: number | null) => {
     const pct = Number(percentage) || 0;
     const rest = rates.filter((r) => String(r.deductionId) !== id);
-    // A zero rate is stored as "not applied" rather than as a 0% row.
-    onChange?.(pct > 0 ? [...rest, { deductionId: id, percentage: pct }] : rest);
+    // Always pinned once touched — even 0%, which means "opted out" for this
+    // employee specifically rather than "not yet set".
+    onChange?.([...rest, { deductionId: id, percentage: pct }]);
+  };
+
+  const resetToDefault = (id: string) => {
+    onChange?.(rates.filter((r) => String(r.deductionId) !== id));
   };
 
   if (loading) {
@@ -114,6 +106,19 @@ export default function EmployeeDeductionsPicker({
 
   return (
     <div>
+      <div
+        style={{
+          marginBottom: 10,
+          padding: "8px 12px",
+          borderRadius: 8,
+          background: "var(--bg-elev, #f5f5f5)",
+          fontSize: 12,
+          color: "var(--fg-muted, #6b7280)",
+        }}
+      >
+        Rates follow <Link href="/hrms/deductions">Deduction Management</Link>&apos;s current
+        defaults unless you set a custom rate for this employee below.
+      </div>
       <div style={{ display: "grid", gap: 8 }}>
         {rows.map((row) => (
           <div
@@ -130,10 +135,24 @@ export default function EmployeeDeductionsPicker({
           >
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ fontWeight: 600 }}>{row.name}</span>
-              {row.isDefault ? (
+              {row.overridden ? (
+                <Tag color="orange" style={{ marginLeft: 8 }}>
+                  Custom
+                </Tag>
+              ) : row.isDefault ? (
                 <Tag color="blue" style={{ marginLeft: 8 }}>
                   Default
                 </Tag>
+              ) : null}
+              {row.overridden && !disabled ? (
+                <Button
+                  type="link"
+                  size="small"
+                  style={{ padding: 0, height: "auto", marginLeft: 8, fontSize: 12 }}
+                  onClick={() => resetToDefault(row._id)}
+                >
+                  Reset to default
+                </Button>
               ) : null}
               <div style={{ fontSize: 12, color: "var(--fg-muted, #6b7280)" }}>
                 {formatDeductionBasis(row)}
@@ -214,7 +233,7 @@ export default function EmployeeDeductionsPicker({
       </div>
       <div style={{ marginTop: 6, fontSize: 12, color: "var(--fg-muted, #6b7280)" }}>
         Previewed against the salary entered above, before attendance is applied.
-        Leave a percentage blank if it doesn&apos;t apply to this employee.
+        Set a percentage to 0 to opt this employee out of a default deduction.
         Payroll recalculates these every cycle from the current rates.
       </div>
     </div>

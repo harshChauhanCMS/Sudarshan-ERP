@@ -12650,3 +12650,43 @@ button.owner-vendor-chart__row:focus-visible {
     width: 74px;
   }
 }
+
+/* ── Cursor-following field tip (employee edit form) ───────────────────────── */
+.field-cursor-tip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2000;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  box-shadow: 0 6px 20px rgba(14, 17, 22, 0.14);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.09s ease-out;
+}
+
+.field-cursor-tip[data-visible="true"] {
+  opacity: 1;
+}
+
+.field-cursor-tip__label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+.field-cursor-tip__value {
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}

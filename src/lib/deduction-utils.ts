@@ -109,9 +109,15 @@ export function computeDeductionLines(
 
 /**
  * Merges the employee's own percentages onto the deduction masters.
- * The master supplies the basis, cap and eligibility ceiling; the employee
- * supplies the rate. A rate of 0 means the deduction doesn't apply to them, so
- * it is dropped rather than producing a zero line on their payslip.
+ * The master supplies the basis, cap and eligibility ceiling. For the rate:
+ * an employee who has an explicit row (even 0%, meaning "opted out") always
+ * uses that pinned value, so it stays fixed regardless of later master edits.
+ * An employee with no row for a given master follows that master's current
+ * default rate live — so editing a deduction's percentage on Deduction
+ * Management immediately re-rates every employee who hasn't customized it.
+ * Inactive masters only still apply to employees already pinned to them
+ * (retiring a rule shouldn't silently stop deducting mid-cycle); they never
+ * newly cascade to employees who haven't set a rate.
  */
 export function resolveEmployeeDeductions(
   masters: DeductionRule[],
@@ -121,8 +127,11 @@ export function resolveEmployeeDeductions(
   return masters
     .map((master) => {
       const rate = byId.get(String(master._id));
-      if (!rate) return null;
-      const percentage = Number(rate.percentage) || 0;
+      const percentage = rate
+        ? Number(rate.percentage) || 0
+        : master.isActive !== false && master.isDefault
+          ? Number(master.percentage) || 0
+          : 0;
       if (percentage <= 0) return null;
       return { ...master, percentage };
     })

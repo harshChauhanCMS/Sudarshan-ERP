@@ -133,14 +133,22 @@ export async function POST(request: Request) {
       leaveByEmp.set(eid, cur);
     }
 
-    // Deduction masters resolved once for the whole run; each employee applies
-    // the subset in their `deductionRates`. Inactive rules stay honoured for
-    // employees already assigned to them — retiring a rule shouldn't silently
-    // stop deducting mid-cycle.
+    // Deduction masters resolved once for the whole run. Each employee's rate
+    // is resolved against the *full* master list (not just the rows already on
+    // their record), so an employee who never customized a default deduction
+    // keeps following its current master percentage — see
+    // `resolveEmployeeDeductions` for the inherit-vs-pinned rules.
     const deductionDocs = await Deduction.find({}).lean();
-    const deductionById = new Map(
-      deductionDocs.map((d) => [String(d._id), d]),
-    );
+    const deductionMasters = deductionDocs.map((d: any) => ({
+      _id: String(d._id),
+      name: d.name,
+      percentage: d.percentage,
+      basis: d.basis === "basic" ? ("basic" as const) : ("gross" as const),
+      maxAmount: d.maxAmount,
+      applicableUpToGross: d.applicableUpToGross,
+      isDefault: d.isDefault,
+      isActive: d.isActive,
+    }));
 
     const results: { employeeId: string; action: string }[] = [];
 
@@ -187,21 +195,10 @@ export async function POST(request: Request) {
 
       const leaveInfo = leaveByEmp.get(eid) ?? { paid: 0, unpaid: 0 };
 
-      // The employee supplies the rate; the master supplies basis/cap/ceiling.
+      // The employee supplies a pinned rate where they have one; otherwise it
+      // follows the master's current default (see resolveEmployeeDeductions).
       const appliedDeductions = resolveEmployeeDeductions(
-        (emp.deductionRates || [])
-          .map((r: { deductionId: string }) =>
-            deductionById.get(String(r.deductionId)),
-          )
-          .filter(Boolean)
-          .map((d: any) => ({
-            _id: String(d._id),
-            name: d.name,
-            percentage: d.percentage,
-            basis: d.basis === "basic" ? ("basic" as const) : ("gross" as const),
-            maxAmount: d.maxAmount,
-            applicableUpToGross: d.applicableUpToGross,
-          })),
+        deductionMasters,
         emp.deductionRates || [],
       );
 
