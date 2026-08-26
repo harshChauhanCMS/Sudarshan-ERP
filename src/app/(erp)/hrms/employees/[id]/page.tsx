@@ -1,7 +1,7 @@
 "use client";
 
-import { use, useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, use, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Form,
   Input,
@@ -82,18 +82,26 @@ function formatFormDate(value: unknown): string | undefined {
   return String(value);
 }
 
-export default function EmployeeDetailsPage({
+function EmployeeDetailsContent({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const searchParams = useSearchParams();
+  // The list's edit action links here with ?edit=1 so the form opens ready to
+  // edit; the view action lands on the same page in read-only mode.
+  const openInEditMode = searchParams.get("edit") === "1";
   const { user, isManager } = useSessionUser();
   const canManageCredentials = canResendCredentials(user?.role);
   const [form] = Form.useForm();
   const { shifts, loading: shiftsLoading } = useShifts(true);
   const department = Form.useWatch("department", form);
   const showReportingManager = !departmentSkipsReportingManager(department);
+  const shiftMode = Form.useWatch("shiftMode", form);
+  // Eligible shifts only apply to rotating employees; a fixed-shift employee
+  // just uses the primary shift.
+  const isMultiShift = shiftMode === "Multiple shifts (rotating)";
 
   useEffect(() => {
     if (isManager) setIsEditing(false);
@@ -107,7 +115,7 @@ export default function EmployeeDetailsPage({
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(openInEditMode);
   const formRef = useRef<HTMLDivElement | null>(null);
   const [messageApi, contextHolder] = message.useMessage();
   const compensationType = Form.useWatch("compensationType", form) ?? "Monthly CTC";
@@ -948,6 +956,11 @@ export default function EmployeeDetailsPage({
                       { value: "Single shift (fixed)", label: "Single shift (fixed)" },
                       { value: "Multiple shifts (rotating)", label: "Multiple shifts (rotating)" },
                     ]}
+                    onChange={(value) => {
+                      if (value !== "Multiple shifts (rotating)") {
+                        form.setFieldValue("eligibleShifts", []);
+                      }
+                    }}
                   />
                 </Form.Item>
                 <Form.Item
@@ -977,17 +990,23 @@ export default function EmployeeDetailsPage({
                   label="Eligible Shifts"
                   extra={
                     isEditing
-                      ? "Every shift this employee can be rostered on. Leave empty to use the primary shift only."
+                      ? isMultiShift
+                        ? "Every shift this employee can be rostered on. Leave empty to use the primary shift only."
+                        : "Set Shift Mode to “Multiple shifts (rotating)” to assign eligible shifts."
                       : undefined
                   }
                 >
                   <Select
                     mode="multiple"
                     allowClear
-                    disabled={!isEditing}
+                    disabled={!isEditing || !isMultiShift}
                     loading={shiftsLoading}
                     placeholder={
-                      shiftsLoading ? "Loading shifts…" : "Select one or more shifts"
+                      !isMultiShift
+                        ? "Available for rotating shifts only"
+                        : shiftsLoading
+                          ? "Loading shifts…"
+                          : "Select one or more shifts"
                     }
                     maxTagCount="responsive"
                     options={shifts.map((s) => ({
@@ -1215,5 +1234,23 @@ export default function EmployeeDetailsPage({
         </div>
       </div> {/* End main flex-col pb-12 */}
     </ConfigProvider>
+  );
+}
+
+export default function EmployeeDetailsPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  return (
+    <Suspense
+      fallback={
+        <div className="emp-details-page__loading">
+          <Spin size="large" description="Loading employee records..." />
+        </div>
+      }
+    >
+      <EmployeeDetailsContent params={params} />
+    </Suspense>
   );
 }

@@ -540,7 +540,7 @@ export default function EmployeesPage() {
       render: (_, record: Employee) => (
         <ViewEditActions
           viewHref={`/hrms/employees/${record.id}`}
-          editHref={isManager ? undefined : `/hrms/employees/${record.id}`}
+          editHref={isManager ? undefined : `/hrms/employees/${record.id}?edit=1`}
           showDelete={!isManager}
           onDelete={() => void handleDeleteEmployee(record.id)}
           deleteConfirmTitle={`Delete ${record.name} (${record.id})? This also removes their login.`}
