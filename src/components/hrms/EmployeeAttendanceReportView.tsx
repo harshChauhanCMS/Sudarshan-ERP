@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Button, Tag, message, Select } from "antd";
+import { Button, Segmented, Tag, message, Select } from "antd";
+import AttendanceCalendarView from "@/components/hrms/AttendanceCalendarView";
 import PageFilterPanel from "@/components/common/PageFilterPanel";
 import { FilePdfOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -22,6 +23,7 @@ import CommonTable, {
 import ReportSection from "@/components/hrms/ReportSection";
 import { useEmployeeAttendanceReport } from "@/hooks/use-employee-attendance-report";
 import { downloadEmployeeAttendanceReportPdf } from "@/lib/employee-attendance-report-pdf";
+import { formatWorkedDuration } from "@/lib/format-duration";
 import type { EmployeeDailyReportRow } from "@/lib/employee-attendance-report";
 
 type Props = {
@@ -76,11 +78,12 @@ export default function EmployeeAttendanceReportView({
   to,
   rangeLabel,
 }: Props) {
-  const { loading, rows, chartData, summary, employee } =
+  const { loading, rows, holidays, chartData, summary, employee } =
     useEmployeeAttendanceReport(employeeId, from, to);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [view, setView] = useState<"table" | "calendar">("table");
 
   const filteredRows = useMemo(() => {
     return rows.filter((r) => {
@@ -145,11 +148,11 @@ export default function EmployeeAttendanceReportView({
         ),
       },
       {
-        title: "Worked (h)",
+        title: "Worked",
         dataIndex: "workedHours",
         key: "worked",
         width: 96,
-        render: (v: number) => v.toFixed(2),
+        render: (v: number) => formatWorkedDuration(v),
       },
       {
         title: "Attendance",
@@ -225,6 +228,29 @@ export default function EmployeeAttendanceReportView({
         meta={`${rangeLabel} · ${rows.length} day records`}
         flush
       >
+        <div className="att-cal__viewswitch">
+          <Segmented
+            value={view}
+            onChange={(v) => setView(v as "table" | "calendar")}
+            options={[
+              { label: "Table view", value: "table" },
+              { label: "Calendar view", value: "calendar" },
+            ]}
+          />
+        </div>
+        {view === "calendar" ? (
+          <div style={{ padding: 16 }}>
+            <AttendanceCalendarView
+              rows={rows}
+              holidays={holidays}
+              from={from}
+              to={to}
+              loading={loading}
+              weeklyOff={employee?.weeklyOff}
+            />
+          </div>
+        ) : (
+        <>
         <PageFilterPanel
           search={search}
           onSearchChange={setSearch}
@@ -278,6 +304,8 @@ export default function EmployeeAttendanceReportView({
             emptyText: loading ? "Loading…" : "No daily records for this period",
           }}
         />
+        </>
+        )}
       </ReportSection>
     </div>
   );

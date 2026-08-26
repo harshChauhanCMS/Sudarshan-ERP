@@ -10,7 +10,7 @@ export function useOwnerDashboard(period?: { year: number; month: number; day: n
   const inFlightRef = useRef(false);
 
   const reload = useCallback(async (silent = false) => {
-    if (inFlightRef.current) return;
+    if (inFlightRef.current) return false;
     inFlightRef.current = true;
     if (!silent) setLoading(true);
     setError(null);
@@ -27,9 +27,11 @@ export function useOwnerDashboard(period?: { year: number; month: number; day: n
       if (json.error) throw new Error(json.error);
       if (!json.data) throw new Error("No dashboard data returned");
       setData(json.data as OwnerDashboardView);
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load owner dashboard");
       setData(null);
+      return false;
     } finally {
       inFlightRef.current = false;
       if (!silent) setLoading(false);

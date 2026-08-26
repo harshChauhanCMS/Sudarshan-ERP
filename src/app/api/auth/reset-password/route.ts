@@ -3,6 +3,7 @@ import { connectDB, isDbConfigured } from "@/lib/mongodb";
 import { User } from "@/models/User";
 import { getSession } from "@/lib/session";
 import { ok, fail } from "@/lib/api-response";
+import { getDefaultLandingRoute } from "@/lib/nav-permissions";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -73,7 +74,10 @@ export async function POST(request: Request) {
     session.user.mustResetPassword = false;
     await session.save();
 
-    return ok({ reset: true, next: "/select-company" });
+    return ok({
+      reset: true,
+      next: getDefaultLandingRoute(session.user.permissions, session.user.role),
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Password reset failed";
     return fail(message, 500);

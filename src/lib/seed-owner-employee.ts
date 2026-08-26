@@ -45,7 +45,6 @@ const OWNER_EMPLOYEE_PROFILE = {
   annualCtc: 0,
   monthlyGross: 0,
   basicSalary: 0,
-  da: 0,
   hra: 0,
   otherConveyance: 0,
 };

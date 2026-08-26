@@ -1,9 +1,10 @@
 "use client";
 
-import { Button, Tag, Select, DatePicker, message } from "antd";
+import { Button, Modal, Tag, Select, DatePicker, message } from "antd";
 import {
   DownloadOutlined,
   ReloadOutlined,
+  SyncOutlined,
   ThunderboltOutlined,
   TeamOutlined,
   DollarOutlined,
@@ -11,9 +12,9 @@ import {
   WalletOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import RepHeader from "@/components/hrms/RepHeader";
 import CommonTable from "@/components/common/CommonTable";
 import { ViewEditActions } from "@/components/common/TableActionIcons";
@@ -31,9 +32,16 @@ import {
 import PageFilterPanel from "@/components/common/PageFilterPanel";
 import { filterBySearch } from "@/lib/filter-search";
 
-export default function PayrollBulkPage() {
+/** `?cycle=YYYY-MM`, as sent by bulk-approve and the row pages; today otherwise. */
+function parseCycleParam(value: string | null): dayjs.Dayjs {
+  if (value && dayjs(value, "YYYY-MM", true).isValid()) return dayjs(value, "YYYY-MM");
+  return dayjs();
+}
+
+function PayrollBulkContent() {
   const router = useRouter();
-  const [month, setMonth] = useState(dayjs());
+  const searchParams = useSearchParams();
+  const [month, setMonth] = useState(() => parseCycleParam(searchParams.get("cycle")));
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
@@ -41,26 +49,39 @@ export default function PayrollBulkPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+  const loadSeq = useRef(0);
 
   const cycleKey = month.format("YYYY-MM");
 
   const load = useCallback(async () => {
+    // Changing month/status re-runs `load`, and the drawer's Apply button runs
+    // it again — without this guard a slower earlier response could land last
+    // and repaint the table with the previous filter's rows.
+    const requestId = ++loadSeq.current;
+    const isStale = () => requestId !== loadSeq.current;
+
     setLoading(true);
     try {
       const params = new URLSearchParams({ cycle: cycleKey });
       if (statusFilter !== "all") {
         params.set("status", statusFilter);
       }
-      const res = await fetch(`/api/hrms/salary/bulk?${params.toString()}`);
+      const res = await fetch(`/api/hrms/salary/bulk?${params.toString()}`, {
+        cache: "no-store",
+      });
       const json = await res.json();
+      if (isStale()) return false;
       if (!res.ok) throw new Error(json?.error || "Failed to load payroll sheet");
       setRows(json.data || []);
       setSelectedRowKeys([]);
+      return true;
     } catch (e) {
+      if (isStale()) return false;
       message.error(e instanceof Error ? e.message : "Failed to load payroll sheet");
       setRows([]);
+      return false;
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   }, [cycleKey, statusFilter]);
 
@@ -68,7 +89,7 @@ export default function PayrollBulkPage() {
     void load();
   }, [load]);
 
-  const generate = async () => {
+  const runGenerate = async (regenerate: boolean) => {
     const selectedEmployeeIds = rows
       .filter((r) => selectedRowKeys.includes(r.id))
       .map((r) => r.employeeId);
@@ -81,6 +102,7 @@ export default function PayrollBulkPage() {
         body: JSON.stringify({
           from: month.startOf("month").format("YYYY-MM-DD"),
           to: month.endOf("month").format("YYYY-MM-DD"),
+          ...(regenerate ? { regenerate: true } : {}),
           ...(selectedEmployeeIds.length > 0
             ? { employeeIds: selectedEmployeeIds }
             : {}),
@@ -88,9 +110,30 @@ export default function PayrollBulkPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed");
-      message.success(
-        `Generated ${json.data.generated} salary slips for ${month.format("MMMM YYYY")}`,
-      );
+      const { generated = 0, skipped = 0, locked = 0 } = json.data ?? {};
+      const cycleLabel = month.format("MMMM YYYY");
+      const lockedNote =
+        locked > 0 ? ` · ${locked} approved/disbursed, not rebuilt` : "";
+
+      // Skipped employees already have a sheet for the cycle — say so rather
+      // than reporting "Generated 0", which reads like a failure.
+      if (generated === 0 && skipped > 0) {
+        message.info(
+          `Salary already generated for ${skipped === 1 ? "this employee" : `all ${skipped} selected employees`} in ${cycleLabel}. Use Regenerate to rebuild them.`,
+        );
+      } else if (generated === 0 && locked > 0) {
+        message.info(
+          `Nothing to rebuild — ${locked === 1 ? "this sheet is" : `all ${locked} sheets are`} approved or disbursed.`,
+        );
+      } else {
+        message.success(
+          `${regenerate ? "Regenerated" : "Generated"} ${generated} salary slip${
+            generated === 1 ? "" : "s"
+          } for ${cycleLabel}${
+            skipped > 0 ? ` · ${skipped} already generated, left untouched` : ""
+          }${lockedNote}`,
+        );
+      }
       setSelectedRowKeys([]);
       void load();
     } catch (e) {
@@ -98,6 +141,32 @@ export default function PayrollBulkPage() {
     } finally {
       setGenerating(false);
     }
+  };
+
+  /** Rows the Generate/Regenerate buttons act on: the selection, or everything. */
+  const targetRows = useMemo(
+    () =>
+      selectedRowKeys.length > 0
+        ? rows.filter((r) => selectedRowKeys.includes(r.id))
+        : rows,
+    [rows, selectedRowKeys],
+  );
+  // Only drafts can be rebuilt; approved and disbursed sheets are records of
+  // what was paid, so the server refuses to touch them either way.
+  const rebuildableCount = targetRows.filter((r) => r.status === "draft").length;
+
+  const confirmRegenerate = () => {
+    Modal.confirm({
+      title: `Regenerate ${rebuildableCount} salary slip${rebuildableCount === 1 ? "" : "s"}?`,
+      content: `Rebuilds ${
+        selectedRowKeys.length > 0 ? "the selected" : "every"
+      } draft sheet for ${month.format(
+        "MMMM YYYY",
+      )} from the employees' current salary, attendance and deduction rules. Manual edits to those sheets are overwritten; approved and disbursed sheets are left untouched.`,
+      okText: "Regenerate",
+      okButtonProps: { danger: true },
+      onOk: () => runGenerate(true),
+    });
   };
 
   const filtered = useMemo(() => {
@@ -351,15 +420,32 @@ export default function PayrollBulkPage() {
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search employee ID, name, department…"
-        activeFilterCount={statusFilter !== "all" ? 1 : 0}
+        activeFilterCount={
+          (statusFilter !== "all" ? 1 : 0) + (month.isSame(dayjs(), "month") ? 0 : 1)
+        }
         trailing={
           <>
-            <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => void load().then((ok) => ok && message.success("Refreshed"))}
+              loading={loading}
+            >
               Refresh
             </Button>
             <Button
+              icon={<SyncOutlined />}
+              onClick={confirmRegenerate}
+              loading={generating}
+              disabled={rebuildableCount === 0}
+              title="Rebuild existing draft sheets from current salary, attendance and deductions"
+            >
+              {selectedRowKeys.length > 0
+                ? `Regenerate (${rebuildableCount})`
+                : "Regenerate drafts"}
+            </Button>
+            <Button
               icon={<ThunderboltOutlined />}
-              onClick={() => void generate()}
+              onClick={() => void runGenerate(false)}
               loading={generating}
               style={{ background: "#7c3aed", borderColor: "#7c3aed", color: "#fff" }}
             >
@@ -431,5 +517,19 @@ export default function PayrollBulkPage() {
         />
       </ReportSection>
     </div>
+  );
+}
+
+export default function PayrollBulkPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="attendance-reports-page" style={{ padding: 24 }}>
+          Loading payroll sheet…
+        </div>
+      }
+    >
+      <PayrollBulkContent />
+    </Suspense>
   );
 }

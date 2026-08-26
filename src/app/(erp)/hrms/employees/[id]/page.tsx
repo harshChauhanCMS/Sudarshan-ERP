@@ -1,6 +1,7 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Form,
   Input,
@@ -27,8 +28,11 @@ import {
   MailOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import Link from "next/link";
 import PageHeader from "@/components/common/PageHeader";
 import CompensationCategoryPicker from "@/components/hrms/CompensationCategoryPicker";
+import EmployeeDeductionsPicker from "@/components/hrms/EmployeeDeductionsPicker";
+import FieldValueCursorTip from "@/components/hrms/FieldValueCursorTip";
 import { HRMS_BACK } from "@/lib/hrms-nav";
 import {
   disableEmployeeDobUnder18,
@@ -37,6 +41,7 @@ import {
 } from "@/lib/hrms-dob";
 import {
   departmentSkipsReportingManager,
+  EMPLOYEE_COMPANY_OPTIONS,
   EMPLOYEE_EXPERIENCE_OPTIONS,
   EMPLOYEE_LOCATION_UNIT_OPTIONS,
   EMPLOYEE_QUALIFICATION_OPTIONS,
@@ -44,6 +49,8 @@ import {
 } from "@/lib/hrms-employee-options";
 import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
 import { useSessionUser } from "@/hooks/use-session-user";
+import { useShifts } from "@/hooks/use-shifts";
+import { shiftLabel, EMPLOYEE_WEEKLY_OFF_OPTIONS } from "@/lib/shift-utils";
 
 const { Panel } = Collapse;
 
@@ -84,6 +91,7 @@ export default function EmployeeDetailsPage({
   const { user, isManager } = useSessionUser();
   const canManageCredentials = canResendCredentials(user?.role);
   const [form] = Form.useForm();
+  const { shifts, loading: shiftsLoading } = useShifts(true);
   const department = Form.useWatch("department", form);
   const showReportingManager = !departmentSkipsReportingManager(department);
 
@@ -96,11 +104,17 @@ export default function EmployeeDetailsPage({
       form.setFieldValue("reportingManager", undefined);
     }
   }, [showReportingManager, form]);
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const formRef = useRef<HTMLDivElement | null>(null);
   const [messageApi, contextHolder] = message.useMessage();
   const compensationType = Form.useWatch("compensationType", form) ?? "Monthly CTC";
+  // Watched so the deduction preview re-prices as the salary is edited.
+  const watchedBasic = Form.useWatch("basicSalary", form);
+  const watchedGross = Form.useWatch("monthlyGross", form);
+  const watchedArrears = Form.useWatch("arrears", form);
   const [originalData, setOriginalData] = useState<any>(null);
 
   // Profile banner state
@@ -219,25 +233,68 @@ export default function EmployeeDetailsPage({
     loadEmployee();
   }, [id, form, messageApi]);
 
+  const refreshCredentialStatus = useCallback(async () => {
+    if (!canManageCredentials) return;
+    try {
+      const res = await fetch(`/api/hrms/employees/${id}/credentials`, {
+        cache: "no-store",
+      });
+      const json = await res.json();
+      if (res.ok && json.success && json.data) {
+        setCredentialStatus(json.data as CredentialStatus);
+      }
+    } catch {
+      // keep the last known status; a later refresh will correct it
+    }
+  }, [id, canManageCredentials]);
+
+  useEffect(() => {
+    void refreshCredentialStatus();
+  }, [refreshCredentialStatus]);
+
+  // The temporary password blocks resending only until its deadline passes.
+  // Without this the button would stay disabled on an open tab even after the
+  // hour elapsed, because the status was only fetched on mount.
+  useEffect(() => {
+    if (!canManageCredentials) return;
+    if (credentialStatus?.reason !== "not_expired") return;
+
+    const deadline = credentialStatus.passwordResetDeadline
+      ? new Date(credentialStatus.passwordResetDeadline).getTime()
+      : NaN;
+    if (Number.isNaN(deadline)) return;
+
+    // +1s guard so the server also sees the deadline as passed.
+    const delay = Math.max(deadline - Date.now() + 1000, 0);
+    const timer = setTimeout(() => {
+      void refreshCredentialStatus();
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [
+    canManageCredentials,
+    credentialStatus?.reason,
+    credentialStatus?.passwordResetDeadline,
+    refreshCredentialStatus,
+  ]);
+
+  // Re-check when the tab regains focus, so a page left in the background
+  // (where timers are throttled) still picks up the expiry.
   useEffect(() => {
     if (!canManageCredentials) return;
 
-    let cancelled = false;
-    void fetch(`/api/hrms/employees/${id}/credentials`)
-      .then((res) => res.json())
-      .then((json) => {
-        if (!cancelled && json.success && json.data) {
-          setCredentialStatus(json.data as CredentialStatus);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setCredentialStatus(null);
-      });
-
-    return () => {
-      cancelled = true;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshCredentialStatus();
+      }
     };
-  }, [id, canManageCredentials]);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [canManageCredentials, refreshCredentialStatus]);
 
   const handleResendCredentials = async () => {
     setResendingCredentials(true);
@@ -256,11 +313,7 @@ export default function EmployeeDetailsPage({
           : "New temporary password emailed successfully.",
       );
 
-      const statusRes = await fetch(`/api/hrms/employees/${id}/credentials`);
-      const statusJson = await statusRes.json();
-      if (statusRes.ok && statusJson.success && statusJson.data) {
-        setCredentialStatus(statusJson.data as CredentialStatus);
-      }
+      await refreshCredentialStatus();
     } catch (err: unknown) {
       messageApi.error(
         err instanceof Error ? err.message : "Failed to resend credentials",
@@ -326,7 +379,7 @@ export default function EmployeeDetailsPage({
       }
 
       messageApi.success({
-        content: "Employee records updated successfully!",
+        content: "Employee records updated successfully! Redirecting…",
         duration: 2,
       });
 
@@ -343,6 +396,12 @@ export default function EmployeeDetailsPage({
 
       setOriginalData(savedFormValues);
       setIsEditing(false);
+
+      // Back to the employee list, same as after creating one — the saved row
+      // is what HR wants to see next. Delayed so the success toast is readable.
+      setTimeout(() => {
+        router.push("/hrms/employees");
+      }, 1000);
     } catch (err: any) {
       messageApi.error({
         content: err.message || "An error occurred while updating.",
@@ -516,6 +575,8 @@ export default function EmployeeDetailsPage({
         />
 
         {/* ID Card & Form Layout */}
+        <div ref={formRef}>
+        <FieldValueCursorTip form={form} containerRef={formRef} enabled={isEditing} />
         <Form
           form={form}
           layout="vertical"
@@ -796,6 +857,21 @@ export default function EmployeeDetailsPage({
               key="4"
             >
               <div className="emp-form-grid">
+                <Form.Item
+                  name="companies"
+                  label="Companies"
+                  className="emp-form-grid__full"
+                  rules={[{ required: true, type: "array", min: 1, message: "Select at least one company" }]}
+                >
+                  <Select
+                    disabled={!isEditing}
+                    mode="multiple"
+                    style={{ width: "100%" }}
+                    placeholder="Select company access"
+                    options={[...EMPLOYEE_COMPANY_OPTIONS]}
+                    maxTagCount="responsive"
+                  />
+                </Form.Item>
                 <Form.Item name="department" label="Department" rules={[{ required: true, message: "Required" }]}>
                   <Select
                     disabled={!isEditing}
@@ -874,37 +950,62 @@ export default function EmployeeDetailsPage({
                     ]}
                   />
                 </Form.Item>
-                <Form.Item name="primaryShift" label="Primary Shift">
+                <Form.Item
+                  name="primaryShift"
+                  label="Primary Shift"
+                  extra={
+                    isEditing && !shiftsLoading && shifts.length === 0 ? (
+                      <Link href="/hrms/shifts">No shifts defined — add one first</Link>
+                    ) : undefined
+                  }
+                >
                   <Select
                     disabled={!isEditing}
-                    options={[
-                      { value: "Shift A — 06:00 to 14:00", label: "Shift A — 06:00 to 14:00" },
-                      { value: "Shift B — 14:00 to 22:00", label: "Shift B — 14:00 to 22:00" },
-                      { value: "Shift C — 22:00 to 06:00", label: "Shift C — 22:00 to 06:00" },
-                    ]}
+                    loading={shiftsLoading}
+                    placeholder={shiftsLoading ? "Loading shifts…" : "Select shift"}
+                    options={shifts.map((s) => ({
+                      value: shiftLabel(s),
+                      label: shiftLabel(s),
+                    }))}
+                    notFoundContent={
+                      shiftsLoading ? "Loading…" : "No shifts defined yet"
+                    }
                   />
                 </Form.Item>
-                <Form.Item name="rotationPattern" label="Rotation Pattern">
+                <Form.Item
+                  name="eligibleShifts"
+                  label="Eligible Shifts"
+                  extra={
+                    isEditing
+                      ? "Every shift this employee can be rostered on. Leave empty to use the primary shift only."
+                      : undefined
+                  }
+                >
                   <Select
+                    mode="multiple"
+                    allowClear
                     disabled={!isEditing}
-                    options={[
-                      { value: "None", label: "None" },
-                      { value: "Weekly rotation", label: "Weekly rotation" },
-                      { value: "Fortnightly rotation", label: "Fortnightly rotation" },
-                    ]}
+                    loading={shiftsLoading}
+                    placeholder={
+                      shiftsLoading ? "Loading shifts…" : "Select one or more shifts"
+                    }
+                    maxTagCount="responsive"
+                    options={shifts.map((s) => ({
+                      value: shiftLabel(s),
+                      label: shiftLabel(s),
+                    }))}
+                    notFoundContent={
+                      shiftsLoading ? "Loading…" : "No shifts defined yet"
+                    }
                   />
-                </Form.Item>
-                <Form.Item name="workingHours" label="Working Hours / Day">
-                  <InputNumber style={{ width: "100%" }} min={1} max={24} disabled={!isEditing} />
                 </Form.Item>
                 <Form.Item name="weeklyOff" label="Weekly Off Day">
                   <Select
                     disabled={!isEditing}
-                    options={[
-                      { value: "Sunday", label: "Sunday" },
-                      { value: "Saturday", label: "Saturday" },
-                      { value: "Rotating", label: "Rotating" },
-                    ]}
+                    options={EMPLOYEE_WEEKLY_OFF_OPTIONS.map((d) => ({
+                      value: d,
+                      label: d,
+                    }))}
                   />
                 </Form.Item>
                 <Form.Item name="overtimeApplicable" label="Overtime Applicability" valuePropName="checked">
@@ -963,14 +1064,6 @@ export default function EmployeeDetailsPage({
                           disabled={!isEditing}
                         />
                       </Form.Item>
-                      <Form.Item name="da" label="DA (₹/mo)">
-                        <InputNumber
-                          style={{ width: "100%" }}
-                          formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                          parser={v => parseFloat(v?.replace(/\₹\s?|(,*)/g, "") || "0") || 0}
-                          disabled={!isEditing}
-                        />
-                      </Form.Item>
                       <Form.Item name="hra" label="HRA (₹/mo)">
                         <InputNumber
                           style={{ width: "100%" }}
@@ -1003,9 +1096,42 @@ export default function EmployeeDetailsPage({
                           disabled={!isEditing}
                         />
                       </Form.Item>
+                      <Form.Item
+                        name="arrears"
+                        label="Arrears (₹/mo)"
+                        tooltip="Pending dues paid out with this month's salary. Printed on the payslip's Arrears row."
+                      >
+                        <InputNumber
+                          style={{ width: "100%" }}
+                          formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                          parser={v => parseFloat(v?.replace(/\₹\s?|(,*)/g, "") || "0") || 0}
+                          disabled={!isEditing}
+                        />
+                      </Form.Item>
                     </div>
                   </div>
                 )}
+
+                {/* Sub-Form: Deductions applied to this employee */}
+                <div className="emp-form-subpanel">
+                  <div className="emp-form-subpanel__head">
+                    <div className="emp-form-subpanel__head-main">
+                      <CalculatorOutlined />
+                      <span>Deductions</span>
+                    </div>
+                    <span className="emp-form-subpanel__badge">
+                      Managed in Deduction Management
+                    </span>
+                  </div>
+                  <Form.Item name="deductionRates" noStyle>
+                    <EmployeeDeductionsPicker
+                      disabled={!isEditing}
+                      basic={Number(watchedBasic) || 0}
+                      gross={Number(watchedGross) || 0}
+                      arrears={Number(watchedArrears) || 0}
+                    />
+                  </Form.Item>
+                </div>
 
                 {/* Sub-Form: Daily Wage Details */}
                 {compensationType === "Daily wage" && (
@@ -1086,6 +1212,7 @@ export default function EmployeeDetailsPage({
           </Collapse>
         </div>
         </Form>
+        </div>
       </div> {/* End main flex-col pb-12 */}
     </ConfigProvider>
   );

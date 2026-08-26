@@ -12,6 +12,7 @@ import {
   resolveManagerScope,
 } from "@/lib/manager-scope";
 import { isAdminOrOwner } from "@/lib/api-auth";
+import { resolveCompanyScope, narrowEmployeeIdsByCompany } from "@/lib/company-scope";
 import type { SessionUser } from "@/lib/session";
 
 export type HrDataScope =
@@ -24,15 +25,26 @@ export async function resolveHrDataScope(
 ): Promise<HrDataScope> {
   if (!user) return { mode: "self", employeeId: "__none__" };
   if (isAdminOrOwner(user.role)) return { mode: "all" };
+
+  const companyScope = await resolveCompanyScope(user);
+
   if (canPerform(user.permissions, "hr", "view") && !isManagerRole(user.role)) {
-    return { mode: "all" };
+    if (!companyScope.restricted) return { mode: "all" };
+    const employeeIds = await narrowEmployeeIdsByCompany(companyScope);
+    return { mode: "team", employeeIds: employeeIds ?? [] };
   }
   if (canPerform(user.permissions, "reports", "view") && !isManagerRole(user.role)) {
-    return { mode: "all" };
+    if (!companyScope.restricted) return { mode: "all" };
+    const employeeIds = await narrowEmployeeIdsByCompany(companyScope);
+    return { mode: "team", employeeIds: employeeIds ?? [] };
   }
   if (isManagerRole(user.role)) {
-    const scope = await resolveManagerScope(user);
-    return { mode: "team", employeeIds: scope.teamEmployeeIds };
+    const managerScope = await resolveManagerScope(user);
+    const employeeIds = await narrowEmployeeIdsByCompany(
+      companyScope,
+      managerScope.teamEmployeeIds,
+    );
+    return { mode: "team", employeeIds: employeeIds ?? managerScope.teamEmployeeIds };
   }
   if (user.employeeId) {
     return { mode: "self", employeeId: String(user.employeeId).trim() };
@@ -74,8 +86,11 @@ export async function assertCanAccessEmployee(
   if (scope.mode === "all") {
     return assertEmployeeVisibleToViewer(user?.role, target);
   }
-  if (scope.mode === "team" && scope.employeeIds.includes(target)) {
-    return { ok: true };
+  if (scope.mode === "team") {
+    if (!scope.employeeIds.includes(target)) {
+      return { ok: false, message: "You do not have access to this employee." };
+    }
+    return assertEmployeeVisibleToViewer(user?.role, target);
   }
   if (scope.mode === "self" && scope.employeeId === target) {
     return { ok: true };

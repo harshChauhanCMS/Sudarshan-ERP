@@ -75,7 +75,7 @@ async function migrateLegacyIfEmpty() {
 export async function listRawMaterials(): Promise<RawMaterial[]> {
   await connectDB();
   await migrateLegacyIfEmpty();
-  const docs = await RawMaterialModel.find({}).sort({ name: 1 }).lean();
+  const docs = await RawMaterialModel.find({}).sort({ createdAt: -1 }).lean();
   return (docs as unknown as RawMaterialDoc[]).map(toDTO);
 }
 

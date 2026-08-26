@@ -87,7 +87,7 @@ async function generatePackagingCode(): Promise<string> {
 export async function listPackaging(): Promise<Packaging[]> {
   await connectDB();
   await migrateLegacyIfEmpty();
-  const docs = await PackagingModel.find({}).sort({ name: 1 }).lean();
+  const docs = await PackagingModel.find({}).sort({ createdAt: -1 }).lean();
   return (docs as unknown as PackagingDoc[]).map(toDTO);
 }
 

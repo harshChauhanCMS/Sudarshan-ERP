@@ -2,19 +2,24 @@
 'use client';
 
 
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import { Icon } from "./icons";
-import { useDATA } from "./data";
+import { useRawMaterials } from "@/hooks/use-raw-materials";
+import { useVendors } from "@/hooks/use-vendors";
+import { useEmployees } from "@/hooks/use-employees";
+import { useAttendanceToday } from "@/hooks/use-attendance-today";
+import { useAttendanceReport } from "@/hooks/use-attendance-report";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import PageFilterPanel from "@/components/common/PageFilterPanel";
-import { Select, DatePicker, Input, message } from "antd";
+import { Select, DatePicker, Input, message, Dropdown } from "antd";
 import { downloadGenericTablePdf } from "@/lib/generic-table-pdf";
+import { downloadGenericTableExcel } from "@/lib/generic-table-excel";
 import { filterBySearch } from "@/lib/filter-search";
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
-import { nextEmployeeId, formatDisplayDate } from "@/lib/id-generators";
+import { formatDisplayDate } from "@/lib/id-generators";
 import { DashHead, SectionH } from "./dashboards";
 
 /* ============================================================
@@ -36,37 +41,20 @@ import { usePackaging } from "@/hooks/use-packaging";
 
 
 const Employees = () => {
-  const DATA = useDATA();
-  const { append, saving, error, clearError } = useEntityMutation();
-  const [open, setOpen] = useState(false);
-  const empForm = useFormState({ name: "", role: "", dept: "Operations", since: String(new Date().getFullYear()) });
-
-  const saveEmployee = async () => {
-    const err = requireFields(empForm.values, ["name", "role"]);
-    if (err) throw new Error(err);
-    await append("employees", {
-      id: nextEmployeeId(DATA.EMPLOYEES),
-      name: empForm.values.name.trim(),
-      role: empForm.values.role.trim(),
-      dept: empForm.values.dept,
-      status: "active",
-      since: empForm.values.since,
-    });
-    setOpen(false);
-    empForm.reset({ name: "", role: "", dept: "Operations", since: String(new Date().getFullYear()) });
-  };
+  const router = useRouter();
+  const { items: employees } = useEmployees();
 
   const columns = [
-    { title: "Emp ID", dataIndex: "id", key: "id", render: (text) => <span className="mono strong">{text}</span> },
-    { title: "Name", dataIndex: "name", key: "name", render: (text, record, i) => (
+    { title: "Emp ID", dataIndex: "employeeId", key: "employeeId", render: (text) => <span className="mono strong">{text}</span> },
+    { title: "Name", dataIndex: "fullName", key: "fullName", render: (text, record, i) => (
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <AntAvatar style={{ backgroundColor: ["#f56a00", "#7265e6", "#ffbf00", "#00a2ae"][i % 4] }}>{text.charAt(0)}</AntAvatar>
         <div className="strong">{text}</div>
       </div>
     )},
-    { title: "Role", dataIndex: "role", key: "role" },
-    { title: "Department", dataIndex: "dept", key: "dept", render: (text) => <span className="muted">{text}</span> },
-    { title: "Joined", dataIndex: "since", key: "since", render: (text) => <span className="muted">{text}</span> },
+    { title: "Role", dataIndex: "designation", key: "designation" },
+    { title: "Department", dataIndex: "department", key: "department", render: (text) => <span className="muted">{text}</span> },
+    { title: "Joined", dataIndex: "dateOfJoining", key: "dateOfJoining", render: (text) => <span className="muted">{text}</span> },
     { title: "Reporting to", key: "reporting", render: (_, __, i) => <span className="muted">{i === 0 ? "—" : i < 3 ? "Rajiv Mehta" : "Priya Sharma"}</span> },
     { title: "Status", key: "status", render: () => <AntBadge status="success" text="Active" /> },
     { title: "Actions", key: "action", width: 72, align: "center", render: () => <ErpViewAction /> },
@@ -76,14 +64,14 @@ const Employees = () => {
     <>
       <DashHead title="Employees" sub="HR master across both companies">
         <AntButton size="small" icon={<ExportOutlined />}>Import</AntButton>
-        <AntButton type="primary" size="small" icon={<UserAddOutlined />} onClick={() => setOpen(true)}>Add employee</AntButton>
+        <AntButton type="primary" size="small" icon={<UserAddOutlined />} onClick={() => router.push("/hrms/employees/add")}>Add employee</AntButton>
       </DashHead>
 
       <ErpStatGrid cols={4}>
         <StatCard
           icon={TeamOutlined}
           label="Total headcount"
-          value={DATA.EMPLOYEES.length}
+          value={employees.length}
           hint="From database"
         />
         <StatCard
@@ -111,8 +99,8 @@ const Employees = () => {
       <div className="card">
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex" }}>
           <div className="tabs" style={{ border: "none", marginBottom: -1 }}>
-            <span className="tab active">All <span className="tab-count">{DATA.EMPLOYEES.length}</span></span>
-            <span className="tab">Active <span className="tab-count">{DATA.EMPLOYEES.length}</span></span>
+            <span className="tab active">All <span className="tab-count">{employees.length}</span></span>
+            <span className="tab">Active <span className="tab-count">{employees.length}</span></span>
             <span className="tab">Onboarding <span className="tab-count">2</span></span>
             <span className="tab">On leave <span className="tab-count">3</span></span>
           </div>
@@ -122,22 +110,9 @@ const Employees = () => {
           </div>
         </div>
         <div style={{ padding: 16 }}>
-          <CommonTable {...ERP_TABLE_PROPS} dataSource={DATA.EMPLOYEES} columns={columns} rowKey="id" />
+          <CommonTable {...ERP_TABLE_PROPS} dataSource={employees} columns={columns} rowKey="employeeId" />
         </div>
       </div>
-
-      <EntityFormModal open={open} onClose={() => setOpen(false)} title="Add employee" wide submitLabel="Create employee" saving={saving} error={error} onSubmit={saveEmployee}>
-        <FormGrid>
-          <FormField label="Full name"><FormInput value={empForm.values.name} onChange={(v) => empForm.setField("name", v)} /></FormField>
-          <FormField label="Role / designation"><FormInput value={empForm.values.role} onChange={(v) => empForm.setField("role", v)} /></FormField>
-          <FormField label="Department">
-            <FormSelect value={empForm.values.dept} onChange={(v) => empForm.setField("dept", v)}>
-              <option>Operations</option><option>Procurement</option><option>Production</option><option>Logistics</option><option>Sales</option><option>HR</option>
-            </FormSelect>
-          </FormField>
-          <FormField label="Joined year"><FormInput value={empForm.values.since} onChange={(v) => empForm.setField("since", v)} /></FormField>
-        </FormGrid>
-      </EntityFormModal>
     </>
   );
 };
@@ -146,32 +121,33 @@ const Employees = () => {
    ATTENDANCE
    ============================================================ */
 const Attendance = () => {
-  const DATA = useDATA();
+  const { items: employees } = useEmployees();
+  const { attendance, reload: reloadAttendance } = useAttendanceToday();
   const { update, saving, error, clearError } = useEntityMutation();
   const [applyLeave, setApplyLeave] = useState(false);
   const [leaveReason, setLeaveReason] = useState("");
 
   const submitLeave = async () => {
-    const att = DATA.ATTENDANCE_TODAY;
     await update("attendanceToday", "today", {
-      leave: (att.leave ?? 0) + 1,
-      present: Math.max(0, (att.present ?? 0) - 1),
+      leave: (attendance.leave ?? 0) + 1,
+      present: Math.max(0, (attendance.present ?? 0) - 1),
       lastLeaveNote: leaveReason || "Leave application",
       lastLeaveAt: formatDisplayDate(),
     });
+    await reloadAttendance();
     setApplyLeave(false);
     setLeaveReason("");
   };
 
   const columns = [
-    { title: "Emp ID", dataIndex: "id", key: "id", render: (text) => <span className="mono strong">{text}</span> },
-    { title: "Name", dataIndex: "name", key: "name", render: (text, record, i) => (
+    { title: "Emp ID", dataIndex: "employeeId", key: "employeeId", render: (text) => <span className="mono strong">{text}</span> },
+    { title: "Name", dataIndex: "fullName", key: "fullName", render: (text, record, i) => (
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <AntAvatar style={{ backgroundColor: ["#f56a00", "#7265e6", "#ffbf00", "#00a2ae"][i % 4] }}>{text.charAt(0)}</AntAvatar>
         {text}
       </div>
     )},
-    { title: "Department", dataIndex: "dept", key: "dept", render: (text) => <span className="muted">{text}</span> },
+    { title: "Department", dataIndex: "department", key: "department", render: (text) => <span className="muted">{text}</span> },
     { title: "Check-in", dataIndex: "in_", key: "in_", render: (text) => <span className="mono">{text}</span> },
     { title: "Check-out", dataIndex: "out", key: "out", render: (text) => <span className="mono subtle">{text}</span> },
     { title: "Worked", dataIndex: "w", key: "w", render: (text) => <span className="mono">{text}</span> },
@@ -186,7 +162,7 @@ const Attendance = () => {
     )},
   ];
 
-  const dataSource = DATA.EMPLOYEES.map((e, i) => {
+  const dataSource = employees.map((e, i) => {
     const states = [
       { in_: "08:54", out: "—",     w: "ongoing", late: "—",  st: "active",  late_: false },
       { in_: "09:02", out: "—",     w: "ongoing", late: "—",  st: "active",  late_: false },
@@ -214,34 +190,34 @@ const Attendance = () => {
         <StatCard
           icon={CheckCircleOutlined}
           label="Present today"
-          value={DATA.ATTENDANCE_TODAY.present}
-          hint={`${Math.round(DATA.ATTENDANCE_TODAY.present / DATA.ATTENDANCE_TODAY.total * 100)}% attendance`}
+          value={attendance.present}
+          hint={`${Math.round(attendance.present / attendance.total * 100)}% attendance`}
           hintTone="positive"
         />
         <StatCard
           icon={ClockCircleOutlined}
           label="Late comers"
-          value={DATA.ATTENDANCE_TODAY.late}
+          value={attendance.late}
           hint="3.9%"
           hintTone="warning"
         />
         <StatCard
           icon={CalendarOutlined}
           label="On leave"
-          value={DATA.ATTENDANCE_TODAY.leave}
+          value={attendance.leave}
           hint="11 sick · 7 planned"
         />
         <StatCard
           icon={CloseCircleOutlined}
           label="Absent"
-          value={DATA.ATTENDANCE_TODAY.absent}
+          value={attendance.absent}
           hint="Unscheduled"
           hintTone="negative"
         />
         <StatCard
           icon={EnvironmentOutlined}
           label="On field"
-          value={DATA.ATTENDANCE_TODAY.onField}
+          value={attendance.onField}
           hint="Sales reps"
           hintTone="accent"
         />
@@ -311,7 +287,7 @@ const Attendance = () => {
             {...ERP_TABLE_PROPS}
             columns={columns}
             dataSource={dataSource}
-            rowKey="id"
+            rowKey="employeeId"
           />
         </div>
       </div>
@@ -329,7 +305,7 @@ const Attendance = () => {
    PAYROLL
    ============================================================ */
 const Payroll = () => {
-  const DATA = useDATA();
+  const { items: employees } = useEmployees();
   const { update, saving, error, clearError } = useEntityMutation();
   const [openSlip, setOpenSlip] = useState(null);
   const [runOpen, setRunOpen] = useState(false);
@@ -343,7 +319,7 @@ const Payroll = () => {
     setRunOpen(false);
   };
 
-  const PAYROLL = DATA.EMPLOYEES.map((e, i) => {
+  const PAYROLL = employees.map((e, i) => {
     const ctcAnnual = [1800000, 1400000, 920000, 880000, 920000, 1280000, 1100000, 1080000, 680000, 540000][i];
     const monthly = Math.round(ctcAnnual / 12);
     const basic = Math.round(monthly * 0.5);
@@ -358,8 +334,8 @@ const Payroll = () => {
   const total = PAYROLL.reduce((s, p) => s + p.net, 0);
 
   const columns = [
-    { title: "Emp ID", dataIndex: "id", key: "id", render: (text) => <span className="mono strong">{text}</span> },
-    { title: "Name", dataIndex: "name", key: "name", render: (text, record, i) => (
+    { title: "Emp ID", dataIndex: "employeeId", key: "employeeId", render: (text) => <span className="mono strong">{text}</span> },
+    { title: "Name", dataIndex: "fullName", key: "fullName", render: (text, record, i) => (
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <AntAvatar style={{ backgroundColor: ["#f56a00", "#7265e6", "#ffbf00", "#00a2ae"][i % 4] }}>{text.charAt(0)}</AntAvatar>
         {text}
@@ -466,13 +442,13 @@ const Payroll = () => {
             {...ERP_TABLE_PROPS}
             dataSource={PAYROLL}
             columns={columns}
-            rowKey="id"
+            rowKey="employeeId"
             onRow={(record) => ({ onClick: () => setOpenSlip(record), style: { cursor: "pointer" } })}
           />
         </div>
       </div>
 
-      <Modal open={!!openSlip} onClose={() => setOpenSlip(null)} title="Payslip" sub={openSlip ? `${openSlip.name} · May 2026` : ""} wide
+      <Modal open={!!openSlip} onClose={() => setOpenSlip(null)} title="Payslip" sub={openSlip ? `${openSlip.fullName} · May 2026` : ""} wide
         footer={<>
           <AntButton icon={<DownloadOutlined />} onClick={() => setOpenSlip(null)}>Download PDF</AntButton>
           <AntButton icon={<MailOutlined />}>Email</AntButton>
@@ -498,8 +474,8 @@ const Payroll = () => {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, padding: "16px 0", borderBottom: "1px solid var(--border)" }}>
               <div>
                 <div style={{ fontSize: 10, color: "var(--fg-subtle)", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>Employee</div>
-                <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{openSlip.name}</div>
-                <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{openSlip.id} · {openSlip.role}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{openSlip.fullName}</div>
+                <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{openSlip.employeeId} · {openSlip.designation}</div>
               </div>
               <div>
                 <div style={{ fontSize: 10, color: "var(--fg-subtle)", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>Banking</div>
@@ -623,13 +599,26 @@ const Payroll = () => {
     </>
   );
 };
+// downloadGenericTableExcel is async (dynamic-imports xlsx); surface failures
+// as a toast instead of an unhandled rejection.
+function runReportExport(fn) {
+  try {
+    const result = fn?.();
+    if (result && typeof result.catch === "function") {
+      result.catch((e) => message.error(e instanceof Error ? e.message : "Export failed"));
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : "Export failed");
+  }
+}
+
 const REPORTS_META = [
   { id: "profit",    title: "Profit Analysis",     icon: "chart",    sub: "Revenue, COGS, gross margin by product line" },
   { id: "inventory", title: "Inventory Report",    icon: "box",      sub: "Stock movement, valuation, ABC analysis" },
   { id: "production",title: "Production Report",   icon: "factory",  sub: "Throughput, yield, downtime, defect rate" },
   { id: "dispatch",  title: "Dispatch Report",     icon: "truck",    sub: "On-time delivery, lead time, route P&L" },
   { id: "vendor",    title: "Vendor Purchase",     icon: "users",    sub: "PO volume, spend, rating, payment history" },
-  { id: "hr",        title: "HR Report",           icon: "user",     sub: "Attendance, attrition, payroll summary" },
+  { id: "hr",        title: "HR Report",           icon: "user",     sub: "Headcount, attendance, tenure, payroll" },
 ];
 
 const Reports = () => {
@@ -637,13 +626,13 @@ const Reports = () => {
   const [period, setPeriod] = useState(() => dayjs());
   const [customOpen, setCustomOpen] = useState(false);
   const [customReportId, setCustomReportId] = useState("profit");
-  // Each report registers its own PDF-export function here (it owns its
-  // rows/columns), so the header-level Export/Custom-report buttons can
-  // trigger whichever report is currently active without lifting all six
+  // Each report registers its own { pdf, excel } export functions here (it
+  // owns its rows/columns), so the header-level Export/Custom-report buttons
+  // can trigger whichever report is currently active without lifting all six
   // dummy datasets up to this component.
   const exportHandlers = useRef({});
-  const registerExport = useCallback((id, fn) => {
-    exportHandlers.current[id] = fn;
+  const registerExport = useCallback((id, handlers) => {
+    exportHandlers.current[id] = handlers;
   }, []);
 
   const periodLabel = period.format("MMMM YYYY");
@@ -660,15 +649,29 @@ const Reports = () => {
           suffixIcon={<CalendarOutlined />}
           style={{ width: 130 }}
         />
-        <Btn size="sm" icon="download" onClick={() => exportHandlers.current[active]?.()}>
-          Export PDF
-        </Btn>
+        <Dropdown
+          trigger={["click"]}
+          menu={{
+            items: [
+              { key: "pdf", label: "Export as PDF", icon: <Icon name="fileText" size={13} /> },
+              { key: "excel", label: "Export as Excel", icon: <Icon name="layout" size={13} /> },
+            ],
+            onClick: ({ key }) =>
+              runReportExport(
+                key === "excel"
+                  ? exportHandlers.current[active]?.excel
+                  : exportHandlers.current[active]?.pdf,
+              ),
+          }}
+        >
+          <Btn size="sm" icon="download">Export</Btn>
+        </Dropdown>
         <Btn variant="primary" size="sm" icon="plus" onClick={() => setCustomOpen(true)}>
           Custom report
         </Btn>
       </DashHead>
 
-      <div className="grid" style={{ gridTemplateColumns: "260px 1fr", gap: 20 }}>
+      <div className="grid" style={{ gridTemplateColumns: "260px minmax(0, 1fr)", gap: 20 }}>
         <div className="card">
           <div className="card-head"><div className="card-title">All reports</div></div>
           <div style={{ padding: 8 }}>
@@ -695,7 +698,7 @@ const Reports = () => {
           </div>
         </div>
 
-        <div>
+        <div style={{ minWidth: 0 }}>
           {active === "profit" && <ProfitReport periodLabel={periodLabel} registerExport={(fn) => registerExport("profit", fn)} />}
           {active === "inventory" && <InventoryReport periodLabel={periodLabel} registerExport={(fn) => registerExport("inventory", fn)} />}
           {active === "production" && <ProductionReport periodLabel={periodLabel} registerExport={(fn) => registerExport("production", fn)} />}
@@ -752,7 +755,7 @@ const Reports = () => {
   );
 };
 
-const ReportShell = ({ title, sub, onExport, search, onSearchChange, children }) => {
+const ReportShell = ({ title, sub, onExportPdf, onExportExcel, search, onSearchChange, children }) => {
   const [showSearch, setShowSearch] = useState(false);
   return (
     <div className="card">
@@ -778,7 +781,18 @@ const ReportShell = ({ title, sub, onExport, search, onSearchChange, children })
               <Btn size="sm" icon="filter" onClick={() => setShowSearch(true)}>Filter</Btn>
             )
           ) : null}
-          <Btn size="sm" icon="download" onClick={onExport}>Export</Btn>
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: [
+                { key: "pdf", label: "Export as PDF", icon: <Icon name="fileText" size={13} /> },
+                { key: "excel", label: "Export as Excel", icon: <Icon name="layout" size={13} /> },
+              ],
+              onClick: ({ key }) => runReportExport(key === "excel" ? onExportExcel : onExportPdf),
+            }}
+          >
+            <Btn size="sm" icon="download">Export</Btn>
+          </Dropdown>
         </div>
       </div>
       <div className="card-body">{children}</div>
@@ -845,24 +859,26 @@ const ProfitReport = ({ periodLabel, registerExport }) => {
 
   const filteredRows = filterBySearch(profitRows, search, (r) => [r.name]);
 
-  const handleExport = () =>
-    downloadGenericTablePdf(
-      "Profit Analysis",
-      `${periodLabel ?? ""} · Revenue, COGS, gross margin by product line`,
-      ["Product line", "Revenue", "COGS", "GP", "GM%", "vs Apr"],
-      profitRows.map((r) => [
-        r.name, fmtINR(r.r), fmtINR(r.c), fmtINR(r.r - r.c), `${r.m}%`, `${r.d >= 0 ? "+" : ""}${r.d}%`,
-      ])
-    );
-  registerExport?.(handleExport);
+  const profitExportArgs = () => [
+    "Profit Analysis",
+    `${periodLabel ?? ""} · Revenue, COGS, gross margin by product line`,
+    ["Product line", "Revenue", "COGS", "GP", "GM%", "vs Apr"],
+    profitRows.map((r) => [
+      r.name, fmtINR(r.r), fmtINR(r.c), fmtINR(r.r - r.c), `${r.m}%`, `${r.d >= 0 ? "+" : ""}${r.d}%`,
+    ]),
+  ] as const;
+  const handleExportPdf = () => downloadGenericTablePdf(...profitExportArgs());
+  const handleExportExcel = () => downloadGenericTableExcel(...profitExportArgs());
+  registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
 
   return (
     <ReportShell
-      title={`Profit Analysis · ${periodLabel ?? "May 2026"}`}
+      title={`Profit Analysis · ${periodLabel ?? new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" })}`}
       sub="Revenue, COGS, gross margin by product line — both companies"
       search={search}
       onSearchChange={setSearch}
-      onExport={handleExport}
+      onExportPdf={handleExportPdf}
+      onExportExcel={handleExportExcel}
     >
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
         <Kpi icon="money" label="Revenue" value={fmtINR(11_82_00_000)} delta={12.4} spark={[8, 9, 10, 10, 11, 11, 12]} />
@@ -875,15 +891,16 @@ const ProfitReport = ({ periodLabel, registerExport }) => {
         columns={profitColumns}
         dataSource={filteredRows}
         rowKey="name"
+        scroll={{ x: "max-content" }}
       />
     </ReportShell>
   );
 };
 
 const InventoryReport = ({ periodLabel, registerExport }) => {
-  const DATA = useDATA();
+  const { items: rawMaterials } = useRawMaterials();
   const [search, setSearch] = useState("");
-  const inventoryRows = DATA.RAW_MATERIALS.map((r, i) => ({
+  const inventoryRows = rawMaterials.map((r, i) => ({
     ...r,
     classCode: i < 3 ? "A" : i < 7 ? "B" : "C",
     movementCode: i % 3 === 0 ? "fast" : i % 3 === 1 ? "medium" : "slow",
@@ -937,24 +954,26 @@ const InventoryReport = ({ periodLabel, registerExport }) => {
 
   const filteredRows = filterBySearch(inventoryRows, search, (r) => [r.code, r.name, r.classCode, r.movementCode]);
 
-  const handleExport = () =>
-    downloadGenericTablePdf(
-      "Inventory Report",
-      `${periodLabel ?? ""} · Stock value, ABC analysis, ageing`,
-      ["SKU", "Material", "Stock", "Value", "Class", "Movement"],
-      inventoryRows.map((r) => [
-        r.code, r.name, `${r.stock} ${r.unit}`, fmtINR(r.value), r.classCode, r.movementCode,
-      ])
-    );
-  registerExport?.(handleExport);
+  const inventoryExportArgs = () => [
+    "Inventory Report",
+    `${periodLabel ?? ""} · Stock value, ABC analysis, ageing`,
+    ["SKU", "Material", "Stock", "Value", "Class", "Movement"],
+    inventoryRows.map((r) => [
+      r.code, r.name, `${r.stock} ${r.unit}`, fmtINR(r.value), r.classCode, r.movementCode,
+    ]),
+  ] as const;
+  const handleExportPdf = () => downloadGenericTablePdf(...inventoryExportArgs());
+  const handleExportExcel = () => downloadGenericTableExcel(...inventoryExportArgs());
+  registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
 
   return (
   <ReportShell
-    title={`Inventory Report · ${periodLabel ?? "As of May 21"}`}
+    title={`Inventory Report · ${periodLabel ?? `As of ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`}`}
     sub="Stock value, ABC analysis, ageing"
     search={search}
     onSearchChange={setSearch}
-    onExport={handleExport}
+    onExportPdf={handleExportPdf}
+    onExportExcel={handleExportExcel}
   >
     <div className="grid grid-3" style={{ marginBottom: 20 }}>
       <Kpi icon="money" label="Total inventory value" value={fmtINR(2_50_00_000)} delta={4.8} spark={[2.2,2.3,2.3,2.4,2.4,2.5,2.5]} />
@@ -966,6 +985,7 @@ const InventoryReport = ({ periodLabel, registerExport }) => {
       columns={inventoryColumns}
       dataSource={filteredRows}
       rowKey="code"
+      scroll={{ x: "max-content" }}
     />
   </ReportShell>
   );
@@ -980,26 +1000,28 @@ const PRODUCTION_DOWNTIME = [
 ];
 
 const ProductionReport = ({ periodLabel, registerExport }) => {
-  const handleExport = () =>
-    downloadGenericTablePdf(
-      "Production Report",
-      `${periodLabel ?? ""} · Throughput, yield, downtime, defect rate`,
-      ["Metric", "Value"],
-      [
-        ["Total output", "2,420 MT"],
-        ["Yield", "96.8%"],
-        ["Downtime", "42 hrs"],
-        ["Defect rate", "3.8 ppm"],
-        ...PRODUCTION_DOWNTIME.map((r) => [`Downtime — ${r.l}`, `${r.v} hrs`]),
-      ]
-    );
-  registerExport?.(handleExport);
+  const productionExportArgs = () => [
+    "Production Report",
+    `${periodLabel ?? ""} · Throughput, yield, downtime, defect rate`,
+    ["Metric", "Value"],
+    [
+      ["Total output", "2,420 MT"],
+      ["Yield", "96.8%"],
+      ["Downtime", "42 hrs"],
+      ["Defect rate", "3.8 ppm"],
+      ...PRODUCTION_DOWNTIME.map((r) => [`Downtime — ${r.l}`, `${r.v} hrs`]),
+    ],
+  ] as const;
+  const handleExportPdf = () => downloadGenericTablePdf(...productionExportArgs());
+  const handleExportExcel = () => downloadGenericTableExcel(...productionExportArgs());
+  registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
 
   return (
   <ReportShell
     title={`Production Report · ${periodLabel ?? "Last 30 days"}`}
     sub="Throughput, yield, downtime, defect rate"
-    onExport={handleExport}
+    onExportPdf={handleExportPdf}
+    onExportExcel={handleExportExcel}
   >
     <div className="grid grid-4" style={{ marginBottom: 20 }}>
       <Kpi icon="factory" label="Total output" value="2,420" unit="MT" delta={8.4} spark={[300,310,320,330,340,350,360]} />
@@ -1099,24 +1121,26 @@ const DispatchReport = ({ periodLabel, registerExport }) => {
 
   const filteredRows = filterBySearch(dispatchRows, search, (r) => [r.route]);
 
-  const handleExport = () =>
-    downloadGenericTablePdf(
-      "Dispatch Report",
-      `${periodLabel ?? ""} · On-time delivery, lead time, route P&L`,
-      ["Route", "Trips", "Vol (MT)", "On-time %", "Avg lead (hrs)", "Freight cost"],
-      dispatchRows.map((r) => [
-        r.route, r.trips, r.volume, `${r.onTime}%`, r.leadTime, fmtINR(r.freightCost),
-      ])
-    );
-  registerExport?.(handleExport);
+  const dispatchExportArgs = () => [
+    "Dispatch Report",
+    `${periodLabel ?? ""} · On-time delivery, lead time, route P&L`,
+    ["Route", "Trips", "Vol (MT)", "On-time %", "Avg lead (hrs)", "Freight cost"],
+    dispatchRows.map((r) => [
+      r.route, r.trips, r.volume, `${r.onTime}%`, r.leadTime, fmtINR(r.freightCost),
+    ]),
+  ] as const;
+  const handleExportPdf = () => downloadGenericTablePdf(...dispatchExportArgs());
+  const handleExportExcel = () => downloadGenericTableExcel(...dispatchExportArgs());
+  registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
 
   return (
     <ReportShell
-      title={`Dispatch Report · ${periodLabel ?? "May 2026"}`}
+      title={`Dispatch Report · ${periodLabel ?? new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" })}`}
       sub="On-time delivery, lead time, route P&L"
       search={search}
       onSearchChange={setSearch}
-      onExport={handleExport}
+      onExportPdf={handleExportPdf}
+      onExportExcel={handleExportExcel}
     >
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
         <Kpi icon="truck" label="Vehicles dispatched" value="218" delta={11} spark={[180, 190, 200, 205, 210, 215, 218]} />
@@ -1129,15 +1153,16 @@ const DispatchReport = ({ periodLabel, registerExport }) => {
         columns={dispatchColumns}
         dataSource={filteredRows}
         rowKey="route"
+        scroll={{ x: "max-content" }}
       />
     </ReportShell>
   );
 };
 
 const VendorReport = ({ periodLabel, registerExport }) => {
-  const DATA = useDATA();
+  const { items: vendors } = useVendors();
   const [search, setSearch] = useState("");
-  const vendorRows = DATA.VENDORS.map((v, i) => ({
+  const vendorRows = vendors.map((v, i) => ({
     ...v,
     rowIndex: i,
     poMtd: Math.round(v.poCount / 6),
@@ -1198,16 +1223,17 @@ const VendorReport = ({ periodLabel, registerExport }) => {
 
   const filteredRows = filterBySearch(vendorRows, search, (v) => [v.name, v.city, v.category]);
 
-  const handleExport = () =>
-    downloadGenericTablePdf(
-      "Vendor Purchase Report",
-      `${periodLabel ?? ""} · PO volume, spend, rating, payment history`,
-      ["Vendor", "City", "Category", "POs MTD", "Spend MTD", "YTD", "Rating"],
-      vendorRows.map((v) => [
-        v.name, v.city, v.category, v.poMtd, fmtINR(v.spendMtd), fmtINR(v.ytd), v.rating,
-      ])
-    );
-  registerExport?.(handleExport);
+  const vendorExportArgs = () => [
+    "Vendor Purchase Report",
+    `${periodLabel ?? ""} · PO volume, spend, rating, payment history`,
+    ["Vendor", "City", "Category", "POs MTD", "Spend MTD", "YTD", "Rating"],
+    vendorRows.map((v) => [
+      v.name, v.city, v.category, v.poMtd, fmtINR(v.spendMtd), fmtINR(v.ytd), v.rating,
+    ]),
+  ] as const;
+  const handleExportPdf = () => downloadGenericTablePdf(...vendorExportArgs());
+  const handleExportExcel = () => downloadGenericTableExcel(...vendorExportArgs());
+  registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
 
   return (
   <ReportShell
@@ -1215,31 +1241,117 @@ const VendorReport = ({ periodLabel, registerExport }) => {
     sub="PO volume, spend, rating, payment history"
     search={search}
     onSearchChange={setSearch}
-    onExport={handleExport}
+    onExportPdf={handleExportPdf}
+    onExportExcel={handleExportExcel}
   >
     <CommonTable
       {...ERP_TABLE_PROPS}
       columns={vendorColumns}
       dataSource={filteredRows}
       rowKey="id"
+      scroll={{ x: "max-content" }}
     />
   </ReportShell>
   );
 };
 
+const HR_TENURE_FORMATS = ["YYYY-MM-DD", "DD/MM/YYYY", "DD-MM-YYYY"];
+
+// dateJoining is a free-text field — most rows are "DD/MM/YYYY" but some
+// older/edited records were saved as full ISO strings, so fall back to a
+// loose parse rather than dropping those employees from the tenure average.
+function parseJoiningDate(value) {
+  if (!value) return null;
+  const strict = dayjs(value, HR_TENURE_FORMATS, true);
+  if (strict.isValid()) return strict;
+  const loose = dayjs(value);
+  return loose.isValid() ? loose : null;
+}
+
 const HRReport = ({ periodLabel, registerExport }) => {
   const [search, setSearch] = useState("");
-  const hrRows = [
-    { d: "Production", h: 142, a: 91.2, t: 5.1, p: 84_00_000 },
-    { d: "Procurement", h: 14, a: 95.4, t: 4.8, p: 12_00_000 },
-    { d: "Logistics", h: 38, a: 89.6, t: 3.4, p: 22_00_000 },
-    { d: "Sales", h: 24, a: 94.8, t: 2.8, p: 18_00_000 },
-    { d: "Operations", h: 18, a: 96.2, t: 6.2, p: 24_00_000 },
-    { d: "HR", h: 8, a: 97.4, t: 4.6, p: 8_40_000 },
-    { d: "Accounts", h: 12, a: 96.0, t: 5.8, p: 11_80_000 },
-    { d: "QC & Lab", h: 22, a: 93.2, t: 3.9, p: 14_60_000 },
-    { d: "Daily wage", h: 28, a: 88.4, t: 1.2, p: 7_80_000 },
-  ];
+  const { items: employees } = useEmployees();
+  const attendanceReport = useAttendanceReport();
+  const [payrollByDept, setPayrollByDept] = useState({});
+  const [payrollLoading, setPayrollLoading] = useState(true);
+  const cycle = dayjs().format("YYYY-MM");
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { attendanceReport.handleApply(); }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPayrollLoading(true);
+    fetch(`/api/hrms/salary/bulk?cycle=${cycle}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (cancelled) return;
+        const rows = Array.isArray(json?.data) ? json.data : [];
+        const byDept = {};
+        for (const row of rows) {
+          const dept = row.department || "Unassigned";
+          byDept[dept] = (byDept[dept] || 0) + (Number(row.netPay) || 0);
+        }
+        setPayrollByDept(byDept);
+      })
+      .catch(() => setPayrollByDept({}))
+      .finally(() => { if (!cancelled) setPayrollLoading(false); });
+    return () => { cancelled = true; };
+  }, [cycle]);
+
+  // Real roster + attendance + payroll, rolled up by department — mirrors the
+  // Vendor Purchase report's pattern of driving the table off live hooks
+  // instead of dummy rows. Attrition isn't tracked anywhere in the Employee
+  // model (no exit/resignation field), so that KPI was dropped rather than
+  // faked.
+  const attendancePctByDept = useMemo(() => {
+    const map = new Map();
+    for (const d of attendanceReport.deptCompliance) {
+      map.set(d.department || "Unassigned", d.presentPct);
+    }
+    return map;
+  }, [attendanceReport.deptCompliance]);
+
+  const hrRows = useMemo(() => {
+    const now = dayjs();
+    const byDept = new Map();
+    for (const emp of employees) {
+      const dept = emp.department || "Unassigned";
+      if (!byDept.has(dept)) byDept.set(dept, { headcount: 0, tenureSum: 0, tenureCount: 0 });
+      const bucket = byDept.get(dept);
+      bucket.headcount += 1;
+      const doj = parseJoiningDate(emp.dateJoining);
+      if (doj) {
+        bucket.tenureSum += now.diff(doj, "month") / 12;
+        bucket.tenureCount += 1;
+      }
+    }
+    return Array.from(byDept.entries())
+      .map(([dept, b]) => ({
+        d: dept,
+        h: b.headcount,
+        a: attendancePctByDept.get(dept) ?? null,
+        t: b.tenureCount ? Math.round((b.tenureSum / b.tenureCount) * 10) / 10 : null,
+        tSum: b.tenureSum,
+        tCount: b.tenureCount,
+        p: payrollByDept[dept] ?? 0,
+      }))
+      .sort((x, y) => y.h - x.h);
+  }, [employees, attendancePctByDept, payrollByDept]);
+
+  const kpiTotals = useMemo(() => {
+    const headcount = employees.length;
+    const kpi = attendanceReport.kpi;
+    const attendancePct = kpi && kpi.presentDays + kpi.absentDays > 0
+      ? Math.round((kpi.presentDays / (kpi.presentDays + kpi.absentDays)) * 1000) / 10
+      : null;
+    const tenureSum = hrRows.reduce((s, r) => s + r.tSum, 0);
+    const tenureCount = hrRows.reduce((s, r) => s + r.tCount, 0);
+    const avgTenure = tenureCount ? Math.round((tenureSum / tenureCount) * 10) / 10 : null;
+    const payrollTotal = Object.values(payrollByDept).reduce((s, v) => s + v, 0);
+    return { headcount, attendancePct, avgTenure, payrollTotal };
+  }, [employees, attendanceReport.kpi, hrRows, payrollByDept]);
+
   const hrColumns = [
     {
       title: "Department",
@@ -1259,54 +1371,83 @@ const HRReport = ({ periodLabel, registerExport }) => {
       dataIndex: "a",
       key: "attendance",
       align: "right",
-      render: (a) => <span className="num" style={{ color: a >= 95 ? "var(--success)" : a >= 90 ? "var(--fg-muted)" : "var(--warning)" }}>{a}%</span>,
+      render: (a) =>
+        a == null ? (
+          <span className="subtle">—</span>
+        ) : (
+          <span className="num" style={{ color: a >= 95 ? "var(--success)" : a >= 90 ? "var(--fg-muted)" : "var(--warning)" }}>{a}%</span>
+        ),
     },
     {
       title: "Avg tenure",
       dataIndex: "t",
       key: "avgTenure",
       align: "right",
-      render: (t) => <span className="num">{t} yrs</span>,
+      render: (t) => (t == null ? <span className="subtle">—</span> : <span className="num">{t} yrs</span>),
     },
     {
       title: "Payroll MTD",
       dataIndex: "p",
       key: "payrollMtd",
       align: "right",
-      render: (p) => <span className="num">{fmtINR(p)}</span>,
+      render: (p) => <span className="num">{p > 0 ? fmtINR(p) : "—"}</span>,
     },
   ];
 
   const filteredRows = filterBySearch(hrRows, search, (r) => [r.d]);
 
-  const handleExport = () =>
-    downloadGenericTablePdf(
-      "HR Report",
-      `${periodLabel ?? ""} · Attendance, attrition, training, payroll summary`,
-      ["Department", "Headcount", "Attendance %", "Avg tenure", "Payroll MTD"],
-      hrRows.map((r) => [r.d, r.h, `${r.a}%`, `${r.t} yrs`, fmtINR(r.p)])
-    );
-  registerExport?.(handleExport);
+  const hrExportArgs = () => [
+    "HR Report",
+    `${periodLabel ?? ""} · Attendance and payroll summary by department`,
+    ["Department", "Headcount", "Attendance %", "Avg tenure", "Payroll MTD"],
+    hrRows.map((r) => [
+      r.d,
+      r.h,
+      r.a == null ? "—" : `${r.a}%`,
+      r.t == null ? "—" : `${r.t} yrs`,
+      r.p > 0 ? fmtINR(r.p) : "—",
+    ]),
+  ] as const;
+  const handleExportPdf = () => downloadGenericTablePdf(...hrExportArgs());
+  const handleExportExcel = () => downloadGenericTableExcel(...hrExportArgs());
+  registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
 
   return (
     <ReportShell
-      title={`HR Report · ${periodLabel ?? "May 2026"}`}
-      sub="Attendance, attrition, training, payroll summary"
+      title={`HR Report · ${periodLabel ?? new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" })}`}
+      sub="Attendance and payroll summary by department — current month"
       search={search}
       onSearchChange={setSearch}
-      onExport={handleExport}
+      onExportPdf={handleExportPdf}
+      onExportExcel={handleExportExcel}
     >
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <Kpi icon="users" label="Headcount" value="306" delta={1.3} spark={[298, 300, 301, 303, 304, 305, 306]} sparkColor="var(--primary)" />
-        <Kpi icon="check" label="Avg attendance" value="92.4" unit="%" delta={1.2} spark={[90, 91, 91, 92, 92, 92, 92]} sparkColor="var(--success)" />
-        <Kpi icon="logout" label="Attrition (YTD)" value="2.8" unit="%" delta={-0.4} spark={[3.2, 3.1, 3.0, 3.0, 2.9, 2.8, 2.8]} sparkColor="var(--success)" />
-        <Kpi icon="badge" label="Avg tenure" value="4.2" unit="yrs" delta={0.2} spark={[4.0, 4.0, 4.1, 4.1, 4.2, 4.2, 4.2]} sparkColor="var(--success)" />
+        <Kpi icon="users" label="Headcount" value={String(kpiTotals.headcount)} />
+        <Kpi
+          icon="check"
+          label="Avg attendance (MTD)"
+          value={kpiTotals.attendancePct != null ? kpiTotals.attendancePct.toFixed(1) : "—"}
+          unit={kpiTotals.attendancePct != null ? "%" : undefined}
+        />
+        <Kpi
+          icon="badge"
+          label="Avg tenure"
+          value={kpiTotals.avgTenure != null ? kpiTotals.avgTenure.toFixed(1) : "—"}
+          unit={kpiTotals.avgTenure != null ? "yrs" : undefined}
+        />
+        <Kpi
+          icon="money"
+          label="Payroll MTD"
+          value={kpiTotals.payrollTotal > 0 ? fmtINR(kpiTotals.payrollTotal) : "—"}
+        />
       </div>
       <CommonTable
         {...ERP_TABLE_PROPS}
         columns={hrColumns}
         dataSource={filteredRows}
         rowKey="d"
+        loading={attendanceReport.loading || payrollLoading}
+        scroll={{ x: "max-content" }}
       />
     </ReportShell>
   );
@@ -1487,11 +1628,34 @@ const PackagingInventory = () => {
     [deletingCode, deletePackaging]
   );
 
+  const handlePackExport = (type: 'xls' | 'pdf') => {
+    const title = "Packaging Inventory";
+    const subtitle = `Exported ${new Date().toISOString().split("T")[0]}`;
+    const head = ["SKU", "Description", "Stock", "Unit", "Reorder At", "Trend", "Status"];
+    const body = filteredPackaging.map(p => [
+      p.code, p.name, p.stock, p.unit, p.reorder,
+      `${p.trend > 0 ? "↑" : "↓"} ${Math.abs(p.trend)}%`, p.status
+    ]);
+    if (type === 'pdf') {
+      downloadGenericTablePdf(title, subtitle, head, body);
+    } else {
+      downloadGenericTableExcel(title, subtitle, head, body);
+    }
+    message.success(`Exported packaging as ${type === 'xls' ? 'Excel' : 'PDF'}`);
+  };
+
+  const packExportMenuItems = [
+    { key: "xls", label: "Export as Excel (XLSX)", onClick: () => handlePackExport('xls') },
+    { key: "pdf", label: "Export as PDF", onClick: () => handlePackExport('pdf') }
+  ];
+
   return (
     <>
       <DashHead title="Packaging Inventory" sub="FIBC, PP woven, BOPP — stock, bag auto-calc, alerts">
         <Btn size="sm" icon="bolt" onClick={() => setCalcOpen(true)}>Bag calc</Btn>
-        <Btn size="sm" icon="download">Export</Btn>
+        <Dropdown menu={{ items: packExportMenuItems }} placement="bottomRight">
+          <Btn size="sm" icon="download">Export</Btn>
+        </Dropdown>
         <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/inventory/packaging/add")}>Add packaging</Btn>
       </DashHead>
 

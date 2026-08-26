@@ -4,11 +4,15 @@ import Employee from "@/lib/models/Employee";
 import AttendancePunch from "@/lib/models/AttendancePunch";
 import LeaveRequest from "@/lib/models/LeaveRequest";
 import SalarySheet from "@/lib/models/SalarySheet";
+import Deduction from "@/lib/models/Deduction";
 import { calcSalary } from "@/lib/salary-calc";
+import { resolveEmployeeDeductions } from "@/lib/deduction-utils";
+import { getHolidayMap } from "@/lib/holiday-service";
 import { getSession } from "@/lib/session";
 import { canManagePayroll } from "@/lib/hrms-access";
 import { User } from "@/models/User";
 import Notification from "@/lib/models/Notification";
+import { isWeeklyOffDate } from "@/lib/shift-utils";
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function endOfDay(d: Date)   { const x = new Date(d); x.setHours(23,59,59,999); return x; }
@@ -19,11 +23,11 @@ function dayKey(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
-function countWorkingDays(from: Date, to: Date): number {
+function countWorkingDays(from: Date, to: Date, weeklyOff?: string): number {
   let count = 0;
   const cur = new Date(startOfDay(from));
   while (cur <= to) {
-    if (cur.getDay() !== 0) count++; // exclude Sundays
+    if (!isWeeklyOffDate(cur, weeklyOff)) count++;
     cur.setDate(cur.getDate() + 1);
   }
   return count;
@@ -62,7 +66,12 @@ export async function POST(request: Request) {
       cycle = c;
     }
 
+    // Informational only — each employee's actual working-day count below
+    // honours their own `weeklyOff`; this is the Sunday-based figure shown
+    // as the batch-level summary when employees don't share one schedule.
     const workingDays = countWorkingDays(start, end);
+    // Same holiday source as attendance and reports — see holiday-service.
+    const holidayMap = await getHolidayMap(start, end);
 
     const employeeIds: string[] = Array.isArray(body.employeeIds)
       ? body.employeeIds.map((id: unknown) => String(id)).filter(Boolean)
@@ -71,6 +80,23 @@ export async function POST(request: Request) {
     const employees = await Employee.find(
       employeeIds.length > 0 ? { employeeId: { $in: employeeIds } } : {}
     ).lean();
+
+    // Employees whose sheet for this cycle already exists are skipped, so a
+    // second "Generate All" can't rebuild — and reset to draft — sheets that
+    // were edited, approved or already disbursed. `regenerate: true` rebuilds
+    // them from current salary, attendance and deduction rules, but only while
+    // they are still drafts: an approved or disbursed sheet is a record of what
+    // was paid and is never rewritten.
+    const regenerate = body.regenerate === true;
+    const existingSheets = await SalarySheet.find({ cycle })
+      .select({ employeeId: 1, status: 1 })
+      .lean();
+    const existingByEmployee = new Map(
+      existingSheets.map((s) => [
+        String(s.employeeId),
+        { id: String(s._id), status: String(s.status || "draft") },
+      ]),
+    );
 
     // Build attendance map
     const punches = await AttendancePunch.find({
@@ -107,27 +133,61 @@ export async function POST(request: Request) {
       leaveByEmp.set(eid, cur);
     }
 
+    // Deduction masters resolved once for the whole run. Each employee's rate
+    // is resolved against the *full* master list (not just the rows already on
+    // their record), so an employee who never customized a default deduction
+    // keeps following its current master percentage — see
+    // `resolveEmployeeDeductions` for the inherit-vs-pinned rules.
+    const deductionDocs = await Deduction.find({}).lean();
+    const deductionMasters = deductionDocs.map((d: any) => ({
+      _id: String(d._id),
+      name: d.name,
+      percentage: d.percentage,
+      basis: d.basis === "basic" ? ("basic" as const) : ("gross" as const),
+      maxAmount: d.maxAmount,
+      applicableUpToGross: d.applicableUpToGross,
+      isDefault: d.isDefault,
+      isActive: d.isActive,
+    }));
+
     const results: { employeeId: string; action: string }[] = [];
 
     for (const emp of employees) {
       const eid = String(emp.employeeId);
+
+      const existing = existingByEmployee.get(eid);
+      if (existing && !regenerate) {
+        results.push({ employeeId: eid, action: "skipped" });
+        continue;
+      }
+      if (existing && existing.status !== "draft") {
+        results.push({ employeeId: eid, action: "locked" });
+        continue;
+      }
+
       const expectedHours = typeof emp.workingHours === "number" && emp.workingHours > 0
         ? emp.workingHours : 8;
+      const empWorkingDays = countWorkingDays(start, end, emp.weeklyOff);
 
       let daysPresent = 0;
       let overtimeHours = 0;
+      let unworkedHolidays = 0;
 
       const cur = new Date(startOfDay(start));
       while (cur <= end) {
-        if (cur.getDay() !== 0) {
-          const k = `${eid}|${dayKey(cur)}`;
-          const entry = punchDayMap.get(k);
+        if (!isWeeklyOffDate(cur, emp.weeklyOff)) {
+          const key = dayKey(cur);
+          const entry = punchDayMap.get(`${eid}|${key}`);
           if (entry?.inAt) {
             daysPresent++;
             if (entry.outAt && emp.overtimeApplicable) {
               const workedH = (entry.outAt.getTime() - entry.inAt.getTime()) / 36e5;
               if (workedH > expectedHours) overtimeHours += workedH - expectedHours;
             }
+          } else if (holidayMap.has(key)) {
+            // Counted only when *not* worked — a worked holiday is already in
+            // daysPresent, and double-counting would over-credit the employee.
+            unworkedHolidays++;
           }
         }
         cur.setDate(cur.getDate() + 1);
@@ -135,19 +195,28 @@ export async function POST(request: Request) {
 
       const leaveInfo = leaveByEmp.get(eid) ?? { paid: 0, unpaid: 0 };
 
+      // The employee supplies a pinned rate where they have one; otherwise it
+      // follows the master's current default (see resolveEmployeeDeductions).
+      const appliedDeductions = resolveEmployeeDeductions(
+        deductionMasters,
+        emp.deductionRates || [],
+      );
+
       const result = calcSalary({
         basicSalary: emp.basicSalary || 0,
-        da: emp.da || 0,
         hra: emp.hra || 0,
         otherConveyance: emp.otherConveyance || 0,
         specialBonus: emp.specialBonus || 0,
-        workingDays,
+        workingDays: empWorkingDays,
         daysPresent,
         overtimeHours: Math.round(overtimeHours * 100) / 100,
         workingHoursPerDay: expectedHours,
         overtimeApplicable: emp.overtimeApplicable === true,
         approvedLeaveDays: leaveInfo.paid,
         unpaidLeaveDays: leaveInfo.unpaid,
+        holidayDays: unworkedHolidays,
+        arrears: emp.arrears || 0,
+        deductions: appliedDeductions,
       });
 
       const sheet = {
@@ -159,13 +228,15 @@ export async function POST(request: Request) {
         locationUnit: emp.locationUnit,
         compensationType: emp.compensationType,
         basicSalary: emp.basicSalary || 0,
-        da: emp.da || 0,
         hra: emp.hra || 0,
         otherConveyance: emp.otherConveyance || 0,
         specialBonus: emp.specialBonus || 0,
+        arrears: emp.arrears || 0,
         grossSalary: result.grossSalary,
-        workingDays,
+        workingDays: empWorkingDays,
         daysPresent,
+        holidayDays: unworkedHolidays,
+        absentDays: result.absentDays,
         leaveDays: leaveInfo.paid,
         unpaidLeaveDays: leaveInfo.unpaid,
         leaveDeduction: result.leaveDeduction,
@@ -175,14 +246,15 @@ export async function POST(request: Request) {
         pfEmployer: result.pfEmployer,
         esi: result.esi,
         tds: result.tds,
+        advance: result.advance,
         otherDeductions: result.otherDeductions,
+        deductionBreakdown: result.deductionLines,
         netPayable: result.netPayable,
         status: "draft",
       };
 
-      const existing = await SalarySheet.findOne({ cycle, employeeId: eid });
       if (existing) {
-        await SalarySheet.findByIdAndUpdate(existing._id, { $set: sheet });
+        await SalarySheet.findByIdAndUpdate(existing.id, { $set: sheet });
         results.push({ employeeId: eid, action: "updated" });
       } else {
         await SalarySheet.create(sheet);
@@ -190,7 +262,11 @@ export async function POST(request: Request) {
       }
     }
 
-    if (results.length > 0) {
+    const skipped = results.filter((r) => r.action === "skipped").length;
+    const locked = results.filter((r) => r.action === "locked").length;
+    const generated = results.length - skipped - locked;
+
+    if (generated > 0) {
       try {
         const targetRoles = ["admin", "owner", "master", "hr"];
         const admins = await User.find({ role: { $in: targetRoles } }).select("email").lean();
@@ -200,7 +276,7 @@ export async function POST(request: Request) {
             recipientEmail: admin.email,
             category: "system",
             type: "info",
-            message: `Monthly salary generated for ${cycle} (${results.length} employees).`,
+            message: `Monthly salary generated for ${cycle} (${generated} employees).`,
             target: "/hrms/salary/monthly",
             read: false,
           }));
@@ -216,7 +292,11 @@ export async function POST(request: Request) {
       from: start.toISOString().slice(0, 10),
       to: end.toISOString().slice(0, 10),
       workingDays,
-      generated: results.length,
+      generated,
+      skipped,
+      locked,
+      created: results.filter((r) => r.action === "created").length,
+      updated: results.filter((r) => r.action === "updated").length,
       results,
     });
   } catch (e) {

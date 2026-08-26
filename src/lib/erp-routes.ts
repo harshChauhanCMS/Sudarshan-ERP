@@ -66,3 +66,34 @@ export function pathToRoute(segments: string[] | undefined): string {
 export function routeToSegments(route: string): string[] {
   return route.replace(/^\//, "").split("/").filter(Boolean);
 }
+
+export function isLegacyRenderRoute(route: string): boolean {
+  return [
+    "/dashboard/master",
+    "/dashboard/admin",
+    "/dashboard/owner",
+    "/dashboard/production",
+    "/dashboard/dispatch",
+    "/inventory/raw-material",
+    "/inventory/packaging",
+    "/inventory/spare-parts",
+    "/procurement/vendors",
+    "/procurement/po",
+    "/procurement/invoices",
+    "/customers",
+    "/orders",
+    "/field-sales",
+    "/field-sales/activity-dashboard",
+    "/field-sales/visits-beat-tracking",
+    "/field-sales/visit-log",
+    "/field-sales/visit-history",
+    "/field-sales/beat-territory",
+    "/production",
+    "/hr/employees",
+    "/hr/attendance",
+    "/hr/payroll",
+    "/reports",
+    "/users",
+    "/design-system",
+  ].includes(route);
+}

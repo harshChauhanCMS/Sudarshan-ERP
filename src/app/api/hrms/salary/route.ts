@@ -13,14 +13,12 @@ const MONTHLY_CTC = "Monthly CTC";
 function employeeGross(emp: {
   monthlyGross?: number;
   basicSalary?: number;
-  da?: number;
   hra?: number;
   otherConveyance?: number;
   specialBonus?: number;
 }): number {
   const fromParts =
     (emp.basicSalary || 0) +
-    (emp.da || 0) +
     (emp.hra || 0) +
     (emp.otherConveyance || 0) +
     (emp.specialBonus || 0);
@@ -36,10 +34,10 @@ function pendingRow(
     locationUnit?: string;
     compensationType?: string;
     basicSalary?: number;
-    da?: number;
     hra?: number;
     otherConveyance?: number;
     specialBonus?: number;
+    arrears?: number;
     monthlyGross?: number;
   },
   cycle: string
@@ -54,10 +52,10 @@ function pendingRow(
     locationUnit: emp.locationUnit || "",
     compensationType: emp.compensationType || MONTHLY_CTC,
     basicSalary: emp.basicSalary || 0,
-    da: emp.da || 0,
     hra: emp.hra || 0,
     otherConveyance: emp.otherConveyance || 0,
     specialBonus: emp.specialBonus || 0,
+    arrears: emp.arrears || 0,
     grossSalary: gross,
     workingDays: 0,
     daysPresent: 0,
@@ -70,6 +68,7 @@ function pendingRow(
     pfEmployer: 0,
     esi: 0,
     tds: 0,
+    advance: 0,
     otherDeductions: 0,
     netPayable: gross,
     status: "pending",
@@ -123,11 +122,37 @@ async function getMonthlyCycleRows(
     ...leaves.map((l: any) => String(l.employeeId)),
   ]);
 
-  let rows = sheets.map((sheet) => ({ ...sheet, _id: String(sheet._id) }));
+  /** Employee master fields the salary slip prints alongside the sheet. */
+  const slipFields = (emp?: {
+    pfUan?: string;
+    esiIp?: string;
+    accountNo?: string;
+    dateJoining?: string;
+    annualCtc?: number;
+    monthlyGross?: number;
+    locationUnit?: string;
+  }) => ({
+    pfUan: emp?.pfUan || "",
+    esiIp: emp?.esiIp || "",
+    accountNo: emp?.accountNo || "",
+    dateJoining: emp?.dateJoining || "",
+    annualCtc: emp?.annualCtc || 0,
+    monthlyGross: emp?.monthlyGross || 0,
+  });
+
+  let rows = sheets.map((sheet) => {
+    const emp = empMap.get(String(sheet.employeeId));
+    return {
+      ...sheet,
+      _id: String(sheet._id),
+      ...slipFields(emp),
+      locationUnit: sheet.locationUnit || emp?.locationUnit || "",
+    };
+  });
 
   for (const emp of employees) {
     if (!sheetByEmp.has(String(emp.employeeId)) && activeEmpIds.has(String(emp.employeeId))) {
-      rows.push(pendingRow(emp, cycle) as any);
+      rows.push({ ...pendingRow(emp, cycle), ...slipFields(emp) } as any);
     }
   }
 

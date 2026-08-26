@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { message, Spin } from "antd";
+import { LoadingOutlined } from "@ant-design/icons";
 import { Icon } from "@/components/erp/icons";
 import { Btn } from "@/components/erp/ui";
 import { DashHead } from "@/components/erp/dashboards";
@@ -30,6 +32,11 @@ export function FieldActivityDashboardPage() {
   const [visitModalOpen, setVisitModalOpen] = useState(false);
   const [viewVisit, setViewVisit] = useState<FieldVisitView | null>(null);
   const canCreateVisit = user?.role === "owner" || user?.role === "admin";
+
+  const handleRefresh = async () => {
+    await reload(); // non-silent: shows the loading state for a manual click
+    message.success("Refreshed");
+  };
   const today = new Date().toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
@@ -76,8 +83,14 @@ export function FieldActivityDashboardPage() {
             Add visit
           </Btn>
         ) : null}
-        <Btn variant="secondary" size="sm" icon="refresh" onClick={() => void reload(true)}>
-          Refresh
+        <Btn
+          variant="secondary"
+          size="sm"
+          icon={loading ? undefined : "refresh"}
+          disabled={loading}
+          onClick={() => void handleRefresh()}
+        >
+          {loading ? <LoadingOutlined spin /> : null} {loading ? "Refreshing…" : "Refresh"}
         </Btn>
       </DashHead>
 
@@ -90,7 +103,9 @@ export function FieldActivityDashboardPage() {
       <FieldVisitDetailModal visit={viewVisit} onClose={() => setViewVisit(null)} />
 
       {loading && !data ? (
-        <p style={{ color: "var(--fg-muted)", fontSize: 14 }}>Loading live field data…</p>
+        <div style={{ display: "grid", placeItems: "center", minHeight: 320, padding: 24 }}>
+          <Spin size="large" description="Loading field activity…" />
+        </div>
       ) : null}
       {error ? <p style={{ color: "var(--danger)", fontSize: 13 }}>{error}</p> : null}
 

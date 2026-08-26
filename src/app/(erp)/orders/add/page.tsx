@@ -8,6 +8,8 @@ import { Btn, fmtNum } from "@/components/erp/ui";
 import { DashHead } from "@/components/erp/dashboards";
 import { useDATA } from "@/components/erp/data";
 import { usePackaging } from "@/hooks/use-packaging";
+import { useRawMaterials } from "@/hooks/use-raw-materials";
+import { useOrders } from "@/hooks/use-orders";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { useFormState } from "@/components/forms";
 import { nextOrderId, formatDueDate } from "@/lib/id-generators";
@@ -84,11 +86,13 @@ export default function CreateCustomerOrderPage() {
   const router = useRouter();
   const DATA = useDATA();
   const { items: packagingItems } = usePackaging();
+  const { items: rawMaterials } = useRawMaterials();
+  const { orders } = useOrders();
   const { append, saving, error, clearError } = useEntityMutation();
 
   const defaultOrderNumber = useMemo(
-    () => nextOrderId(DATA.ORDERS),
-    [DATA.ORDERS]
+    () => nextOrderId(orders),
+    [orders]
   );
 
   const form = useFormState(buildInitial(defaultOrderNumber));
@@ -110,8 +114,8 @@ export default function CreateCustomerOrderPage() {
   );
 
   const selectedMaterial = useMemo(
-    () => DATA.RAW_MATERIALS.find((m) => m.code === form.values.material),
-    [DATA.RAW_MATERIALS, form.values.material]
+    () => rawMaterials.find((m) => m.code === form.values.material),
+    [rawMaterials, form.values.material]
   );
 
   const selectedPackaging = useMemo(
@@ -176,6 +180,17 @@ export default function CreateCustomerOrderPage() {
     }
   };
 
+  const validateDraft = (): string | null => {
+    if (!form.values.customer) return "Customer is required.";
+    if (!form.values.material) return "Material is required.";
+
+    if (form.values.specialInstructions.length > 500) {
+      return "Special instructions must be at most 500 characters.";
+    }
+
+    return null;
+  };
+
   const validate = (): string | null => {
     if (!form.values.customer) return "Customer is required.";
     if (!form.values.material) return "Material is required.";
@@ -200,14 +215,14 @@ export default function CreateCustomerOrderPage() {
 
   const saveOrder = async (asDraft: boolean) => {
     clearError();
-    const validationError = validate();
+    const validationError = asDraft ? validateDraft() : validate();
     if (validationError) {
       message.error(validationError);
       throw new Error(validationError);
     }
 
     const customer = DATA.CUSTOMERS.find((c) => c.id === form.values.customer);
-    const material = DATA.RAW_MATERIALS.find((m) => m.code === form.values.material);
+    const material = rawMaterials.find((m) => m.code === form.values.material);
     const gradeLabel = GRADE_LABELS[form.values.grade] ?? form.values.grade;
     const quantity = parseFloat(form.values.quantity) || 0;
     const qtyMt = qtyInMt(quantity, form.values.unit);
@@ -216,7 +231,7 @@ export default function CreateCustomerOrderPage() {
     const palletised = form.values.palletised === "yes";
 
     await append("orders", {
-      id: form.values.orderNumber || nextOrderId(DATA.ORDERS),
+      id: form.values.orderNumber || nextOrderId(orders),
       customer: customer?.name ?? "",
       product: material ? `${material.name} · ${gradeLabel}` : gradeLabel,
       qty: `${quantity} ${form.values.unit}`,
@@ -341,7 +356,7 @@ export default function CreateCustomerOrderPage() {
                       onChange={(e) => form.setField("material", e.target.value)}
                     >
                       <option value="">Select material</option>
-                      {DATA.RAW_MATERIALS.map((m) => (
+                      {rawMaterials.map((m) => (
                         <option key={m.code} value={m.code}>
                           {m.name}
                         </option>

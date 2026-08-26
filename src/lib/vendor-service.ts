@@ -96,7 +96,7 @@ async function allocateVendorId(): Promise<string> {
 export async function listVendors(): Promise<Vendor[]> {
   await connectDB();
   await migrateLegacyIfEmpty();
-  const docs = await VendorModel.find({}).sort({ name: 1 }).lean();
+  const docs = await VendorModel.find({}).sort({ createdAt: -1 }).lean();
   return (docs as unknown as VendorDoc[]).map(toDTO);
 }
 

@@ -4,7 +4,7 @@
 
 import React, { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DownloadOutlined, AlertOutlined, AppstoreOutlined, CarOutlined, CheckCircleOutlined, CheckOutlined, CloseOutlined, ClockCircleOutlined, DollarOutlined, FileExclamationOutlined, ShoppingCartOutlined, TeamOutlined, ThunderboltOutlined, WarningOutlined } from "@ant-design/icons";
+import { DownloadOutlined, AlertOutlined, AppstoreOutlined, CarOutlined, CheckCircleOutlined, CheckOutlined, CloseOutlined, ClockCircleOutlined, DollarOutlined, FileExclamationOutlined, FileTextOutlined, SendOutlined, ShoppingCartOutlined, TeamOutlined, ThunderboltOutlined, WarningOutlined } from "@ant-design/icons";
 import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS, erpStatusBadge, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
 import { ErpViewAction, TableActionIcon, ViewEditActions } from "@/components/common/TableActionIcons";
@@ -13,7 +13,11 @@ import { Icon } from "./icons";
 import { useDATA, useErpData } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import PageFilterPanel from "@/components/common/PageFilterPanel";
-import { Select, message } from "antd";
+import { Select, message, Dropdown } from "antd";
+import type { MenuProps } from "antd";
+import * as XLSX from "xlsx";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { EntityFormModal, FormField, FormGrid, FormInput, FormSelect, useFormState, requireFields } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { useSessionUser } from "@/hooks/use-session-user";
@@ -22,6 +26,21 @@ import { nextDispatchId, formatDisplayDate } from "@/lib/id-generators";
 import { buildInventoryItemDetailView } from "@/lib/inventory-mobile";
 import { downloadCsv } from "@/lib/download-csv";
 import { DashHead, SectionH } from "./dashboards";
+import { useRawMaterials } from "@/hooks/use-raw-materials";
+import { useVendors } from "@/hooks/use-vendors";
+import { usePurchaseOrders } from "@/hooks/use-purchase-orders";
+import { useInvoices } from "@/hooks/use-invoices";
+import { useOrders } from "@/hooks/use-orders";
+import {
+  PO_STATUS_LABELS,
+  canPoTransition,
+  normalizePoStatus,
+} from "@/lib/procurement-workflow";
+import {
+  raiseInvoice,
+  recordVendorResponse,
+  sendPoToVendor,
+} from "@/lib/procurement-api";
 
 function detailGrid(fields) {
   return (
@@ -41,27 +60,6 @@ function detailGrid(fields) {
       ))}
     </div>
   );
-}
-
-function vendorDetailFields(v) {
-  return [
-    { label: "Vendor ID", value: v.id },
-    { label: "Name", value: v.name },
-    { label: "City", value: v.city },
-    { label: "Category", value: v.category },
-    { label: "Rating", value: String(v.rating) },
-    { label: "POs YTD", value: String(v.poCount) },
-    { label: "YTD spend", value: fmtINR(v.ytd) },
-    { label: "Contact", value: v.contactPerson || "—" },
-    { label: "Phone", value: v.phone || "—" },
-    { label: "Email", value: v.email || "—" },
-    { label: "GSTIN", value: v.gstin || "—" },
-    { label: "Address", value: v.address || "—" },
-    { label: "Materials supplied", value: v.materialsSupplied || "—" },
-    { label: "Payment terms", value: v.paymentTerms ? `${v.paymentTerms} days` : "—" },
-    { label: "Lead time", value: v.leadTime != null ? `${v.leadTime} days` : "—" },
-    { label: "Status", value: v.status || "active" },
-  ];
 }
 
 function poDetailFields(po) {
@@ -149,6 +147,7 @@ const RawMaterialInventory = () => {
   const router = useRouter();
   const DATA = useDATA();
   const { refresh } = useErpData();
+  const { items: rawMaterials, reload: reloadRawMaterials } = useRawMaterials();
   const [viewItem, setViewItem] = useState(null);
   const [deletingCode, setDeletingCode] = useState(null);
 
@@ -162,6 +161,7 @@ const RawMaterialInventory = () => {
       if (json.error) throw new Error(json.error);
       message.success("Raw material deleted.");
       await refresh();
+      await reloadRawMaterials();
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Delete failed");
     } finally {
@@ -179,7 +179,7 @@ const RawMaterialInventory = () => {
   const [statusFilter, setStatusFilter] = useState("all");
 
   const filteredMaterials = useMemo(() => {
-    return DATA.RAW_MATERIALS.filter((r) => {
+    return rawMaterials.filter((r) => {
       if (categoryFilter !== "all" && r.category !== categoryFilter) return false;
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (search) {
@@ -190,11 +190,11 @@ const RawMaterialInventory = () => {
       }
       return true;
     });
-  }, [DATA.RAW_MATERIALS, search, categoryFilter, statusFilter]);
+  }, [rawMaterials, search, categoryFilter, statusFilter]);
 
-  const totalValue = DATA.RAW_MATERIALS.reduce((s, r) => s + r.value, 0);
-  const lowCount = DATA.RAW_MATERIALS.filter(r => r.status === "low").length;
-  const critCount = DATA.RAW_MATERIALS.filter(r => r.status === "critical").length;
+  const totalValue = rawMaterials.reduce((s, r) => s + r.value, 0);
+  const lowCount = rawMaterials.filter(r => r.status === "low").length;
+  const critCount = rawMaterials.filter(r => r.status === "critical").length;
 
   const columns = useMemo(
     () => [
@@ -271,11 +271,51 @@ const RawMaterialInventory = () => {
     [deletingCode, deleteMaterial]
   );
 
+  const handleExport = (type: 'xls' | 'pdf') => {
+    const headers = ["SKU", "Material", "Grade", "Location", "Category", "Stock", "Unit", "Reorder Level", "Value", "Status"];
+    const exportData = filteredMaterials.map(row => [
+      row.code,
+      row.name,
+      row.grade,
+      row.location,
+      row.category,
+      row.stock,
+      row.unit,
+      row.reorder,
+      row.value,
+      row.status
+    ]);
+    
+    if (type === 'xls') {
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...exportData]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Raw Materials");
+      XLSX.writeFile(wb, `raw_materials_${new Date().toISOString().split("T")[0]}.xlsx`);
+    } else if (type === 'pdf') {
+      const doc = new jsPDF();
+      doc.text("Raw Material Inventory", 14, 15);
+      autoTable(doc, {
+        head: [headers],
+        body: exportData,
+        startY: 20,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [37, 99, 235] }
+      });
+      doc.save(`raw_materials_${new Date().toISOString().split("T")[0]}.pdf`);
+    }
+  };
+
+  const exportMenuItems: MenuProps['items'] = [
+    { key: "xls", label: "Export as Excel (XLSX)", onClick: () => handleExport('xls') },
+    { key: "pdf", label: "Export as PDF", onClick: () => handleExport('pdf') }
+  ];
+
   return (
     <>
       <DashHead title="Raw Material Inventory" sub="Minerals and chemicals · live stock & alerts">
-        <Btn icon="filter" size="sm">Filters</Btn>
-        <Btn icon="download" size="sm">Export</Btn>
+        <Dropdown menu={{ items: exportMenuItems }} placement="bottomRight">
+          <Btn icon="download" size="sm">Export</Btn>
+        </Dropdown>
         <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/inventory/raw-material/add")}>Add stock</Btn>
       </DashHead>
 
@@ -283,7 +323,7 @@ const RawMaterialInventory = () => {
         <StatCard
           icon={AppstoreOutlined}
           label="Total SKUs"
-          value={DATA.RAW_MATERIALS.length}
+          value={rawMaterials.length}
           hint="6 minerals · 4 chemicals"
         />
         <StatCard
@@ -422,14 +462,28 @@ const RawMaterialInventory = () => {
    ============================================================ */
 const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) => {
   const router = useRouter();
-  const DATA = useDATA();
-  const { refresh } = useErpData();
+  const { items: vendors } = useVendors();
+  const { purchaseOrders, reload: reloadPurchaseOrders } = usePurchaseOrders();
+  const { invoices, reload: reloadInvoices } = useInvoices();
+  const refresh = useCallback(
+    () => Promise.all([reloadPurchaseOrders(), reloadInvoices()]),
+    [reloadPurchaseOrders, reloadInvoices]
+  );
   const { user } = useSessionUser();
   const canApprovePo = isAdminOrOwner(user?.role);
   const [tab, setTab] = useState(defaultTab);
-  const [viewVendor, setViewVendor] = useState(null);
   const [viewPo, setViewPo] = useState(null);
   const [poActionId, setPoActionId] = useState(null);
+  // { po, accepted } — vendor's answer is recorded by procurement on their behalf.
+  const [vendorResp, setVendorResp] = useState(null);
+  const [vendorRespNote, setVendorRespNote] = useState("");
+  const [invoicePo, setInvoicePo] = useState(null);
+  const [invoiceForm, setInvoiceForm] = useState({
+    invAmt: "",
+    vendorInvoiceNo: "",
+    invDate: "",
+    notes: "",
+  });
 
   const [vendorSearch, setVendorSearch] = useState("");
   const [vendorRatingFilter, setVendorRatingFilter] = useState("all");
@@ -459,8 +513,61 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
     [refresh]
   );
 
+  /** Runs a workflow step and refreshes; every one reports its own failure. */
+  const runPoStep = useCallback(
+    async (id, fn, successMessage) => {
+      setPoActionId(id);
+      try {
+        await fn();
+        message.success(successMessage);
+        await refresh();
+        return true;
+      } catch (e) {
+        message.error(e instanceof Error ? e.message : "Action failed");
+        return false;
+      } finally {
+        setPoActionId(null);
+      }
+    },
+    [refresh]
+  );
+
+  const submitVendorResponse = async () => {
+    if (!vendorResp) return;
+    const { po, accepted } = vendorResp;
+    const done = await runPoStep(
+      po.id,
+      () => recordVendorResponse(po.id, accepted, vendorRespNote),
+      accepted ? "Vendor acceptance recorded." : "Vendor rejection recorded."
+    );
+    if (done) {
+      setVendorResp(null);
+      setVendorRespNote("");
+    }
+  };
+
+  const submitInvoice = async () => {
+    if (!invoicePo) return;
+    const done = await runPoStep(
+      invoicePo.id,
+      () =>
+        raiseInvoice({
+          poId: invoicePo.id,
+          invAmt: invoiceForm.invAmt,
+          vendorInvoiceNo: invoiceForm.vendorInvoiceNo,
+          invDate: invoiceForm.invDate,
+          notes: invoiceForm.notes,
+        }),
+      "Invoice recorded — pending verification."
+    );
+    if (done) {
+      setInvoicePo(null);
+      setInvoiceForm({ invAmt: "", vendorInvoiceNo: "", invDate: "", notes: "" });
+    }
+  };
+
   const filteredVendors = useMemo(() => {
-    return DATA.VENDORS.filter(v => {
+    return vendors.filter(v => {
       if (vendorRatingFilter === "4.5" && parseFloat(v.rating) < 4.5) return false;
       if (vendorRatingFilter === "4.0" && parseFloat(v.rating) < 4.0) return false;
       if (vendorSearch) {
@@ -469,10 +576,10 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       }
       return true;
     });
-  }, [DATA.VENDORS, vendorSearch, vendorRatingFilter]);
+  }, [vendors, vendorSearch, vendorRatingFilter]);
 
   const filteredPos = useMemo(() => {
-    return DATA.PURCHASE_ORDERS.filter(p => {
+    return purchaseOrders.filter(p => {
       if (poStatusFilter !== "all" && p.status !== poStatusFilter) return false;
       if (poSearch) {
         const t = poSearch.toLowerCase();
@@ -480,7 +587,7 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       }
       return true;
     });
-  }, [DATA.PURCHASE_ORDERS, poSearch, poStatusFilter]);
+  }, [purchaseOrders, poSearch, poStatusFilter]);
 
   const vendorColumns = useMemo(
     () => [
@@ -557,11 +664,16 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       {
         title: "Actions",
         key: "actions",
-        width: 88,
+        width: 112,
         align: "center",
         render: (_, row) => (
           <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
-            <ErpViewAction label="View vendor" onClick={() => setViewVendor(row)} />
+            <ViewEditActions
+              viewHref={`/procurement/vendors/${row.id}`}
+              editHref={`/procurement/vendors/${row.id}/edit`}
+              viewLabel="View vendor"
+              editLabel="Edit vendor"
+            />
             <TableActionIcon
               icon={<DownloadOutlined />}
               label="Download vendor"
@@ -606,7 +718,11 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         title: "Status",
         dataIndex: "status",
         key: "status",
-        render: (status) => erpStatusBadge(status),
+        render: (status) => (
+          <span title={PO_STATUS_LABELS[normalizePoStatus(status)]}>
+            {erpStatusBadge(normalizePoStatus(status))}
+          </span>
+        ),
       },
       {
         title: "Invoice",
@@ -617,44 +733,154 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       {
         title: "Actions",
         key: "actions",
-        width: 132,
+        width: 190,
         align: "center",
-        render: (_, row) => (
-          <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
-            <ErpViewAction label="View purchase order" onClick={() => setViewPo(row)} />
-            <TableActionIcon
-              icon={<DownloadOutlined />}
-              label="Download purchase order"
-              onClick={() => downloadPoCsv(row)}
-            />
-            {canApprovePo && row.status === "pending_verification" ? (
-              <>
+        // Each step is offered only when the workflow actually allows it, so
+        // the table can't present a button the API would reject.
+        render: (_, row) => {
+          const busy = poActionId === row.id;
+          return (
+            <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
+              <ErpViewAction label="View purchase order" onClick={() => setViewPo(row)} />
+              <TableActionIcon
+                icon={<DownloadOutlined />}
+                label="Download purchase order"
+                onClick={() => downloadPoCsv(row)}
+              />
+              {canApprovePo && canPoTransition(row.status, "approve") ? (
+                <>
+                  <TableActionIcon
+                    icon={<CheckOutlined />}
+                    label="Approve purchase order"
+                    onClick={() => decidePo(row.id, "approve")}
+                    disabled={busy}
+                  />
+                  <TableActionIcon
+                    icon={<CloseOutlined />}
+                    label="Reject purchase order"
+                    onClick={() => decidePo(row.id, "reject")}
+                    disabled={busy}
+                  />
+                </>
+              ) : null}
+              {canPoTransition(row.status, "send") ? (
                 <TableActionIcon
-                  icon={<CheckOutlined />}
-                  label="Approve purchase order"
-                  onClick={() => decidePo(row.id, "approve")}
-                  disabled={poActionId === row.id}
+                  icon={<SendOutlined />}
+                  label="Send purchase order to vendor"
+                  onClick={() =>
+                    runPoStep(row.id, () => sendPoToVendor(row.id), "Purchase order sent to vendor.")
+                  }
+                  disabled={busy}
                 />
+              ) : null}
+              {canPoTransition(row.status, "vendor_accept") ? (
+                <>
+                  <TableActionIcon
+                    icon={<CheckCircleOutlined />}
+                    label="Vendor accepted this PO"
+                    onClick={() => setVendorResp({ po: row, accepted: true })}
+                    disabled={busy}
+                  />
+                  <TableActionIcon
+                    icon={<CloseOutlined />}
+                    label="Vendor declined this PO"
+                    onClick={() => setVendorResp({ po: row, accepted: false })}
+                    disabled={busy}
+                  />
+                </>
+              ) : null}
+              {canPoTransition(row.status, "invoice") ? (
                 <TableActionIcon
-                  icon={<CloseOutlined />}
-                  label="Reject purchase order"
-                  onClick={() => decidePo(row.id, "reject")}
-                  disabled={poActionId === row.id}
+                  icon={<FileTextOutlined />}
+                  label="Record vendor invoice against this PO"
+                  onClick={() => {
+                    setInvoicePo(row);
+                    setInvoiceForm({
+                      invAmt: String(row.total ?? ""),
+                      vendorInvoiceNo: "",
+                      invDate: "",
+                      notes: "",
+                    });
+                  }}
+                  disabled={busy}
                 />
-              </>
-            ) : null}
-          </div>
-        ),
+              ) : null}
+            </div>
+          );
+        },
       },
     ],
-    [canApprovePo, decidePo, poActionId]
+    [canApprovePo, decidePo, poActionId, runPoStep]
   );
+
+  const handleExport = (type: 'xls' | 'pdf') => {
+    if (tab === 'vendors') {
+      const headers = ["ID", "Name", "City", "Category", "Rating", "POs YTD", "YTD Spend", "Contact", "Phone", "Email", "GSTIN", "Status"];
+      const exportData = filteredVendors.map(v => [
+        v.id, v.name, v.city, v.category, v.rating, v.poCount, v.ytd,
+        v.contactPerson ?? "", v.phone ?? "", v.email ?? "", v.gstin ?? "", v.status ?? "active"
+      ]);
+      const fileName = `vendors_${new Date().toISOString().split("T")[0]}`;
+
+      if (type === 'xls') {
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...exportData]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Vendors");
+        XLSX.writeFile(wb, `${fileName}.xlsx`);
+      } else {
+        const doc = new jsPDF();
+        doc.text("Vendors", 14, 15);
+        autoTable(doc, {
+          head: [headers],
+          body: exportData,
+          startY: 20,
+          styles: { fontSize: 7 },
+          headStyles: { fillColor: [37, 99, 235] }
+        });
+        doc.save(`${fileName}.pdf`);
+      }
+    } else {
+      const headers = ["PO #", "Vendor", "Date", "Items", "Total", "Status", "Invoice", "Material", "Code", "Grade", "Quantity", "Unit", "Rate"];
+      const exportData = filteredPos.map(p => [
+        p.id, p.vendor, p.date, p.items, p.total, p.status, p.invoice,
+        p.materialName ?? "", p.materialCode ?? "", p.grade ?? "",
+        p.quantity ?? "", p.unit ?? "", p.rate ?? ""
+      ]);
+      const fileName = `purchase_orders_${new Date().toISOString().split("T")[0]}`;
+
+      if (type === 'xls') {
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...exportData]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Purchase Orders");
+        XLSX.writeFile(wb, `${fileName}.xlsx`);
+      } else {
+        const doc = new jsPDF({ orientation: "landscape" });
+        doc.text("Purchase Orders", 14, 15);
+        autoTable(doc, {
+          head: [headers],
+          body: exportData,
+          startY: 20,
+          styles: { fontSize: 7 },
+          headStyles: { fillColor: [37, 99, 235] }
+        });
+        doc.save(`${fileName}.pdf`);
+      }
+    }
+    message.success(`Exported ${tab === 'vendors' ? 'vendors' : 'purchase orders'} as ${type === 'xls' ? 'Excel' : 'PDF'}`);
+  };
+
+  const exportMenuItems: MenuProps['items'] = [
+    { key: "xls", label: "Export as Excel (XLSX)", onClick: () => handleExport('xls') },
+    { key: "pdf", label: "Export as PDF", onClick: () => handleExport('pdf') }
+  ];
 
   return (
     <>
       <DashHead title="Vendors & Procurement" sub="Manage vendors, purchase orders, and supplier history">
         <Btn icon="upload" size="sm">Import</Btn>
-        <Btn icon="download" size="sm">Export</Btn>
+        <Dropdown menu={{ items: exportMenuItems }} placement="bottomRight">
+          <Btn icon="download" size="sm">Export</Btn>
+        </Dropdown>
         {tab === "vendors" ? (
           <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/procurement/vendors/add")}>Add vendor</Btn>
         ) : (
@@ -666,27 +892,27 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         <StatCard
           icon={TeamOutlined}
           label="Active vendors"
-          value={DATA.VENDORS.length}
+          value={vendors.length}
           hint="2 added this month"
         />
         <StatCard
           icon={ShoppingCartOutlined}
           label="Open POs"
-          value={DATA.PURCHASE_ORDERS.filter((p) => p.status !== "received").length}
-          hint={`${DATA.PURCHASE_ORDERS.filter((p) => p.status === "pending_verification").length} awaiting verification`}
+          value={purchaseOrders.filter((p) => p.status !== "received").length}
+          hint={`${purchaseOrders.filter((p) => p.status === "pending_verification").length} awaiting verification`}
           hintTone="accent"
         />
         <StatCard
           icon={DollarOutlined}
           label="PO spend · MTD"
-          value={fmtINR(DATA.PURCHASE_ORDERS.reduce((s, p) => s + p.total, 0))}
+          value={fmtINR(purchaseOrders.reduce((s, p) => s + p.total, 0))}
           hint="From database"
           hintTone="positive"
         />
         <StatCard
           icon={FileExclamationOutlined}
           label="Invoice mismatches"
-          value={DATA.INVOICES.filter((i) => i.status === "mismatch").length}
+          value={invoices.filter((i) => i.status === "mismatch").length}
           hint="Needs verification"
           hintTone="negative"
         />
@@ -696,10 +922,10 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
           <div className="tabs" style={{ border: "none", marginBottom: -1 }}>
             <span className={`tab ${tab === "vendors" ? "active" : ""}`} onClick={() => setTab("vendors")}>
-              Vendors <span className="tab-count">{DATA.VENDORS.length}</span>
+              Vendors <span className="tab-count">{vendors.length}</span>
             </span>
             <span className={`tab ${tab === "po" ? "active" : ""}`} onClick={() => setTab("po")}>
-              Purchase Orders <span className="tab-count">{DATA.PURCHASE_ORDERS.length}</span>
+              Purchase Orders <span className="tab-count">{purchaseOrders.length}</span>
             </span>
           </div>
         </div>
@@ -784,20 +1010,6 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       </div>
 
       <Modal
-        open={!!viewVendor}
-        onClose={() => setViewVendor(null)}
-        title={viewVendor?.name ?? "Vendor"}
-        sub={viewVendor ? `${viewVendor.id} · ${viewVendor.category}` : ""}
-        footer={
-          <Btn variant="ghost" onClick={() => setViewVendor(null)}>
-            Close
-          </Btn>
-        }
-      >
-        {viewVendor ? detailGrid(vendorDetailFields(viewVendor)) : null}
-      </Modal>
-
-      <Modal
         open={!!viewPo}
         onClose={() => setViewPo(null)}
         title={viewPo ? `Purchase order ${viewPo.id}` : "Purchase order"}
@@ -817,6 +1029,129 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       >
         {viewPo ? detailGrid(poDetailFields(viewPo)) : null}
       </Modal>
+
+      <Modal
+        open={!!vendorResp}
+        onClose={() => setVendorResp(null)}
+        title={
+          vendorResp?.accepted
+            ? "Record vendor acceptance"
+            : "Record vendor rejection"
+        }
+        sub={vendorResp ? `${vendorResp.po.id} · ${vendorResp.po.vendor}` : ""}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setVendorResp(null)}>
+              Cancel
+            </Btn>
+            <Btn
+              variant="primary"
+              size="sm"
+              disabled={
+                poActionId === vendorResp?.po?.id ||
+                (!vendorResp?.accepted && !vendorRespNote.trim())
+              }
+              onClick={() => void submitVendorResponse()}
+            >
+              {vendorResp?.accepted ? "Mark accepted" : "Mark declined"}
+            </Btn>
+          </>
+        }
+      >
+        <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
+          Vendors don&apos;t log in here, so record their answer on their behalf
+          once they confirm.
+          {vendorResp?.accepted
+            ? " After acceptance you can record their invoice against this PO."
+            : " A reason is required so the PO history explains the decline."}
+        </p>
+        <FormField
+          label={vendorResp?.accepted ? "Note (optional)" : "Reason for decline"}
+        >
+          <textarea
+            className="input"
+            rows={3}
+            maxLength={500}
+            value={vendorRespNote}
+            onChange={(e) => setVendorRespNote(e.target.value)}
+            placeholder={
+              vendorResp?.accepted
+                ? "e.g. Confirmed by email, delivery in 5 days"
+                : "e.g. Rate not workable, material out of stock"
+            }
+          />
+        </FormField>
+      </Modal>
+
+      <Modal
+        open={!!invoicePo}
+        onClose={() => setInvoicePo(null)}
+        title="Record vendor invoice"
+        sub={invoicePo ? `Against ${invoicePo.id} · ${invoicePo.vendor}` : ""}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setInvoicePo(null)}>
+              Cancel
+            </Btn>
+            <Btn
+              variant="primary"
+              size="sm"
+              disabled={poActionId === invoicePo?.id || !invoiceForm.invAmt}
+              onClick={() => void submitInvoice()}
+            >
+              Save invoice
+            </Btn>
+          </>
+        }
+      >
+        <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
+          PO value {invoicePo ? fmtINRFull(invoicePo.total) : "—"}. The invoice
+          goes to <strong>pending verification</strong> — it is never
+          auto-approved, even when the amount matches.
+        </p>
+        <FormGrid>
+          <FormField label="Invoice amount (₹)" required>
+            <FormInput
+              type="number"
+              min={0}
+              step="0.01"
+              value={invoiceForm.invAmt}
+              onChange={(e) =>
+                setInvoiceForm((f) => ({ ...f, invAmt: e.target.value }))
+              }
+            />
+          </FormField>
+          <FormField label="Vendor invoice no.">
+            <FormInput
+              value={invoiceForm.vendorInvoiceNo}
+              onChange={(e) =>
+                setInvoiceForm((f) => ({ ...f, vendorInvoiceNo: e.target.value }))
+              }
+              placeholder="Vendor's own reference"
+            />
+          </FormField>
+          <FormField label="Invoice date">
+            <FormInput
+              type="date"
+              value={invoiceForm.invDate}
+              onChange={(e) =>
+                setInvoiceForm((f) => ({ ...f, invDate: e.target.value }))
+              }
+            />
+          </FormField>
+        </FormGrid>
+        <FormField label="Notes">
+          <textarea
+            className="input"
+            rows={2}
+            maxLength={1000}
+            value={invoiceForm.notes}
+            onChange={(e) =>
+              setInvoiceForm((f) => ({ ...f, notes: e.target.value }))
+            }
+          />
+        </FormField>
+      </Modal>
     </>
   );
 };
@@ -826,11 +1161,12 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
    ============================================================ */
 const DispatchTracking = () => {
   const DATA = useDATA();
+  const { orders } = useOrders();
   const { append, saving, error, clearError } = useEntityMutation();
   const [openTrack, setOpenTrack] = useState(null);
   const [planOpen, setPlanOpen] = useState(false);
   const dispatchForm = useFormState({
-    orderId: DATA.ORDERS[0]?.id ?? "",
+    orderId: orders[0]?.id ?? "",
     dispatchId: nextDispatchId(DATA.DISPATCHES),
     vehicle: "RJ-27-GH-4521",
     driver: "Ramesh Kumar",
@@ -840,7 +1176,7 @@ const DispatchTracking = () => {
   });
 
   const scheduleDispatch = async () => {
-    const order = DATA.ORDERS.find((o) => o.id === dispatchForm.values.orderId);
+    const order = orders.find((o) => o.id === dispatchForm.values.orderId);
     await append("dispatches", {
       id: dispatchForm.values.dispatchId || nextDispatchId(DATA.DISPATCHES),
       vehicle: dispatchForm.values.vehicle,
@@ -1112,7 +1448,7 @@ const DispatchTracking = () => {
         <FormGrid>
           <FormField label="Sales order">
             <FormSelect value={dispatchForm.values.orderId} onChange={(v) => dispatchForm.setField("orderId", v)}>
-              {DATA.ORDERS.map((o) => <option key={o.id} value={o.id}>{o.id} · {o.customer}</option>)}
+              {orders.map((o) => <option key={o.id} value={o.id}>{o.id} · {o.customer}</option>)}
             </FormSelect>
           </FormField>
           <FormField label="Dispatch #"><FormInput value={dispatchForm.values.dispatchId} onChange={(v) => dispatchForm.setField("dispatchId", v)} /></FormField>

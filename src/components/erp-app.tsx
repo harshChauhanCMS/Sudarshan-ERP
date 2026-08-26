@@ -4,12 +4,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { message } from "antd";
-import { ErpDataProvider, useErpData } from "@/context/erp-data-provider";
-import type { ErpData } from "@/lib/seed-data";
-import { Login, Forgot, CompanySelect, ResetPassword } from "@/components/erp/auth";
+import { Login, Forgot, ResetPassword } from "@/components/erp/auth";
 import { Sidebar, Topbar } from "@/components/layout";
 import { renderErpRoute } from "@/components/erp/render-route";
-import { ERP_ROUTES, pathToRoute } from "@/lib/erp-routes";
+import { ERP_ROUTES, isLegacyRenderRoute, pathToRoute } from "@/lib/erp-routes";
 import {
   canAccessRoute,
   getDefaultLandingRoute,
@@ -18,26 +16,62 @@ import type { PermissionsMap } from "@/lib/permission-types";
 import { PageShell } from "@/components/layout/page-shell";
 import { sidebarBadges } from "@/lib/erp-stats";
 import { usePackaging } from "@/hooks/use-packaging";
+import { useCompanies, type Company as CompanyRecord } from "@/hooks/use-companies";
+import { useRawMaterials } from "@/hooks/use-raw-materials";
+import { usePurchaseOrders } from "@/hooks/use-purchase-orders";
+import { useInvoices } from "@/hooks/use-invoices";
+import { useOrders } from "@/hooks/use-orders";
+import { useDispatches } from "@/hooks/use-dispatches";
+import { useSystemStatus } from "@/hooks/use-system-status";
+import { ErpDataProvider } from "@/context/erp-data-provider";
 import {
   GROUP_BRAND_TOAST_MESSAGE,
   isGroupBrandRoute,
 } from "@/lib/group-brand-routes";
 
-type Company = ErpData["COMPANIES"][number] & { group?: boolean };
+type Company = CompanyRecord & { group?: boolean };
 
 function ErpAppInner({ segments, children }: { segments?: string[], children?: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { data, meta, loading, error } = useErpData();
+  const { companies, loading, error } = useCompanies();
   const { items: packagingItems } = usePackaging();
+  const { items: rawMaterials } = useRawMaterials();
+  const { purchaseOrders } = usePurchaseOrders();
+  const { invoices } = useInvoices();
+  const { orders } = useOrders();
+  const { dispatches } = useDispatches();
+  const status = useSystemStatus();
+  const isEmpty = companies.length === 0 && orders.length === 0 && rawMaterials.length === 0;
+  let warning: string | undefined;
+  let warningTone: "mock" | "empty" | "danger" = "danger";
+  if (status && !status.dbConfigured && status.mockDataEnabled) {
+    warning =
+      "MONGODB_URI is not set. Showing demo data (USE_MOCK_DATA=true). Set MONGODB_URI and run npm run seed for real data.";
+    warningTone = "mock";
+  } else if (status && !status.dbConfigured) {
+    warning =
+      "MONGODB_URI is not set. No ERP data loaded. Add MONGODB_URI to .env.local and run npm run seed — or set USE_MOCK_DATA=true for demo data only.";
+    warningTone = "empty";
+  } else if (status?.dbConfigured && isEmpty) {
+    warning = "Database has no ERP entities. Run npm run seed to load demo data, or add records via the API.";
+    warningTone = "empty";
+  }
   const badgeMap = useMemo(
-    () => sidebarBadges(data, packagingItems.length),
-    [data, packagingItems]
+    () =>
+      sidebarBadges({
+        rawMaterials,
+        packagingCount: packagingItems.length,
+        purchaseOrders,
+        invoices,
+        orders,
+        dispatches,
+      }),
+    [rawMaterials, packagingItems, purchaseOrders, invoices, orders, dispatches]
   );
   const route =
     pathname === "/login" ||
     pathname === "/forgot" ||
-    pathname === "/select-company" ||
     pathname === "/reset-password"
       ? pathname
       : pathname.startsWith("/hrms/") ||
@@ -59,6 +93,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
     permissions?: PermissionsMap;
     mustResetPassword?: boolean;
   } | null>(null);
+  const [sessionDepartment, setSessionDepartment] = useState<string | undefined>(undefined);
   const [sidebarWidth, setSidebarWidth] = useState(248);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -112,7 +147,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
       });
   }, [sessionUser?.email]);
 
-  useEffect(() => {
+  const loadSession = useCallback(() => {
     fetch("/api/auth/session")
       .then((r) => r.json())
       .then((j) => {
@@ -120,6 +155,39 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    loadSession();
+  }, [loadSession]);
+
+  // Permissions are baked into the session at login and only refreshed by
+  // /api/auth/session — without this, a role's permissions can change (e.g.
+  // an admin edits it in Role Management) and an already-open tab keeps
+  // enforcing the stale snapshot until a hard refresh or re-login.
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.visibilityState === "visible") loadSession();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [loadSession]);
+
+  useEffect(() => {
+    if (!sessionUser?.email) {
+      setSessionDepartment(undefined);
+      return;
+    }
+    fetch("/api/hrms/employees/me")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data?.department) setSessionDepartment(j.data.department);
+      })
+      .catch(() => {});
+  }, [sessionUser?.email]);
 
   useEffect(() => {
     if (!sessionUser?.email) return;
@@ -137,11 +205,11 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   }, [route, sessionUser?.email, loadNotificationBadge]);
 
   useEffect(() => {
-    const authedRoute = !["/login", "/select-company", "/forgot"].includes(route);
-    if (authedRoute && !company && data.COMPANIES[0]) {
-      setCompany(data.COMPANIES[0]);
+    const authedRoute = !["/login", "/forgot"].includes(route);
+    if (authedRoute && !company && companies[0]) {
+      setCompany(companies[0]);
     }
-  }, [route, company, data.COMPANIES]);
+  }, [route, company, companies]);
 
   useEffect(() => {
     if (sessionUser?.mustResetPassword && route !== "/reset-password") {
@@ -152,7 +220,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
 
   useEffect(() => {
     if (!sessionUser?.permissions) return;
-    if (["/login", "/select-company", "/forgot", "/reset-password", "/profile"].includes(route)) return;
+    if (["/login", "/forgot", "/reset-password", "/profile"].includes(route)) return;
     if (canAccessRoute(route, sessionUser.permissions, sessionUser.role)) return;
     const fallback = getDefaultLandingRoute(
       sessionUser.permissions,
@@ -165,11 +233,11 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   }, [route, sessionUser, navigate]);
 
   useEffect(() => {
-    if (["/login", "/select-company", "/forgot"].includes(route)) {
+    if (["/login", "/forgot"].includes(route)) {
       prevRouteRef.current = route;
       return;
     }
-    if (data.COMPANIES.length < 2) {
+    if (companies.length < 2) {
       prevRouteRef.current = route;
       return;
     }
@@ -183,7 +251,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
     if (enteringGroup) {
       message.info(GROUP_BRAND_TOAST_MESSAGE, 4);
     }
-  }, [route, data.COMPANIES.length]);
+  }, [route, companies.length]);
 
   const handleLogin = async (email: string, password: string) => {
     const trimmedEmail = email.trim();
@@ -196,7 +264,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
     const json = await res.json();
     if (json.error) throw new Error(json.error);
     if (json.data?.user) setSessionUser(json.data.user);
-    navigate(json.data?.next ?? "/select-company");
+    navigate(json.data?.next ?? "/login");
   };
 
   const handleLogout = async () => {
@@ -238,37 +306,17 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
             prev ? { ...prev, mustResetPassword: false } : prev
           );
           message.success("Password updated successfully.");
-          navigate(next ?? "/select-company");
-        }}
-        onLogout={handleLogout}
-      />
-    );
-  }
-  if (route === "/select-company" || pathname === "/select-company") {
-    return (
-      <CompanySelect
-        companies={data.COMPANIES}
-        dataWarning={meta?.warning}
-        userEmail={sessionUser?.email}
-        userRole={sessionUser?.role}
-        onSelect={(c) => {
-          setCompany(c);
-          navigate(
-            getDefaultLandingRoute(
-              sessionUser?.permissions,
-              sessionUser?.role
-            )
-          );
+          navigate(next ?? "/login");
         }}
         onLogout={handleLogout}
       />
     );
   }
 
-  const activeCo = company || data.COMPANIES[0];
+  const activeCo = company || companies[0];
   if (!activeCo) {
     return (
-      <PageShell loading={loading} error={error} meta={meta}>
+      <PageShell loading={loading} error={error} warning={warning} warningTone={warningTone} showSeedHint={warningTone === "empty" && Boolean(status?.dbConfigured)}>
         <div style={{ padding: 24, fontSize: 14, color: "var(--fg-muted)" }}>
           No companies in the database. Run <code>npm run seed</code> after setting{" "}
           <code>MONGODB_URI</code>.
@@ -278,6 +326,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
   }
 
   return (
+    <ErpDataProvider>
     <div
       className={`app${mobileSidebarOpen ? " sidebar-mobile-open" : ""}`}
       style={{ "--sidebar-w": isSidebarCollapsed ? "72px" : `${sidebarWidth}px` } as any}
@@ -291,11 +340,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
         route={route}
         navigate={handleNavigate}
         company={activeCo}
-        companies={data.COMPANIES}
-        onCompanyClick={() => {
-          navigate("/select-company");
-          setMobileSidebarOpen(false);
-        }}
+        companies={companies}
         badgeMap={badgeMap}
         sidebarWidth={sidebarWidth}
         setSidebarWidth={setSidebarWidth}
@@ -306,6 +351,7 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
         permissions={sessionUser?.permissions}
         userName={sessionUser?.name}
         userRole={sessionUser?.role}
+        userDepartment={sessionDepartment}
       />
       <div className="main">
         <Topbar
@@ -318,19 +364,16 @@ function ErpAppInner({ segments, children }: { segments?: string[], children?: R
           notifUnreadCount={notifUnreadCount}
         />
         <div className="content">
-          <PageShell loading={loading} error={error} meta={meta}>
-            {children ? children : renderErpRoute(route, navigate)}
+          <PageShell loading={loading} error={error} warning={warning} warningTone={warningTone} showSeedHint={warningTone === "empty" && Boolean(status?.dbConfigured)}>
+            {isLegacyRenderRoute(route) ? renderErpRoute(route, navigate) : children}
           </PageShell>
         </div>
       </div>
     </div>
+    </ErpDataProvider>
   );
 }
 
 export function ErpApp({ segments, children }: { segments?: string[], children?: React.ReactNode }) {
-  return (
-    <ErpDataProvider>
-      <ErpAppInner segments={segments}>{children}</ErpAppInner>
-    </ErpDataProvider>
-  );
+  return <ErpAppInner segments={segments}>{children}</ErpAppInner>;
 }

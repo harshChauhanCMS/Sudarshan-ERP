@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Form,
   Input,
@@ -32,12 +32,16 @@ import {
 } from "@/lib/hrms-dob";
 import {
   departmentSkipsReportingManager,
+  EMPLOYEE_COMPANY_OPTIONS,
   EMPLOYEE_EXPERIENCE_OPTIONS,
   EMPLOYEE_LOCATION_UNIT_OPTIONS,
   EMPLOYEE_QUALIFICATION_OPTIONS,
   EMPLOYEE_WORK_LOCATION_OPTIONS,
 } from "@/lib/hrms-employee-options";
 import { formatReportingManagerLabel } from "@/lib/manager-scope-shared";
+import { useShifts } from "@/hooks/use-shifts";
+import EmployeeDeductionsPicker from "@/components/hrms/EmployeeDeductionsPicker";
+import { shiftLabel, EMPLOYEE_WEEKLY_OFF_OPTIONS } from "@/lib/shift-utils";
 
 const LEGACY_DRAFT_KEY = "hrms_employee_draft";
 
@@ -49,11 +53,6 @@ function draftHasContent(formData: Record<string, unknown>): boolean {
     return true;
   });
 }
-
-const EMPLOYEE_COMPANY_OPTIONS = [
-  { value: "smi", label: "Sudarshan Minerals & Industries (SMI)" },
-  { value: "smic", label: "Sudarshan Microns" },
-];
 
 const digitsOnlyRule = { pattern: /^\d+$/, message: "Numbers only" };
 
@@ -95,6 +94,34 @@ export default function AddEmployeePage() {
     Form.useWatch("compensationType", form) ?? "Monthly CTC";
   const department = Form.useWatch("department", form);
   const showReportingManager = !departmentSkipsReportingManager(department);
+  // Only active shifts are offered for new assignments; retired ones stay
+  // readable on existing employees but shouldn't be selectable here.
+  const { shifts, loading: shiftsLoading } = useShifts(true);
+  // Watched so the deduction preview re-prices as the salary is typed.
+  const watchedBasic = Form.useWatch("basicSalary", form);
+  const watchedGross = Form.useWatch("monthlyGross", form);
+  const watchedArrears = Form.useWatch("arrears", form);
+  const dateJoining = Form.useWatch("dateJoining", form);
+  const probationMonths = Form.useWatch("probationMonths", form);
+  // Confirmation date the employee becomes permanent on, projected from the
+  // joining date + probation length — recalculated as either changes.
+  const permanentFromDate = useMemo(() => {
+    if (!dateJoining || !probationMonths || probationMonths <= 0) return null;
+    const projected = dayjs(dateJoining).add(probationMonths, "month");
+    return projected.isValid() ? projected : null;
+  }, [dateJoining, probationMonths]);
+
+  useEffect(() => {
+    if (probationMonths && probationMonths > 0) {
+      form.setFieldValue("employmentType", "Apprentice");
+    }
+  }, [probationMonths, form]);
+
+  useEffect(() => {
+    if (permanentFromDate) {
+      form.setFieldValue("dateConfirmation", permanentFromDate);
+    }
+  }, [permanentFromDate, form]);
   const [departmentOptions, setDepartmentOptions] = useState<
     { value: string; label: string }[]
   >([]);
@@ -665,7 +692,7 @@ export default function AddEmployeePage() {
               mode="multiple"
               style={{ width: "100%" }}
               placeholder="Select company access"
-              options={EMPLOYEE_COMPANY_OPTIONS}
+              options={[...EMPLOYEE_COMPANY_OPTIONS]}
               maxTagCount="responsive"
             />
           </Form.Item>
@@ -743,7 +770,15 @@ export default function AddEmployeePage() {
           <Form.Item name="dateConfirmation" label="Confirmation Date">
             <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
           </Form.Item>
-          <Form.Item name="probationMonths" label="Probation Period (Months)">
+          <Form.Item
+            name="probationMonths"
+            label="Probation Period (Months)"
+            extra={
+              permanentFromDate
+                ? `This employee becomes permanent on ${permanentFromDate.format("DD MMM YYYY")}.`
+                : undefined
+            }
+          >
             <InputNumber style={{ width: "100%" }} min={0} />
           </Form.Item>
         </div>
@@ -754,8 +789,7 @@ export default function AddEmployeePage() {
       fields: [
         "shiftMode",
         "primaryShift",
-        "rotationPattern",
-        "workingHours",
+        "eligibleShifts",
         "weeklyOff",
         "overtimeApplicable",
       ],
@@ -775,46 +809,55 @@ export default function AddEmployeePage() {
               ]}
             />
           </Form.Item>
-          <Form.Item name="primaryShift" label="Primary Shift">
+          <Form.Item
+            name="primaryShift"
+            label="Primary Shift"
+            extra={
+              !shiftsLoading && shifts.length === 0 ? (
+                <Link href="/hrms/shifts">No shifts defined — add one first</Link>
+              ) : undefined
+            }
+          >
             <Select
-              options={[
-                {
-                  value: "Shift A — 06:00 to 14:00",
-                  label: "Shift A — 06:00 to 14:00",
-                },
-                {
-                  value: "Shift B — 14:00 to 22:00",
-                  label: "Shift B — 14:00 to 22:00",
-                },
-                {
-                  value: "Shift C — 22:00 to 06:00",
-                  label: "Shift C — 22:00 to 06:00",
-                },
-              ]}
+              loading={shiftsLoading}
+              placeholder={shiftsLoading ? "Loading shifts…" : "Select shift"}
+              options={shifts.map((s) => ({
+                value: shiftLabel(s),
+                label: shiftLabel(s),
+              }))}
+              notFoundContent={
+                shiftsLoading ? "Loading…" : "No shifts defined yet"
+              }
             />
           </Form.Item>
-          <Form.Item name="rotationPattern" label="Rotation Pattern">
+          <Form.Item
+            name="eligibleShifts"
+            label="Eligible Shifts"
+            extra="Every shift this employee can be rostered on. Leave empty to use the primary shift only."
+          >
             <Select
-              options={[
-                { value: "None", label: "None" },
-                { value: "Weekly rotation", label: "Weekly rotation" },
-                {
-                  value: "Fortnightly rotation",
-                  label: "Fortnightly rotation",
-                },
-              ]}
+              mode="multiple"
+              allowClear
+              loading={shiftsLoading}
+              placeholder={
+                shiftsLoading ? "Loading shifts…" : "Select one or more shifts"
+              }
+              maxTagCount="responsive"
+              options={shifts.map((s) => ({
+                value: shiftLabel(s),
+                label: shiftLabel(s),
+              }))}
+              notFoundContent={
+                shiftsLoading ? "Loading…" : "No shifts defined yet"
+              }
             />
-          </Form.Item>
-          <Form.Item name="workingHours" label="Working Hours / Day">
-            <InputNumber style={{ width: "100%" }} min={1} max={24} />
           </Form.Item>
           <Form.Item name="weeklyOff" label="Weekly Off Day">
             <Select
-              options={[
-                { value: "Sunday", label: "Sunday" },
-                { value: "Saturday", label: "Saturday" },
-                { value: "Rotating", label: "Rotating" },
-              ]}
+              options={EMPLOYEE_WEEKLY_OFF_OPTIONS.map((d) => ({
+                value: d,
+                label: d,
+              }))}
             />
           </Form.Item>
           <Form.Item
@@ -834,11 +877,12 @@ export default function AddEmployeePage() {
         "annualCtc",
         "monthlyGross",
         "basicSalary",
-        "da",
         "hra",
         "otherConveyance",
         "specialBonus",
         "reimbursementCap",
+        "arrears",
+        "deductionRates",
         "dailyWageRate",
         "skillCategory",
         "tradeJobRole",
@@ -893,19 +937,6 @@ export default function AddEmployeePage() {
                   />
                 </Form.Item>
                 <Form.Item name="basicSalary" label="Basic Salary (₹/mo)">
-                  <InputNumber
-                    style={{ width: "100%" }}
-                    formatter={(v) =>
-                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                    }
-                    parser={(v) =>
-                      parseFloat(
-                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
-                      ) || 0
-                    }
-                  />
-                </Form.Item>
-                <Form.Item name="da" label="DA (₹/mo)">
                   <InputNumber
                     style={{ width: "100%" }}
                     formatter={(v) =>
@@ -976,9 +1007,45 @@ export default function AddEmployeePage() {
                     }
                   />
                 </Form.Item>
+                <Form.Item
+                  name="arrears"
+                  label="Arrears (₹/mo)"
+                  tooltip="Pending dues paid out with this month's salary. Printed on the payslip's Arrears row."
+                >
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    formatter={(v) =>
+                      `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      parseFloat(
+                        v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
+                      ) || 0
+                    }
+                  />
+                </Form.Item>
               </div>
             </div>
           )}
+
+          <div className="emp-form-subpanel">
+            <div className="emp-form-subpanel__head">
+              <div className="emp-form-subpanel__head-main">
+                <CalculatorOutlined />
+                <span>Deductions</span>
+              </div>
+              <span className="emp-form-subpanel__badge">
+                Managed in Deduction Management
+              </span>
+            </div>
+            <Form.Item name="deductionRates" noStyle>
+              <EmployeeDeductionsPicker
+                basic={Number(watchedBasic) || 0}
+                gross={Number(watchedGross) || 0}
+                arrears={Number(watchedArrears) || 0}
+              />
+            </Form.Item>
+          </div>
 
           {compensationType === "Daily wage" && (
             <div className="emp-form-subpanel">

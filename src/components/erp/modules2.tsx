@@ -4,7 +4,7 @@
 
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Select, DatePicker, Button as AntButton } from "antd";
+import { Select, DatePicker, Button as AntButton, message } from "antd";
 import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS, erpStatusBadge, customerStatusBadge, invoiceStatusBadge } from "@/components/common/erpStatusBadges";
 import { ErpViewAction, TableActionIcon } from "@/components/common/TableActionIcons";
@@ -17,6 +17,7 @@ import {
   FileTextOutlined,
   FilterOutlined,
   LineChartOutlined,
+  LoadingOutlined,
   ShoppingCartOutlined,
   TeamOutlined,
   ThunderboltOutlined,
@@ -29,11 +30,25 @@ import StatCard, { ErpStatGrid, mapDashStatTone } from "@/components/common/Stat
 import dayjs from "dayjs";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
+import { useEmployees } from "@/hooks/use-employees";
+import { useCustomers } from "@/hooks/use-customers";
+import { useInvoices } from "@/hooks/use-invoices";
+import {
+  INVOICE_STATUS_LABELS,
+  canInvoiceTransition,
+  canPoTransition,
+} from "@/lib/procurement-workflow";
+import {
+  markInvoiceMismatch,
+  raiseInvoice,
+  resubmitInvoice as resubmitInvoiceApi,
+  verifyInvoice as verifyInvoiceApi,
+} from "@/lib/procurement-api";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import { useOrders } from "@/hooks/use-orders";
 import { FormGrid, FormField, FormInput, FormSelect, EntityFormModal, requireFields, useFormState } from "@/components/forms";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
-import { nextCustomerId, nextOrderId, nextFieldVisitId, nextInvoiceId, formatDueDate, formatDisplayDate } from "@/lib/id-generators";
+import { nextCustomerId, nextOrderId, nextFieldVisitId, formatDueDate, formatDisplayDate } from "@/lib/id-generators";
 import { DashHead, SectionH } from "./dashboards";
 
 /* ============================================================
@@ -276,6 +291,11 @@ const CustomerOrders = () => {
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
 
+  const handleRefresh = async () => {
+    await reload();
+    message.success("Refreshed");
+  };
+
   const ORDERS_EXT = orders;
   const openOrders = ORDERS_EXT.filter((o) => o.status !== "delivered").length;
   const bookValue = ORDERS_EXT.reduce((s, o) => s + (Number(o.value) || 0), 0);
@@ -363,8 +383,14 @@ const CustomerOrders = () => {
   return (
     <>
       <DashHead title="Customer Orders" sub="Sales orders loaded from database">
-        <Btn variant="secondary" size="sm" icon="refresh" onClick={() => void reload()} disabled={loading}>
-          Refresh
+        <Btn
+          variant="secondary"
+          size="sm"
+          icon={loading ? undefined : "refresh"}
+          onClick={() => void handleRefresh()}
+          disabled={loading}
+        >
+          {loading ? <LoadingOutlined spin /> : null} {loading ? "Refreshing…" : "Refresh"}
         </Btn>
         <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/orders/add")}>New order</Btn>
       </DashHead>
@@ -546,8 +572,9 @@ const FieldSales = () => {
   const DATA = useDATA();
   const { append, saving, error, clearError } = useEntityMutation();
   const [planOpen, setPlanOpen] = useState(false);
-  const salesReps = DATA.EMPLOYEES.filter((e) => e.dept === "Sales");
-  const [planRep, setPlanRep] = useState(salesReps[0]?.name ?? "");
+  const { items: employees } = useEmployees();
+  const salesReps = employees.filter((e) => e.department === "Sales");
+  const [planRep, setPlanRep] = useState(salesReps[0]?.fullName ?? "");
   const [planDate, setPlanDate] = useState(new Date().toISOString().slice(0, 10));
   const [planTerritory, setPlanTerritory] = useState("Mumbai Metro");
   const [planVisits, setPlanVisits] = useState([
@@ -728,7 +755,7 @@ const FieldSales = () => {
         <FormGrid cols={3}>
           <FormField label="Rep">
             <FormSelect value={planRep} onChange={setPlanRep}>
-              {salesReps.map((e) => <option key={e.id} value={e.name}>{e.name}</option>)}
+              {salesReps.map((e) => <option key={e.employeeId} value={e.fullName}>{e.fullName}</option>)}
             </FormSelect>
           </FormField>
           <FormField label="Date">
@@ -885,19 +912,28 @@ const FieldActivityMap = () => {
    ============================================================ */
 const InvoiceVerify = () => {
   const DATA = useDATA();
-  const { append, update, saving, error, clearError } = useEntityMutation();
+  const { invoices: INVOICES, reload: reloadInvoices } = useInvoices();
   const [open, setOpen] = useState(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [verifierNote, setVerifierNote] = useState("");
-  const [uploadForm, setUploadForm] = useState({ po: "", vendor: "", invAmt: "", poAmt: "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const clearError = () => setError(null);
+  const [uploadForm, setUploadForm] = useState({ po: "", invAmt: "", vendorInvoiceNo: "", invDate: "", notes: "" });
 
-  const INVOICES = DATA.INVOICES;
-  const matched = INVOICES.filter((i) => i.status === "matched");
+  const verified = INVOICES.filter((i) => i.status === "verified");
   const mismatched = INVOICES.filter((i) => i.status === "mismatch");
-  const passRate = INVOICES.length ? Math.round((matched.length / INVOICES.length) * 100) : 0;
+  const pending = INVOICES.filter((i) => i.status === "pending_verification");
+  const passRate = INVOICES.length ? Math.round((verified.length / INVOICES.length) * 100) : 0;
   const avgDiff = mismatched.length
     ? Math.round(mismatched.reduce((s, i) => s + Math.abs(i.invAmt - i.poAmt), 0) / mismatched.length)
     : 0;
+
+  // Only vendor-accepted POs can carry an invoice, so that is all this offers.
+  const invoiceablePos = useMemo(
+    () => DATA.PURCHASE_ORDERS.filter((p) => canPoTransition(p.status, "invoice")),
+    [DATA.PURCHASE_ORDERS]
+  );
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -915,41 +951,70 @@ const InvoiceVerify = () => {
     });
   }, [INVOICES, search, statusFilter]);
 
-  const approveInvoice = async () => {
-    if (!open) return;
-    await update("invoices", open.id, {
-      status: "matched",
-      reason: verifierNote || "Approved with note",
-    });
-    setOpen(null);
-    setVerifierNote("");
+  const run = async (fn, successMessage) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      message.success(successMessage);
+      await reloadInvoices();
+      return true;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Action failed";
+      setError(msg);
+      message.error(msg);
+      return false;
+    } finally {
+      setBusy(false);
+    }
   };
 
+  const approveInvoice = async () => {
+    if (!open) return;
+    if (await run(() => verifyInvoiceApi(open.id, verifierNote), "Invoice verified — ready for payment.")) {
+      setOpen(null);
+      setVerifierNote("");
+    }
+  };
+
+  // The note is what tells the vendor what to fix, so it is required here too
+  // — the API enforces it, this just avoids a pointless round trip.
   const rejectInvoice = async () => {
     if (!open) return;
-    await update("invoices", open.id, {
-      status: "mismatch",
-      reason: verifierNote || "Rejected by verifier",
-    });
-    setOpen(null);
-    setVerifierNote("");
+    if (!verifierNote.trim()) {
+      setError("A mismatch note is required so the vendor knows what to correct.");
+      return;
+    }
+    if (await run(() => markInvoiceMismatch(open.id, verifierNote), "Invoice marked as mismatch.")) {
+      setOpen(null);
+      setVerifierNote("");
+    }
+  };
+
+  const resendInvoice = async () => {
+    if (!open) return;
+    if (await run(() => resubmitInvoiceApi(open.id, { notes: verifierNote }), "Invoice resubmitted for verification.")) {
+      setOpen(null);
+      setVerifierNote("");
+    }
   };
 
   const uploadInvoice = async () => {
-    const invAmt = Number(uploadForm.invAmt) || 0;
-    const poAmt = Number(uploadForm.poAmt) || 0;
-    await append("invoices", {
-      id: nextInvoiceId(INVOICES),
-      po: uploadForm.po,
-      vendor: uploadForm.vendor,
-      invDate: formatDisplayDate(),
-      invAmt,
-      poAmt,
-      status: invAmt === poAmt ? "matched" : "mismatch",
-      reason: invAmt === poAmt ? "—" : `₹${Math.abs(invAmt - poAmt).toLocaleString("en-IN")} diff`,
-    });
-    setUploadOpen(false);
-    setUploadForm({ po: "", vendor: "", invAmt: "", poAmt: "" });
+    const done = await run(
+      () =>
+        raiseInvoice({
+          poId: uploadForm.po,
+          invAmt: uploadForm.invAmt,
+          vendorInvoiceNo: uploadForm.vendorInvoiceNo,
+          invDate: uploadForm.invDate,
+          notes: uploadForm.notes,
+        }),
+      "Invoice recorded — pending verification."
+    );
+    if (done) {
+      setUploadOpen(false);
+      setUploadForm({ po: "", invAmt: "", vendorInvoiceNo: "", invDate: "", notes: "" });
+    }
   };
 
   const invoiceColumns = useMemo(
@@ -1022,13 +1087,13 @@ const InvoiceVerify = () => {
         align: "center",
         render: (_, inv) => (
           <div onClick={(e) => e.stopPropagation()}>
-            {inv.status === "matched" ? (
+            {inv.status === "verified" ? (
               <ErpViewAction onClick={() => setOpen(inv)} />
             ) : (
               <TableActionIcon
                 icon={<EyeOutlined />}
                 label="Review"
-                onClick={() => setOpen(inv)}
+                onClick={() => { setVerifierNote(""); setOpen(inv); }}
               />
             )}
           </div>
@@ -1040,23 +1105,29 @@ const InvoiceVerify = () => {
 
   return (
     <>
-      <DashHead title="Invoice Verification" sub="Auto-match invoices to POs · flag mismatches">
-        <Btn size="sm" icon="upload" onClick={() => { clearError(); setUploadOpen(true); }}>Upload invoice</Btn>
-        <Btn variant="primary" size="sm" icon="bolt">Auto-match queue</Btn>
+      <DashHead title="Invoice Verification" sub="Verify vendor invoices against their purchase order">
+        <Btn
+          size="sm"
+          icon="upload"
+          disabled={invoiceablePos.length === 0}
+          onClick={() => { clearError(); setUploadOpen(true); }}
+        >
+          Record invoice
+        </Btn>
       </DashHead>
 
       <ErpStatGrid cols={4}>
         <StatCard
           icon={FileTextOutlined}
           label="Pending verification"
-          value={INVOICES.length}
-          hint="Total this month"
+          value={pending.length}
+          hint="Awaiting your check"
         />
         <StatCard
           icon={CheckCircleOutlined}
-          label="Auto-matched"
-          value={matched.length}
-          hint={`${passRate}% pass rate`}
+          label="Verified"
+          value={verified.length}
+          hint={`${passRate}% pass rate · ready for payment`}
           hintTone="positive"
         />
         <StatCard
@@ -1068,9 +1139,9 @@ const InvoiceVerify = () => {
         />
         <StatCard
           icon={DollarOutlined}
-          label="Total amount"
-          value={fmtINR(INVOICES.reduce((s, i) => s + i.invAmt, 0))}
-          hint="To verify"
+          label="Pending value"
+          value={fmtINR(pending.reduce((s, i) => s + i.invAmt, 0))}
+          hint="Not yet verified"
         />
       </ErpStatGrid>
 
@@ -1095,8 +1166,9 @@ const InvoiceVerify = () => {
               onChange={setStatusFilter}
               options={[
                 { value: "all", label: "All invoices" },
-                { value: "matched", label: "Auto-matched" },
-                { value: "mismatch", label: "Mismatched" },
+                { value: "pending_verification", label: INVOICE_STATUS_LABELS.pending_verification },
+                { value: "verified", label: INVOICE_STATUS_LABELS.verified },
+                { value: "mismatch", label: INVOICE_STATUS_LABELS.mismatch },
               ]}
             />
           </div>
@@ -1125,41 +1197,68 @@ const InvoiceVerify = () => {
       <EntityFormModal
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
-        title="Upload invoice"
-        sub="Register invoice for verification (metadata only)"
+        title="Record vendor invoice"
+        sub="Against a purchase order the vendor has accepted"
         wide
         submitLabel="Save invoice"
-        saving={saving}
+        saving={busy}
         error={error}
         onSubmit={uploadInvoice}
       >
+        <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
+          Only vendor-accepted POs are listed — an invoice cannot exist before
+          the vendor has taken the order. The PO amount is read from the PO
+          itself, so it can&apos;t be typed to match.
+        </p>
         <FormGrid>
-          <FormField label="PO number">
-            <FormSelect value={uploadForm.po} onChange={(v) => {
-              const po = DATA.PURCHASE_ORDERS.find((p) => p.id === v);
-              setUploadForm({ po: v, vendor: po?.vendor ?? uploadForm.vendor, invAmt: String(po?.total ?? ""), poAmt: String(po?.total ?? "") });
-            }}>
+          <FormField label="Purchase order" required>
+            <FormSelect
+              value={uploadForm.po}
+              onChange={(v) => {
+                const po = invoiceablePos.find((p) => p.id === v);
+                setUploadForm({
+                  ...uploadForm,
+                  po: v,
+                  invAmt: String(po?.total ?? ""),
+                });
+              }}
+            >
               <option value="">Select PO</option>
-              {DATA.PURCHASE_ORDERS.map((p) => <option key={p.id} value={p.id}>{p.id} — {p.vendor}</option>)}
+              {invoiceablePos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.id} — {p.vendor} — {fmtINRFull(p.total)}
+                </option>
+              ))}
             </FormSelect>
           </FormField>
-          <FormField label="Vendor">
-            <FormInput value={uploadForm.vendor} onChange={(v) => setUploadForm({ ...uploadForm, vendor: v })} />
-          </FormField>
-          <FormField label="Invoice amount (₹)">
+          <FormField label="Invoice amount (₹)" required>
             <FormInput value={uploadForm.invAmt} onChange={(v) => setUploadForm({ ...uploadForm, invAmt: v })} />
           </FormField>
-          <FormField label="PO amount (₹)">
-            <FormInput value={uploadForm.poAmt} onChange={(v) => setUploadForm({ ...uploadForm, poAmt: v })} />
+          <FormField label="Vendor invoice no.">
+            <FormInput value={uploadForm.vendorInvoiceNo} onChange={(v) => setUploadForm({ ...uploadForm, vendorInvoiceNo: v })} />
+          </FormField>
+          <FormField label="Invoice date">
+            <FormInput type="date" value={uploadForm.invDate} onChange={(v) => setUploadForm({ ...uploadForm, invDate: v })} />
           </FormField>
         </FormGrid>
       </EntityFormModal>
 
-      <Modal open={!!open} onClose={() => setOpen(null)} title={open ? `Verify ${open.id}` : ""} sub={open ? `vs ${open.po} · ${open.vendor}` : ""} wide
+      <Modal open={!!open} onClose={() => setOpen(null)} title={open ? `Verify ${open.id}` : ""} sub={open ? `vs ${open.po} · ${open.vendor} · ${INVOICE_STATUS_LABELS[open.status] ?? open.status}` : ""} wide
         footer={<>
-          <Btn variant="ghost" onClick={() => setOpen(null)} disabled={saving}>Cancel</Btn>
-          <Btn variant="danger" onClick={rejectInvoice} disabled={saving}>Reject</Btn>
-          <Btn variant="primary" onClick={approveInvoice} disabled={saving}>{saving ? "Saving…" : "Approve with diff"}</Btn>
+          <Btn variant="ghost" onClick={() => setOpen(null)} disabled={busy}>Close</Btn>
+          {canInvoiceTransition(open?.status, "resubmit") ? (
+            <Btn variant="primary" onClick={resendInvoice} disabled={busy}>
+              {busy ? "Saving…" : "Vendor resubmitted — send back for verification"}
+            </Btn>
+          ) : null}
+          {canInvoiceTransition(open?.status, "mismatch") ? (
+            <Btn variant="danger" onClick={rejectInvoice} disabled={busy}>Mark mismatch</Btn>
+          ) : null}
+          {canInvoiceTransition(open?.status, "verify") ? (
+            <Btn variant="primary" onClick={approveInvoice} disabled={busy}>
+              {busy ? "Saving…" : "Verify — ready for payment"}
+            </Btn>
+          ) : null}
         </>}>
         {open && (
           <div>
@@ -1191,20 +1290,60 @@ const InvoiceVerify = () => {
                 </div>
               </div>
             </div>
-            {open.status === "mismatch" && (
+            {open.invAmt !== open.poAmt && (
               <div style={{ padding: 12, background: "var(--warning-soft)", border: "1px solid var(--warning)", borderRadius: 8, display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 14 }}>
                 <Icon name="alert" size={16} style={{ color: "var(--warning)", flexShrink: 0, marginTop: 2 }} />
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>Difference detected: {open.reason}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{open.reason}</div>
                   <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
-                    Variance is within 1% tolerance. Approve with note, or contact vendor for revised invoice.
+                    Verify anyway with a note explaining why, or mark it a mismatch
+                    so the vendor corrects and resubmits.
                   </div>
                 </div>
               </div>
             )}
-            <FormField label="Verifier note">
-              <textarea className="input" rows={3} placeholder="Reason for approval/rejection — visible in audit log…" value={verifierNote} onChange={(e) => setVerifierNote(e.target.value)} />
-            </FormField>
+            {open.status === "mismatch" && open.mismatchNote ? (
+              <div style={{ padding: 12, background: "var(--danger-soft)", border: "1px solid var(--danger)", borderRadius: 8, marginBottom: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Sent back to vendor</div>
+                <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
+                  {open.mismatchNote}
+                </div>
+              </div>
+            ) : null}
+            {canInvoiceTransition(open.status, "verify") || canInvoiceTransition(open.status, "resubmit") ? (
+              <FormField
+                label={
+                  canInvoiceTransition(open.status, "resubmit")
+                    ? "Resubmission note"
+                    : "Verifier note (required to mark mismatch)"
+                }
+              >
+                <textarea
+                  className="input"
+                  rows={3}
+                  maxLength={1000}
+                  placeholder="What the vendor must correct — recorded in the invoice history…"
+                  value={verifierNote}
+                  onChange={(e) => setVerifierNote(e.target.value)}
+                />
+              </FormField>
+            ) : null}
+            {open.history?.length ? (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 10, color: "var(--fg-subtle)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, marginBottom: 8 }}>
+                  History {open.revision > 1 ? `· revision ${open.revision}` : ""}
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, color: "var(--fg-muted)" }}>
+                  {open.history.map((h, i) => (
+                    <li key={`${h.action}-${h.at}-${i}`} style={{ marginBottom: 4 }}>
+                      <strong>{h.action}</strong> by {h.byName || h.byEmail || "—"} ·{" "}
+                      {new Date(h.at).toLocaleString("en-IN")}
+                      {h.note ? ` — ${h.note}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {error ? <p style={{ color: "var(--danger)", fontSize: 12 }}>{error}</p> : null}
           </div>
         )}

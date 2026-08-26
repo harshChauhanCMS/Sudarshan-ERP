@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { ok, fail } from "@/lib/api-response";
 import { resolvePermissionsForRole } from "@/lib/resolve-user-permissions";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { getDefaultLandingRoute } from "@/lib/nav-permissions";
 
 export async function POST(request: Request) {
   const ip =
@@ -67,7 +68,9 @@ export async function POST(request: Request) {
 
     return ok({
       user: session.user,
-      next: mustResetPassword ? "/reset-password" : "/select-company",
+      next: mustResetPassword
+        ? "/reset-password"
+        : getDefaultLandingRoute(permissions, user.role),
       mustResetPassword,
       passwordResetDeadline: user.passwordResetDeadline ?? null,
     });

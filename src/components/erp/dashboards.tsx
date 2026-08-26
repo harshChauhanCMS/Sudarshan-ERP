@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Calendar, Popover, Select, Spin } from "antd";
+import { Calendar, DatePicker, Popover, Select, Spin, message } from "antd";
 import {
   AlertOutlined,
   BarChartOutlined,
@@ -15,6 +15,7 @@ import {
   ExclamationCircleOutlined,
   FileExclamationOutlined,
   InboxOutlined,
+  LoadingOutlined,
   MessageOutlined,
   RiseOutlined,
   SendOutlined,
@@ -28,10 +29,20 @@ import dayjs from "dayjs";
 import StatCard, { mapDashStatTone } from "@/components/common/StatCard";
 import { AddDriverModal } from "@/components/dispatch/add-driver-modal";
 import { Icon } from "./icons";
-import { useDATA } from "./data";
+import { useDATA, useErpData } from "./data";
 import { usePackaging } from "@/hooks/use-packaging";
+import { useSpareParts } from "@/hooks/use-spare-parts";
+import { useRawMaterials } from "@/hooks/use-raw-materials";
+import { useOrders } from "@/hooks/use-orders";
+import { useEmployees } from "@/hooks/use-employees";
+import { useFieldVisits } from "@/hooks/use-field-visits";
+import { useCompanies } from "@/hooks/use-companies";
+import { useRevenueData } from "@/hooks/use-revenue-data";
+import { useAttendanceToday } from "@/hooks/use-attendance-today";
+import { useCustomers } from "@/hooks/use-customers";
 import { useOwnerDashboard } from "@/hooks/use-owner-dashboard";
 import { useProductionDashboard } from "@/hooks/use-production-dashboard";
+import { useDispatchDashboard } from "@/hooks/use-dispatch-dashboard";
 import {
   revenueMtdRupees,
   revenueLakhsFromSeries,
@@ -52,7 +63,6 @@ import {
   grossMarginPct,
   grossProfitRupees,
   topCustomerNames,
-  fieldVisitsTodayCount,
   dispatchesForPlant,
 } from "@/lib/erp-stats";
 import { DASHBOARD_AVATARS, OWNER_BANNER_AVATARS, ADMIN_BANNER_AVATARS, bannerAvatarSrc } from "@/lib/dashboard-banner-avatars";
@@ -183,7 +193,12 @@ const DashHead = ({
         {title}
         {dateBadge ?? (
           <Badge tone="default" sq>
-            <Icon name="calendar" size={10} /> May 21, 2026 · Thu
+            <Icon name="calendar" size={10} />{" "}
+            {`${new Date().toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })} · ${new Date().toLocaleDateString("en-US", { weekday: "short" })}`}
           </Badge>
         )}
       </h1>
@@ -558,33 +573,48 @@ const MasterListRow = ({ label, value, pillTone }) => (
   </li>
 );
 
+function fieldVisitsTodayCountFromView(visits) {
+  const todayIso = new Date().toISOString().slice(0, 10);
+  return visits.filter(
+    (v) => v.status === "in-progress" || v.visitDate === todayIso
+  ).length;
+}
+
 /* ============================================================
    MASTER DASHBOARD — group view
    ============================================================ */
 const MasterDashboard = ({ navigate }) => {
   const DATA = useDATA();
+  const { companies } = useCompanies();
   const { items: packagingItems } = usePackaging();
-  const rev = revenueLakhsFromSeries(DATA.REVENUE_DATA);
-  const revenueRupees = revenueMtdRupees(DATA.REVENUE_DATA);
-  const attendance = DATA.ATTENDANCE_TODAY;
+  const { items: spareParts } = useSpareParts();
+  const { items: rawMaterials } = useRawMaterials();
+  const { orders } = useOrders();
+  const { items: employees } = useEmployees();
+  const { visits: fieldVisits } = useFieldVisits();
+  const { revenueData } = useRevenueData();
+  const { attendance } = useAttendanceToday();
+  const { customers } = useCustomers();
+  const rev = revenueLakhsFromSeries(revenueData);
+  const revenueRupees = revenueMtdRupees(revenueData);
   const presentToday =
-    attendance.total > 0 ? attendance.present : DATA.EMPLOYEES.length;
+    attendance.total > 0 ? attendance.present : employees.length;
   const totalEmployees =
-    attendance.total > 0 ? attendance.total : DATA.EMPLOYEES.length;
+    attendance.total > 0 ? attendance.total : employees.length;
   const prodToday = productionDayActual(DATA.PRODUCTION_DATA);
   const prodWeek = productionWeekTotals(DATA.PRODUCTION_DATA);
-  const activeJobs = activeProductionJobs(DATA.ORDERS);
+  const activeJobs = activeProductionJobs(orders);
   const batchCount = Math.max(activeJobs, DATA.PRODUCTION_DATA.length);
   const dispatchesDue = activeDispatches(DATA.DISPATCHES);
-  const overdueDispatches = overdueOpenOrders(DATA.ORDERS);
+  const overdueDispatches = overdueOpenOrders(orders);
   const dispatchCounts = dispatchStatusCounts(DATA.DISPATCHES);
-  const rmLow = lowStockCount(DATA.RAW_MATERIALS);
+  const rmLow = lowStockCount(rawMaterials);
   const packLow = lowStockCount(packagingItems);
-  const spareRisk = lowStockCount(DATA.SPARE_PARTS);
+  const spareRisk = lowStockCount(spareParts);
   const pendingInvoices = pendingInvoiceVerifications(DATA.INVOICES);
   const mineralsDispatch = dispatchesForPlant(DATA.DISPATCHES, "udaipur");
   const micronsDispatch = dispatchesForPlant(DATA.DISPATCHES, "ahmedabad");
-  const fieldToday = fieldVisitsTodayCount(DATA.FIELD_VISITS);
+  const fieldToday = fieldVisitsTodayCountFromView(fieldVisits);
   const grossProfit = grossProfitRupees(revenueRupees);
   const prodTargetToday =
     DATA.PRODUCTION_DATA.length > 0
@@ -595,7 +625,7 @@ const MasterDashboard = ({ navigate }) => {
     prodTargetToday > 0
       ? Math.round((prodToday / prodTargetToday) * 100)
       : null;
-  const lowRmNames = DATA.RAW_MATERIALS.filter(
+  const lowRmNames = rawMaterials.filter(
     (r) => r.status === "low" || r.status === "critical",
   )
     .slice(0, 3)
@@ -710,7 +740,7 @@ const MasterDashboard = ({ navigate }) => {
             />
             <MasterListRow
               label="Key customers"
-              value={topCustomerNames(DATA.CUSTOMERS)}
+              value={topCustomerNames(customers)}
             />
           </MasterListCard>
         </div>
@@ -719,11 +749,11 @@ const MasterDashboard = ({ navigate }) => {
         <div className="master-two-col">
           <MasterListCard title="Company overview">
             <MasterListRow
-              label={DATA.COMPANIES[0]?.name ?? "Sudarshan Minerals"}
+              label={companies[0]?.name ?? "Sudarshan Minerals"}
               value={`Sales: ${formatLakhs(rev.smi)} · Dispatches today: ${mineralsDispatch.due} · RM alerts: ${rmLow}`}
             />
             <MasterListRow
-              label={DATA.COMPANIES[1]?.name ?? "Sudarshan Microns"}
+              label={companies[1]?.name ?? "Sudarshan Microns"}
               value={`Sales: ${formatLakhs(rev.smic)} · Dispatches today: ${micronsDispatch.due} · Overdue: ${micronsDispatch.overdue}`}
             />
           </MasterListCard>
@@ -733,7 +763,7 @@ const MasterDashboard = ({ navigate }) => {
           >
             <MasterListRow
               label="Total users"
-              value={String(DATA.EMPLOYEES.length)}
+              value={String(employees.length)}
             />
             <MasterListRow label="Present today" value={String(presentToday)} />
             <MasterListRow
@@ -839,8 +869,8 @@ const MasterDashboard = ({ navigate }) => {
             />
             <MasterListRow
               label="Key visits"
-              value={DATA.FIELD_VISITS.slice(0, 6)
-                .map((v) => v.customer.split(" ")[0])
+              value={fieldVisits.slice(0, 6)
+                .map((v) => v.partyName.split(" ")[0])
                 .join(", ")}
             />
           </MasterListCard>
@@ -856,7 +886,7 @@ const MasterDashboard = ({ navigate }) => {
             />
             <MasterListRow
               label="Top customers (MTD)"
-              value={topCustomerNames(DATA.CUSTOMERS)}
+              value={topCustomerNames(customers)}
             />
           </MasterListCard>
         </div>
@@ -935,15 +965,32 @@ const AdminWidget = ({ title, icon, badge, children }) => (
 
 const AdminDashboard = ({ navigate }) => {
   const DATA = useDATA();
+  const { refresh: refreshErp } = useErpData();
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshErp();
+      message.success("Refreshed");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+  const { companies } = useCompanies();
   const { items: packagingItems } = usePackaging();
-  const attendance = DATA.ATTENDANCE_TODAY;
+  const { items: spareParts } = useSpareParts();
+  const { items: rawMaterials } = useRawMaterials();
+  const { orders } = useOrders();
+  const { items: employees } = useEmployees();
+  const { visits: fieldVisits } = useFieldVisits();
+  const { attendance } = useAttendanceToday();
   const totalUsers =
-    attendance.total > 0 ? attendance.total : DATA.EMPLOYEES.length;
+    attendance.total > 0 ? attendance.total : employees.length;
   const presentToday =
-    attendance.total > 0 ? attendance.present : DATA.EMPLOYEES.length;
-  const rmLow = lowStockCount(DATA.RAW_MATERIALS);
+    attendance.total > 0 ? attendance.present : employees.length;
+  const rmLow = lowStockCount(rawMaterials);
   const packLow = lowStockCount(packagingItems);
-  const spareLow = lowStockCount(DATA.SPARE_PARTS);
+  const spareLow = lowStockCount(spareParts);
   const lowStockTotal = rmLow + packLow + spareLow;
   const pendingInvoices = pendingInvoiceVerifications(DATA.INVOICES);
   const mismatchInvoices = useMemo(
@@ -954,12 +1001,12 @@ const AdminDashboard = ({ navigate }) => {
     (s, i) => s + (Number(i.invAmt) || 0),
     0,
   );
-  const dispatchDelays = overdueOpenOrders(DATA.ORDERS);
+  const dispatchDelays = overdueOpenOrders(orders);
   const mineralsDispatch = dispatchesForPlant(DATA.DISPATCHES, "udaipur");
   const micronsDispatch = dispatchesForPlant(DATA.DISPATCHES, "ahmedabad");
   const waTasks = pendingPoCount(DATA.PURCHASE_ORDERS);
 
-  const lowRmLabels = DATA.RAW_MATERIALS.filter(
+  const lowRmLabels = rawMaterials.filter(
     (r) => r.status === "low" || r.status === "critical",
   )
     .slice(0, 3)
@@ -970,7 +1017,7 @@ const AdminDashboard = ({ navigate }) => {
     .slice(0, 2)
     .map((p) => p.name.split(" · ")[0])
     .join(", ");
-  const lowSpareLabels = DATA.SPARE_PARTS.filter(
+  const lowSpareLabels = spareParts.filter(
     (s) => s.status === "low" || s.status === "critical",
   )
     .slice(0, 2)
@@ -1068,13 +1115,13 @@ const AdminDashboard = ({ navigate }) => {
         when: dsp.lastUpdate,
       });
     }
-    const emp = DATA.EMPLOYEES[1];
+    const emp = employees[1];
     if (emp) {
       rows.push({
-        key: emp.id,
+        key: emp.employeeId,
         type: "User",
         tone: "default",
-        record: `${emp.name} — Role: ${emp.role}`,
+        record: `${emp.fullName} — Role: ${emp.designation}`,
         by: "System",
         when: "May 21, 08:55",
       });
@@ -1091,7 +1138,7 @@ const AdminDashboard = ({ navigate }) => {
         when: inv.invDate,
       });
     }
-    const order = DATA.ORDERS[0];
+    const order = orders[0];
     if (order) {
       rows.push({
         key: order.id,
@@ -1111,34 +1158,52 @@ const AdminDashboard = ({ navigate }) => {
       when: "May 21, 15:30",
     });
     return rows;
-  }, [DATA]);
+  }, [DATA, orders, employees]);
 
   const fieldAlerts = useMemo(() => {
-    const fromVisits = DATA.FIELD_VISITS.slice(0, 2).map((v) => ({
-      icon: "pin",
-      tone: "primary",
-      text: (
-        <>
-          <strong>{v.rep}</strong> —{" "}
-          {v.status === "completed" ? "Visit logged" : "Check-in"} at{" "}
-          {v.customer}. {v.ts}.
-        </>
-      ),
-    }));
-    return [
-      ...fromVisits,
-      {
-        icon: "alert",
-        tone: "danger",
+    const alerts = [];
+    // Show latest completed visits
+    const completed = fieldVisits
+      .filter((v) => v.status === "completed")
+      .slice(0, 3);
+    for (const v of completed) {
+      alerts.push({
+        icon: "check",
+        tone: "success",
         text: (
           <>
-            <strong>Lotus Herbals</strong> — Follow-up not yet logged. Due May
-            22. Escalate?
+            <strong>{v.assignedEmployeeName}</strong> — Visit completed at{" "}
+            {v.partyName}.{v.completedAt ? ` ${new Date(v.completedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })}` : ""}
           </>
         ),
-      },
-    ];
-  }, [DATA.FIELD_VISITS]);
+      });
+    }
+    // Show not-completed visits (pending, accepted, in-progress)
+    const notCompleted = fieldVisits
+      .filter((v) => v.status === "pending" || v.status === "accepted" || v.status === "in-progress")
+      .slice(0, 3);
+    for (const v of notCompleted) {
+      const statusLabel = v.status === "in-progress" ? "In progress" : v.status === "accepted" ? "Accepted" : "Pending";
+      alerts.push({
+        icon: v.status === "in-progress" ? "pin" : "alert",
+        tone: v.status === "in-progress" ? "primary" : "warning",
+        text: (
+          <>
+            <strong>{v.assignedEmployeeName}</strong> — {statusLabel} visit at{" "}
+            {v.partyName}.{v.startTime ? ` Scheduled ${v.startTime}.` : ""}
+          </>
+        ),
+      });
+    }
+    if (alerts.length === 0) {
+      alerts.push({
+        icon: "check",
+        tone: "default",
+        text: <span className="muted">No field visits recorded today.</span>,
+      });
+    }
+    return alerts;
+  }, [fieldVisits]);
 
   const dispatchDelayAlerts = useMemo(() => {
     const alerts = DATA.DISPATCHES.filter(
@@ -1171,15 +1236,35 @@ const AdminDashboard = ({ navigate }) => {
     return alerts;
   }, [DATA.DISPATCHES, dispatchDelays]);
 
-  const ordersWeekData = [
-    { day: "Mon", orders: 8 },
-    { day: "Tue", orders: 12 },
-    { day: "Wed", orders: 10 },
-    { day: "Thu", orders: 15 },
-    { day: "Fri", orders: 13 },
-    { day: "Sat", orders: 7 },
-    { day: "Sun", orders: 4 },
-  ];
+  const ordersWeekData = useMemo(() => {
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    // Build a map of ISO day -> count
+    const dayCounts = new Map();
+    // Initialize the last 7 days with 0
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      dayCounts.set(key, { day: dayNames[d.getDay()], orders: 0 });
+    }
+    // Count orders by date
+    for (const o of orders) {
+      // Try orderDate first (ISO "YYYY-MM-DD"), then fall back to due ("May 24")
+      let dateStr = o.orderDate;
+      if (!dateStr && o.due) {
+        dateStr = o.due + ", " + currentYear;
+      }
+      if (!dateStr) continue;
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) continue;
+      const key = d.toISOString().slice(0, 10);
+      const entry = dayCounts.get(key);
+      if (entry) entry.orders += 1;
+    }
+    return [...dayCounts.values()];
+  }, [orders]);
 
   return (
     <div className="admin-dash">
@@ -1187,8 +1272,14 @@ const AdminDashboard = ({ navigate }) => {
         title="Admin Dashboard"
         sub="Overview for current company — access, alerts, invoices, field & operations"
       >
-        <Btn icon="refresh" size="sm">
-          Refresh
+        <Btn
+          icon={refreshing ? undefined : "refresh"}
+          size="sm"
+          disabled={refreshing}
+          style={{ background: "#e8a903", borderColor: "#e8a903", color: "#1a1a1a" }}
+          onClick={() => void handleRefresh()}
+        >
+          {refreshing ? <LoadingOutlined spin /> : null} {refreshing ? "Refreshing…" : "Refresh"}
         </Btn>
       </DashHead>
 
@@ -1196,14 +1287,14 @@ const AdminDashboard = ({ navigate }) => {
 
       <AdminEyebrow>Current company</AdminEyebrow>
       <div className="admin-company-overview">
-        {DATA.COMPANIES[0] ? (
+        {companies[0] ? (
           <AdminCompanyCard
-            company={DATA.COMPANIES[0]}
+            company={companies[0]}
             accent="primary"
             metrics={[
               {
                 label: "Active users",
-                value: DATA.COMPANIES[0].employees ?? "—",
+                value: companies[0].employees ?? "—",
               },
               {
                 label: "RM alerts",
@@ -1215,14 +1306,14 @@ const AdminDashboard = ({ navigate }) => {
             ]}
           />
         ) : null}
-        {DATA.COMPANIES[1] ? (
+        {companies[1] ? (
           <AdminCompanyCard
-            company={DATA.COMPANIES[1]}
+            company={companies[1]}
             accent="gold"
             metrics={[
               {
                 label: "Active users",
-                value: DATA.COMPANIES[1].employees ?? "—",
+                value: companies[1].employees ?? "—",
               },
               {
                 label: "Pack alerts",
@@ -1305,43 +1396,7 @@ const AdminDashboard = ({ navigate }) => {
         </Btn>
       </div>
 
-      <div className="admin-dash-grid">
-        <AdminWidget
-          title="User access issues"
-          icon="shield"
-          badge={<Badge tone="warning">3</Badge>}
-        >
-          <ul className="admin-issue-list">
-            <li>
-              <span className="admin-issue-list__icon danger">
-                <Icon name="user" size={13} />
-              </span>
-              <div>
-                <strong>Arun Nair</strong> — account disabled. Last login 28
-                Feb. Re-enable or archive.
-              </div>
-            </li>
-            <li>
-              <span className="admin-issue-list__icon warning">
-                <Icon name="shield" size={13} />
-              </span>
-              <div>
-                <strong>Kiran Desai</strong> — password reset requested. Pending
-                since 8 Mar.
-              </div>
-            </li>
-            <li>
-              <span className="admin-issue-list__icon warning">
-                <Icon name="check" size={13} />
-              </span>
-              <div>
-                <strong>2 new users</strong> — awaiting role assignment (Stores,
-                Microns).
-              </div>
-            </li>
-          </ul>
-        </AdminWidget>
-
+      <div className="admin-dash-grid admin-dash-grid--two">
         <AdminWidget title="Low stock alerts by module" icon="box">
           <div className="admin-alert-mod-section">
             <div className="admin-alert-mod-title">
@@ -1443,13 +1498,21 @@ const AdminDashboard = ({ navigate }) => {
             </div>
             <div className="admin-attendance-box field">
               <div className="admin-attendance-box__n">
-                {attendance.onField || fieldVisitsTodayCount(DATA.FIELD_VISITS)}
+                {attendance.onField || fieldVisitsTodayCountFromView(fieldVisits)}
               </div>
               <div className="admin-attendance-box__l">In field</div>
             </div>
           </div>
           <p className="admin-widget-footnote">
-            Of {totalUsers} users · Both companies. Marked as of May 21, 10:00.
+            Of {totalUsers} users · Both companies. Marked as of{" "}
+            {new Date().toLocaleString("en-IN", {
+              day: "2-digit",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+            })}
+            .
           </p>
         </AdminWidget>
 
@@ -1906,38 +1969,75 @@ const OwnerDispatchDonut = ({ due, overdue }) => {
 
 const OwnerDashboard = ({ navigate }) => {
   const [dashboardDate, setDashboardDate] = useState(() => dayjs());
-  const { data, loading, error } = useOwnerDashboard({
+  const { data, loading, error, reload } = useOwnerDashboard({
     year: dashboardDate.year(),
     month: dashboardDate.month() + 1,
     day: dashboardDate.date(),
   });
+  const handleRefresh = async () => {
+    const ok = await reload();
+    if (ok) message.success("Refreshed");
+  };
 
-  if (loading) {
-    return (
-      <div
-        className="owner-dash"
-        style={{ display: "flex", justifyContent: "center", padding: "4rem 0" }}
+  const header = (
+    <>
+      <DashHead
+        title="Owner Dashboard"
+        sub={data?.subtitle ?? (loading ? "Loading…" : "Unable to load dashboard data")}
+        dateBadge={
+          <OwnerHoverCalendar
+            value={dashboardDate}
+            onChange={setDashboardDate}
+          >
+            <Badge tone="default" sq className="owner-dash-date-badge">
+              <Icon name="calendar" size={10} />{" "}
+              {dashboardDate.format("MMM D, YYYY")} · {dashboardDate.format("ddd")}
+            </Badge>
+          </OwnerHoverCalendar>
+        }
       >
-        <Spin size="large" />
-      </div>
-    );
-  }
+        <Btn
+          icon={loading ? undefined : "refresh"}
+          size="sm"
+          disabled={loading}
+          style={{ background: "#e8a903", borderColor: "#e8a903", color: "#1a1a1a" }}
+          onClick={() => void handleRefresh()}
+        >
+          {loading ? <LoadingOutlined spin /> : null} {loading ? "Refreshing…" : "Refresh"}
+        </Btn>
+        <OwnerHoverCalendar value={dashboardDate} onChange={setDashboardDate}>
+          <Btn icon="calendar" size="sm" type="button">
+            {dashboardDate.format("MMM YYYY")}
+          </Btn>
+        </OwnerHoverCalendar>
+        <Btn icon="download" size="sm">
+          Export PDF
+        </Btn>
+      </DashHead>
+      <DashboardBannerCarousel slides={OWNER_BANNER_SLIDES} navigate={navigate} />
+    </>
+  );
 
-  if (error || !data) {
+  if (!data) {
     return (
       <div className="owner-dash">
-        <DashHead title="Owner Dashboard" sub="Unable to load dashboard data" />
-        <div className="card" style={{ padding: 24 }}>
-          <p style={{ color: "var(--danger)", margin: 0 }}>
-            {error ?? "No data available"}
-          </p>
-        </div>
+        {header}
+        {loading ? (
+          <div style={{ display: "grid", placeItems: "center", minHeight: 320, padding: 24 }}>
+            <Spin size="large" description="Loading owner dashboard…" />
+          </div>
+        ) : (
+          <div className="card" style={{ padding: 24 }}>
+            <p style={{ color: "var(--danger)", margin: 0 }}>
+              {error ?? "No data available"}
+            </p>
+          </div>
+        )}
       </div>
     );
   }
 
   const {
-    subtitle,
     companyTiles,
     stats,
     counts,
@@ -1987,32 +2087,7 @@ const OwnerDashboard = ({ navigate }) => {
 
   return (
     <div className="owner-dash">
-      <DashHead
-        title="Owner Dashboard"
-        sub={subtitle}
-        dateBadge={
-          <OwnerHoverCalendar
-            value={dashboardDate}
-            onChange={setDashboardDate}
-          >
-            <Badge tone="default" sq className="owner-dash-date-badge">
-              <Icon name="calendar" size={10} />{" "}
-              {dashboardDate.format("MMM D, YYYY")} · {dashboardDate.format("ddd")}
-            </Badge>
-          </OwnerHoverCalendar>
-        }
-      >
-        <OwnerHoverCalendar value={dashboardDate} onChange={setDashboardDate}>
-          <Btn icon="calendar" size="sm" type="button">
-            {dashboardDate.format("MMM YYYY")}
-          </Btn>
-        </OwnerHoverCalendar>
-        <Btn icon="download" size="sm">
-          Export PDF
-        </Btn>
-      </DashHead>
-
-      <DashboardBannerCarousel slides={OWNER_BANNER_SLIDES} navigate={navigate} />
+      {header}
 
       <OwnerEyebrow>Company summary</OwnerEyebrow>
       <div className="owner-company-switch">
@@ -2209,31 +2284,7 @@ const OwnerDashboard = ({ navigate }) => {
         </OwnerWidget>
       </div>
 
-      <div className="owner-dash-grid owner-dash-grid--dispatch">
-        <OwnerWidget
-          title="Vendor price change alerts"
-          icon="money"
-          titleHref="/procurement/vendors"
-          navigate={navigate}
-          badge={
-            counts.vendorPriceAlerts > 0 ? (
-              <Badge tone="warning">{counts.vendorPriceAlerts}</Badge>
-            ) : null
-          }
-          theme={OWNER_CHART_THEMES.vendor.container}
-        >
-          <p className="owner-chart-caption">
-            Recent vendor quote changes (% vs last order)
-          </p>
-          <OwnerVendorPriceChart
-            items={vendorPriceAlerts}
-            navigate={navigate}
-          />
-          <p className="owner-widget-footnote">
-            Review margin impact. Both companies.
-          </p>
-        </OwnerWidget>
-
+      <div className="owner-dash-grid owner-dash-grid--single">
         <OwnerWidget
           title="Dispatch due & overdue summary"
           icon="truck"
@@ -2290,7 +2341,7 @@ const OwnerDashboard = ({ navigate }) => {
         </OwnerWidget>
       </div>
 
-      <div className="owner-dash-grid">
+      <div className="owner-dash-grid owner-dash-grid--two">
         <OwnerWidget
           title="Production overview"
           icon="factory"
@@ -2383,42 +2434,6 @@ const OwnerDashboard = ({ navigate }) => {
           {fieldVisits[0]?.key !== "none" ? (
             <p className="owner-widget-footnote">
               Live from today&apos;s field visit assignments (IST).
-            </p>
-          ) : null}
-        </OwnerWidget>
-
-        <OwnerWidget
-          title="Employees in field today"
-          icon="users"
-          titleHref="/field-sales/activity-dashboard"
-          navigate={navigate}
-        >
-          <ul className="owner-employees-field">
-            {employeesInField.map((e) => (
-              <li key={e.key}>
-                <OwnerNavButton
-                  navigate={navigate}
-                  href={e.href}
-                  className="owner-employees-field__row"
-                  disabled={e.key === "none" || e.key.startsWith("extra-")}
-                >
-                  <span className="owner-employees-field__avatar">
-                    {e.name
-                      .split(" ")
-                      .map((p) => p[0])
-                      .join("")
-                      .slice(0, 2)}
-                  </span>
-                  <span>{e.name}</span>
-                  <span className="owner-employees-field__role">{e.role}</span>
-                </OwnerNavButton>
-              </li>
-            ))}
-          </ul>
-          {employeesInField[0]?.key !== "none" ? (
-            <p className="owner-widget-footnote">
-              Live from mobile field punch-in with GPS. Hidden after punch-out
-              today.
             </p>
           ) : null}
         </OwnerWidget>
@@ -2668,26 +2683,51 @@ function rmAvailLabel(stock, unit, status) {
 const ProductionDashboard = ({ navigate }) => {
   const { data, loading, error, reload } = useProductionDashboard();
 
-  if (loading) {
-    return (
-      <div
-        className="prod-dash"
-        style={{ display: "flex", justifyContent: "center", padding: "4rem 0" }}
-      >
-        <Spin size="large" />
-      </div>
-    );
-  }
+  const handleRefresh = async () => {
+    const ok = await reload();
+    if (ok) message.success("Refreshed");
+  };
 
-  if (error || !data) {
+  const header = (
+    <DashHead
+      title="Production Dashboard"
+      sub="Targets, active jobs, consumption, packaging & machines"
+    >
+      <Btn
+        icon={loading ? undefined : "refresh"}
+        size="sm"
+        disabled={loading}
+        style={{ background: "#e8a903", borderColor: "#e8a903", color: "#1a1a1a" }}
+        onClick={() => void handleRefresh()}
+      >
+        {loading ? <LoadingOutlined spin /> : null} {loading ? "Refreshing…" : "Refresh"}
+      </Btn>
+      <Btn
+        variant="primary"
+        size="sm"
+        icon="plus"
+        onClick={() => navigate && navigate("/orders/add")}
+      >
+        Plan batch
+      </Btn>
+    </DashHead>
+  );
+
+  if (!data) {
     return (
       <div className="prod-dash">
-        <DashHead title="Production Dashboard" sub="Unable to load dashboard data" />
-        <div className="card" style={{ padding: 24 }}>
-          <p style={{ color: "var(--danger)", margin: 0 }}>
-            {error ?? "No data available"}
-          </p>
-        </div>
+        {header}
+        {loading ? (
+          <div style={{ display: "grid", placeItems: "center", minHeight: 320, padding: 24 }}>
+            <Spin size="large" description="Loading production dashboard…" />
+          </div>
+        ) : (
+          <div className="card" style={{ padding: 24 }}>
+            <p style={{ color: "var(--danger)", margin: 0 }}>
+              {error ?? "No data available"}
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -2707,22 +2747,7 @@ const ProductionDashboard = ({ navigate }) => {
 
   return (
     <div className="prod-dash">
-      <DashHead
-        title="Production Dashboard"
-        sub="Targets, active jobs, consumption, packaging & machines"
-      >
-        <Btn icon="refresh" size="sm" onClick={() => reload(true)}>
-          Refresh
-        </Btn>
-        <Btn
-          variant="primary"
-          size="sm"
-          icon="plus"
-          onClick={() => navigate && navigate("/orders/add")}
-        >
-          Plan batch
-        </Btn>
-      </DashHead>
+      {header}
 
       <div className="prod-dash-stats">
         <ProdStatCard
@@ -3116,13 +3141,20 @@ const ProductionDashboard = ({ navigate }) => {
 /* ============================================================
    DISPATCH DASHBOARD
    ============================================================ */
-const DispStatCard = ({ label, value, tone = "default", icon }) => (
-  <StatCard
-    icon={icon}
-    label={label}
-    value={value}
-    hintTone={mapDashStatTone(tone)}
-  />
+const DispStatCard = ({ label, value, tone = "default", icon, navigate, href }) => (
+  <OwnerNavButton
+    navigate={navigate}
+    href={href}
+    className="owner-stat-card--nav"
+  >
+    <StatCard
+      icon={icon}
+      label={label}
+      value={value}
+      hintTone={mapDashStatTone(tone)}
+      className={href ? "sc-card--nav" : ""}
+    />
+  </OwnerNavButton>
 );
 
 const DispWidget = ({
@@ -3134,14 +3166,21 @@ const DispWidget = ({
   footnote,
   theme = "",
   wide = false,
+  titleHref,
+  navigate,
 }) => (
   <div
     className={`disp-dash-widget ${wide ? "disp-dash-widget--wide" : ""} ${theme}`.trim()}
   >
     <div className="disp-dash-widget__head">
-      <span className="disp-dash-widget__title">
+      <OwnerNavButton
+        navigate={navigate}
+        href={titleHref}
+        className="disp-dash-widget__title owner-dash-nav--inline"
+        disabled={!titleHref}
+      >
         {icon ? <Icon name={icon} size={14} /> : null} {title}
-      </span>
+      </OwnerNavButton>
       {badge}
       {meta}
     </div>
@@ -3157,6 +3196,34 @@ const DispWidget = ({
 const DispEyebrow = ({ children }) => (
   <div className="disp-dash-eyebrow">{children}</div>
 );
+
+/**
+ * Every dashboard row carries the record it came from, so it can open that
+ * record's own page: a planned dispatch goes to /dispatch/[id], an order with
+ * no dispatch yet goes to /orders/[id]. Returns null when neither id is
+ * present, which leaves the row rendered as plain text.
+ */
+const dispRowHref = (row) => {
+  if (row?.dispatchId) return `/dispatch/${encodeURIComponent(row.dispatchId)}`;
+  if (row?.orderId) return `/orders/${encodeURIComponent(row.orderId)}`;
+  return null;
+};
+
+/** List row that navigates to `href`, or renders inert when there isn't one. */
+const DispNavRow = ({ href, navigate, className = "", children }) => {
+  if (!href || !navigate) return <li className={className}>{children}</li>;
+  return (
+    <li className={`${className} disp-dash-row--nav`.trim()}>
+      <button
+        type="button"
+        className="disp-dash-row__btn"
+        onClick={() => navigate(href)}
+      >
+        {children}
+      </button>
+    </li>
+  );
+};
 
 const DISPATCH_CHART_THEMES = {
   calendar: {
@@ -3203,290 +3270,17 @@ const dispChartLegend = (theme, labels) =>
     color: theme.colors[i % theme.colors.length],
   }));
 
-const dispShortCustomer = (name) => {
-  const parts = name.split(/\s+/);
-  if (parts.length <= 2) return name;
-  return `${parts[0]} ${parts[1]}`;
-};
-
 const dispChartTooltip = {
   count: ({ label, value }) => `${label}: ${value}`,
   mt: ({ label, value }) => `${label}: ${value} MT`,
   dispatches: ({ label, value }) =>
-    `${label} Mar: ${value} dispatch${value === 1 ? "" : "es"}`,
+    `Day ${label}: ${value} dispatch${value === 1 ? "" : "es"}`,
 };
 
-const DISPATCH_DUE_TODAY = [
-  { label: "Asian Paints — 12 MT Talc", co: "minerals" },
-  { label: "ITC Paperboards — 15 MT Kaolin", co: "minerals" },
-  { label: "Berger Paints — 8 MT CaCO₃", co: "minerals" },
-  { label: "HUL — 20 MT Detergent base", co: "minerals" },
-  { label: "Nirma — 20 MT Detergent", co: "minerals" },
-  { label: "Lotus Herbals — 3 MT Cosmetic", co: "minerals" },
-  { label: "Cosmic Minerals — 6 MT Barytes", co: "microns" },
-  { label: "Prime Fillers — 4 MT Dolomite", co: "microns" },
-  { label: "Jaipur Paints — 5 MT Talc", co: "minerals" },
-];
-
-const OVERDUE_DISPATCHES = [
-  {
-    text: "HUL — 20 MT Due 8 Mar. Vehicle assigned 14:00 slot.",
-    co: "minerals",
-  },
-  {
-    text: "Lotus Herbals — 3 MT Due 7 Mar. Pending packaging.",
-    co: "minerals",
-  },
-];
-
-const PACK_PENDING = [
-  {
-    id: "DP-2025-097",
-    text: "Lotus Herbals — 3 MT Cosmetic. Laminated pouches 1 kg short. ETA 10 Mar.",
-  },
-  {
-    id: "DP-2025-098",
-    text: "Nirma — 20 MT. HDPE 50 kg bags delayed from vendor. Expected tomorrow.",
-  },
-];
-
-const DELAY_REASONS = [
-  { n: 1, l: "Vehicle / en-route delay" },
-  { n: 2, l: "Packaging shortage" },
-  { n: 0, l: "Loading delay" },
-  { n: 0, l: "Customer reschedule" },
-];
-
-const TRACKING_ROWS = [
-  { reg: "GJ-01-AB-1234", status: "Loading — Asian Paints" },
-  { reg: "GJ-02-CD-5678", status: "In transit — ITC (ETA 14:30)" },
-  { reg: "GJ-07-EF-9012", status: "In transit — Berger" },
-  { reg: "MH-12-GH-3456", status: "Ready — HUL 14:00" },
-  { reg: "RJ-14-JK-7890", status: "Ready — Cosmic (Microns)" },
-];
-
-const DRIVER_TRACKING = [
-  {
-    reg: "GJ-02-CD-5678",
-    tone: "transit",
-    title: "Kiran S. · ITC — 15 MT Kaolin",
-    meta: "Last update: 10:42 · NH-48, ~45 km from plant. ETA 14:30",
-  },
-  {
-    reg: "GJ-07-EF-9012",
-    tone: "transit",
-    title: "Vijay M. · Berger — 8 MT CaCO₃",
-    meta: "Last update: 09:15 · At customer gate. Awaiting unload",
-  },
-  {
-    reg: "GJ-01-AB-1234",
-    tone: "loading",
-    title: "Ramesh P. · Asian Paints — 12 MT Talc",
-    meta: "Last update: 09:00 · Loading bay #2. Est. departure 09:45",
-  },
-];
-
-const DUE_ORDERS_TODAY = [
-  {
-    id: "DP-2025-095",
-    customer: "Asian Paints Ltd",
-    product: "Talc 400M",
-    qty: "12 MT",
-    vehicle: "GJ-01-AB-1234",
-    slot: "09:00",
-    status: "Loading",
-    tone: "warning",
-  },
-  {
-    id: "DP-2025-094",
-    customer: "ITC Paperboards",
-    product: "Kaolin 200M",
-    qty: "15 MT",
-    vehicle: "GJ-02-CD-5678",
-    slot: "10:30",
-    status: "Delayed",
-    tone: "warning",
-  },
-  {
-    id: "DP-2025-093",
-    customer: "Berger Paints",
-    product: "CaCO₃ 300M",
-    qty: "8 MT",
-    vehicle: "GJ-07-EF-9012",
-    slot: "12:00",
-    status: "In transit",
-    tone: "info",
-  },
-  {
-    id: "DP-2025-096",
-    customer: "Hindustan Unilever",
-    product: "Detergent base",
-    qty: "20 MT",
-    vehicle: "MH-12-GH-3456",
-    slot: "14:00",
-    status: "Ready",
-    tone: "success",
-  },
-  {
-    id: "DP-2025-097",
-    customer: "Lotus Herbals",
-    product: "Talc Cosmetic",
-    qty: "3 MT",
-    vehicle: "—",
-    slot: "—",
-    status: "Packaging",
-    tone: "warning",
-  },
-  {
-    id: "DP-2025-099",
-    customer: "Cosmic Minerals",
-    product: "Barytes 200M",
-    qty: "6 MT",
-    vehicle: "RJ-14-JK-7890",
-    slot: "11:00",
-    status: "Ready",
-    tone: "success",
-  },
-];
-
-const VEHICLE_ASSIGNMENTS = [
-  {
-    reg: "GJ-01-AB-1234",
-    driver: "Ramesh P. · Asian Paints — 12 MT Talc",
-    status: "Loading",
-    tone: "loading",
-  },
-  {
-    reg: "GJ-02-CD-5678",
-    driver: "Kiran S. · ITC — 15 MT Kaolin",
-    status: "In transit",
-    tone: "transit",
-  },
-  {
-    reg: "GJ-07-EF-9012",
-    driver: "Vijay M. · Berger — 8 MT CaCO₃",
-    status: "In transit",
-    tone: "transit",
-  },
-  {
-    reg: "MH-12-GH-3456",
-    driver: "Anil K. · HUL — 20 MT (slot 14:00)",
-    status: "Ready",
-    tone: "ready",
-  },
-  {
-    reg: "RJ-14-JK-7890",
-    driver: "Suresh R. · Cosmic — 6 MT Barytes (Microns)",
-    status: "Ready",
-    tone: "ready",
-  },
-];
-
-const CUST_DISPATCH_SUMMARY = [
-  {
-    customer: "Asian Paints Ltd",
-    due: 1,
-    mt: 12,
-    dispatched: 0,
-    pending: 1,
-    status: "Loading",
-    tone: "warning",
-  },
-  {
-    customer: "ITC Paperboards",
-    due: 1,
-    mt: 15,
-    dispatched: 0,
-    pending: 1,
-    status: "Delayed",
-    tone: "warning",
-  },
-  {
-    customer: "Berger Paints India",
-    due: 1,
-    mt: 8,
-    dispatched: 0,
-    pending: 1,
-    status: "In transit",
-    tone: "info",
-  },
-  {
-    customer: "Hindustan Unilever Ltd",
-    due: 1,
-    mt: 20,
-    dispatched: 0,
-    pending: 1,
-    status: "Ready",
-    tone: "success",
-  },
-  {
-    customer: "Lotus Herbals Pvt Ltd",
-    due: 1,
-    mt: 3,
-    dispatched: 0,
-    pending: 1,
-    status: "Packaging",
-    tone: "warning",
-  },
-  {
-    customer: "Cosmic Minerals",
-    due: 1,
-    mt: 6,
-    dispatched: 0,
-    pending: 1,
-    status: "Ready",
-    tone: "success",
-  },
-  {
-    customer: "Nirma Ltd",
-    due: 0,
-    mt: 0,
-    dispatched: 1,
-    pending: 0,
-    status: "Delivered",
-    tone: "success",
-  },
-];
-
-const CALENDAR_DAYS = [
-  1,
-  2,
-  3,
-  4,
-  5,
-  6,
-  7,
-  8,
-  { day: 9, today: true, count: "9 due" },
-  { day: 10, dispatch: true, count: "6" },
-  { day: 11, dispatch: true, count: "5" },
-  12,
-  13,
-  14,
-  15,
-  16,
-  17,
-  18,
-  19,
-  20,
-  21,
-  22,
-  23,
-  24,
-  25,
-  26,
-  27,
-  28,
-  29,
-  30,
-  31,
-];
-
-function CoTag({ co }) {
+/** Plant chip. `alt` styles the secondary company; labels come from the API. */
+function CoTag({ label, alt }) {
   return (
-    <span className={`disp-dash-tag ${co === "microns" ? "microns" : ""}`}>
-      {co === "microns" ? "Microns" : "Minerals"}
-    </span>
+    <span className={`disp-dash-tag ${alt ? "microns" : ""}`}>{label}</span>
   );
 }
 
@@ -3501,8 +3295,13 @@ const DISPATCH_MAP_VEHICLE_COLORS = {
   ready: { bg: "#16a34a", ring: "rgba(22, 163, 74, 0.24)" },
 };
 
-const buildDispatchMapVehicles = () =>
-  VEHICLE_ASSIGNMENTS.map((vehicle, index) => ({
+/**
+ * Preview-only scatter. `Dispatch.lastLocation` is real lat/lng, but this
+ * decorative map has no projection — positions are derived from the plate so
+ * they stay stable per vehicle. Real positions live in the /dispatch map.
+ */
+const buildDispatchMapVehicles = (assignments) =>
+  assignments.map((vehicle, index) => ({
     reg: vehicle.reg,
     status: vehicle.status,
     tone: vehicle.tone,
@@ -3510,8 +3309,11 @@ const buildDispatchMapVehicles = () =>
     y: 14 + ((index * 17 + vehicle.reg.charCodeAt(vehicle.reg.length - 2)) % 72),
   }));
 
-const DispatchFleetMapPreview = () => {
-  const vehicles = useMemo(() => buildDispatchMapVehicles(), []);
+const DispatchFleetMapPreview = ({ assignments = [] }) => {
+  const vehicles = useMemo(
+    () => buildDispatchMapVehicles(assignments),
+    [assignments]
+  );
 
   return (
     <div className="disp-dash-map-preview">
@@ -3597,117 +3399,211 @@ const DispatchFleetMapPreview = () => {
   );
 };
 
-const DispatchMapHoverButton = ({ children }) => (
+const DispatchMapHoverButton = ({ children, assignments = [] }) => (
   <Popover
     trigger="hover"
     placement="bottomRight"
     overlayClassName="disp-dash-map-popover"
-    content={<DispatchFleetMapPreview />}
+    content={<DispatchFleetMapPreview assignments={assignments} />}
   >
     <span className="disp-dash-map-trigger">{children}</span>
   </Popover>
 );
 
+/**
+ * From/to filter for the merged "Overdue & due orders" section. Both the
+ * schedule list and the dispatch calendar read the same window, so the two
+ * widgets can never disagree about which period is on screen.
+ */
+const DISP_RANGE_PRESETS = [
+  { label: "Today", value: () => [dayjs(), dayjs()] },
+  { label: "Next 7 days", value: () => [dayjs(), dayjs().add(7, "day")] },
+  { label: "Last 7 days", value: () => [dayjs().subtract(7, "day"), dayjs()] },
+  { label: "This month", value: () => [dayjs().startOf("month"), dayjs().endOf("month")] },
+];
+
+/**
+ * Toolbar for the "Overdue & due orders" section: date window + free-text
+ * search. Scoped to that section alone — the KPI row and the dispatch calendar
+ * stay today-anchored, so narrowing this filter never moves them.
+ *
+ * The search box keeps its own draft state and pushes upward on a debounce, so
+ */
+const DispScheduleFilter = ({ range, onChange, onReset, loading, schedule }) => {
+  return (
+    <div className="disp-dash-filter">
+      <span className="disp-dash-filter__label">
+        <Icon name="truck" size={14} /> Overdue &amp; due orders
+      </span>
+      <DatePicker.RangePicker
+        className="disp-dash-filter__picker"
+        size="small"
+        value={[dayjs(range.from), dayjs(range.to)]}
+        format="DD MMM YYYY"
+        allowClear={false}
+        disabled={loading}
+        presets={DISP_RANGE_PRESETS.map((p) => ({
+          label: p.label,
+          value: p.value(),
+        }))}
+        onChange={(values) => {
+          const [from, to] = values ?? [];
+          if (!from || !to) return;
+          onChange({
+            from: from.format("YYYY-MM-DD"),
+            to: to.format("YYYY-MM-DD"),
+          });
+        }}
+      />
+      <Btn variant="secondary" size="sm" type="button" onClick={onReset}>
+        Reset
+      </Btn>
+      <span className="disp-dash-filter__count muted">
+        {schedule.matchCount > schedule.rows.length
+          ? `Showing ${schedule.rows.length} of ${schedule.matchCount}`
+          : `${schedule.matchCount} row${schedule.matchCount === 1 ? "" : "s"}`}
+      </span>
+    </div>
+  );
+};
+
+/** Default schedule filter: 3 days back through 10 ahead, matching the API. */
+const dispDefaultRange = () => {
+  const iso = (offset) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return dayjs(d).format("YYYY-MM-DD");
+  };
+  return { from: iso(-3), to: iso(10) };
+};
+
 const DispatchDashboard = ({ navigate }) => {
   const [addDriverOpen, setAddDriverOpen] = useState(false);
-  const DATA = useDATA();
-  const { items: packagingItems } = usePackaging();
-  const dispatchCounts = dispatchStatusCounts(DATA.DISPATCHES);
-  const mineralsPlant = dispatchesForPlant(DATA.DISPATCHES, "udaipur");
-  const micronsPlant = dispatchesForPlant(DATA.DISPATCHES, "ahmedabad");
-  const packBlock = lowStockCount(packagingItems);
+  const [range, setRange] = useState(dispDefaultRange);
+  const { data, loading, error, reload } = useDispatchDashboard(range);
 
-  const dueToday = DISPATCH_DUE_TODAY.length;
-  const overdue = OVERDUE_DISPATCHES.length;
-  const vehiclesAssigned = VEHICLE_ASSIGNMENTS.length;
-  const inTransit = dispatchCounts.inTransit || 2;
-  const completedToday =
-    DATA.DISPATCHES.filter((d) => d.status === "delivered").length || 3;
+  const resetFilter = () => setRange(dispDefaultRange());
 
-  const dueTodayPlantData = [
-    {
-      plant: "Minerals",
-      count: DISPATCH_DUE_TODAY.filter((d) => d.co !== "microns").length,
-    },
-    {
-      plant: "Microns",
-      count: DISPATCH_DUE_TODAY.filter((d) => d.co === "microns").length,
-    },
-  ];
+  const handleRefresh = async () => {
+    const done = await reload();
+    if (done) message.success("Refreshed");
+  };
 
-  const companyDispatchChartData = [
-    {
-      plant: "Minerals",
-      due: mineralsPlant.due || 7,
-      overdue: mineralsPlant.overdue || 2,
-    },
-    {
-      plant: "Microns",
-      due: micronsPlant.due || 2,
-      overdue: micronsPlant.overdue || 0,
-    },
-  ];
+  const header = (
+    <DashHead
+      title="Dispatch Dashboard"
+      sub="Due today, overdue, vehicles, packaging blocks & company overview"
+    >
+      <DispatchMapHoverButton assignments={data?.vehicleAssignments ?? []}>
+        <Btn
+          icon="map"
+          size="sm"
+          onClick={() => navigate && navigate("/dispatch")}
+        >
+          Map view
+        </Btn>
+      </DispatchMapHoverButton>
+      <Btn
+        icon={loading ? undefined : "refresh"}
+        size="sm"
+        disabled={loading}
+        onClick={() => void handleRefresh()}
+      >
+        {loading ? <LoadingOutlined spin /> : null} {loading ? "Refreshing…" : "Refresh"}
+      </Btn>
+      <Btn
+        variant="secondary"
+        size="sm"
+        icon="user"
+        onClick={() => setAddDriverOpen(true)}
+      >
+        Add driver
+      </Btn>
+      <Btn
+        variant="primary"
+        size="sm"
+        icon="plus"
+        onClick={() => navigate && navigate("/dispatch/new")}
+      >
+        New dispatch
+      </Btn>
+    </DashHead>
+  );
 
-  const dispatchCalendarChartData = CALENDAR_DAYS.map((cell) => {
-    if (typeof cell === "number") {
-      return { day: String(cell), dispatches: 0 };
-    }
-    const n = parseInt(String(cell.count ?? "").replace(/\D/g, ""), 10) || 0;
-    return { day: String(cell.day), dispatches: n };
-  }).filter((d) => Number(d.day) >= 7 && Number(d.day) <= 18);
+  if (!data) {
+    return (
+      <div className="disp-dash">
+        {header}
+        {loading ? (
+          <div style={{ display: "grid", placeItems: "center", minHeight: 320, padding: 24 }}>
+            <Spin size="large" description="Loading dispatch dashboard…" />
+          </div>
+        ) : (
+          <div className="card" style={{ padding: 24 }}>
+            <p style={{ color: "var(--danger)", margin: 0 }}>
+              {error ?? "No data available"}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
 
-  const dueOrdersChartData = DUE_ORDERS_TODAY.map((row) => ({
-    customer: dispShortCustomer(row.customer),
-    mt: parseFloat(row.qty) || 0,
+  const {
+    stats,
+    dueTodayByPlant,
+    companyDispatch,
+    calendar,
+    calendarWindow,
+    schedule,
+    packagingBlocks,
+    delayReasons,
+    trackingCounts,
+    vehicleTracking,
+    driverTracking,
+    delayedAlerts,
+    vehicleAssignments,
+    customerSummary,
+    plantLabels,
+    packagingNote,
+  } = data;
+
+  const dueTodayPlantData = dueTodayByPlant.map((row) => ({
+    plant: row.plant,
+    count: row.count,
   }));
 
-  const customerDispatchChartData = CUST_DISPATCH_SUMMARY.map((row) => ({
-    customer: dispShortCustomer(row.customer),
+  const companyDispatchChartData = companyDispatch.map((row) => ({
+    plant: row.plant,
+    due: row.due,
+    overdue: row.overdue,
+  }));
+
+  const dispatchCalendarChartData = calendar.map((point) => ({
+    day: point.day,
+    dispatches: point.dispatches,
+  }));
+
+  const scheduleChartData = schedule.byCustomer.map((row) => ({
+    customer: row.customerShort,
+    mt: row.mt,
+  }));
+
+  const customerDispatchChartData = customerSummary.map((row) => ({
+    customer: row.customerShort,
     mt: row.mt,
     dispatched: row.dispatched,
     pending: row.pending,
   }));
 
-  const delayReasonsChartData = DELAY_REASONS.filter((r) => r.n > 0).map(
-    (row) => ({
-      reason:
-        row.l.length > 18 ? `${row.l.slice(0, 16)}…` : row.l,
-      count: row.n,
-    }),
-  );
+  const delayReasonsChartData = delayReasons.map((row) => ({
+    reason: row.reason.length > 18 ? `${row.reason.slice(0, 16)}…` : row.reason,
+    count: row.count,
+  }));
 
   return (
     <div className="disp-dash">
-      <DashHead
-        title="Dispatch Dashboard"
-        sub="Due today, overdue, vehicles, packaging blocks & company overview"
-      >
-        <DispatchMapHoverButton>
-          <Btn
-            icon="map"
-            size="sm"
-            onClick={() => navigate && navigate("/dispatch")}
-          >
-            Map view
-          </Btn>
-        </DispatchMapHoverButton>
-        <Btn
-          variant="secondary"
-          size="sm"
-          icon="user"
-          onClick={() => setAddDriverOpen(true)}
-        >
-          Add driver
-        </Btn>
-        <Btn
-          variant="primary"
-          size="sm"
-          icon="plus"
-          onClick={() => navigate && navigate("/dispatch")}
-        >
-          New dispatch
-        </Btn>
-      </DashHead>
+      {header}
 
       <DashboardBannerCarousel slides={DISPATCH_BANNER_SLIDES} navigate={navigate} />
 
@@ -3720,57 +3616,76 @@ const DispatchDashboard = ({ navigate }) => {
         <DispStatCard
           icon={CalendarOutlined}
           label="Dispatch due today"
-          value={String(dueToday)}
+          value={String(stats.dueToday)}
           tone="accent"
+          navigate={navigate}
+          href="/dispatch"
         />
         <DispStatCard
           icon={ExclamationCircleOutlined}
           label="Overdue"
-          value={String(overdue)}
+          value={String(stats.overdue)}
           tone="danger"
+          navigate={navigate}
+          href="/dispatch"
         />
         <DispStatCard
           icon={CarOutlined}
           label="Vehicles assigned"
-          value={String(vehiclesAssigned)}
+          value={String(stats.vehiclesAssigned)}
+          navigate={navigate}
+          href="/dispatch"
         />
         <DispStatCard
           icon={SendOutlined}
           label="In transit"
-          value={String(inTransit)}
+          value={String(stats.inTransit)}
           tone="success"
+          navigate={navigate}
+          href="/dispatch"
         />
         <DispStatCard
           icon={InboxOutlined}
           label="Packaging block"
-          value={String(packBlock || 2)}
+          value={String(stats.packagingBlock)}
           tone="warning"
+          navigate={navigate}
+          href="/inventory/packaging"
         />
         <DispStatCard
           icon={CheckCircleOutlined}
           label="Completed today"
-          value={String(completedToday)}
+          value={String(stats.completedToday)}
+          navigate={navigate}
+          href="/dispatch"
         />
       </div>
 
+      <DispScheduleFilter
+        range={range}
+        onChange={setRange}
+        onReset={resetFilter}
+        loading={loading}
+        schedule={schedule}
+      />
+
       <DispEyebrow>Operations overview</DispEyebrow>
-      <div className="disp-dash-grid disp-dash-grid--3">
+      <div className="disp-dash-grid disp-dash-grid--2">
         <DispWidget
           title="Dispatch due today"
           icon="calendar"
-          badge={<Badge tone="default">{dueToday}</Badge>}
+          badge={<Badge tone="default">{stats.dueToday}</Badge>}
           theme={DISPATCH_CHART_THEMES.dueToday.container}
+          titleHref="/dispatch"
+          navigate={navigate}
         >
           <p className="disp-dash-chart-caption">
-            Due dispatches by company (Minerals vs Microns)
+            Due dispatches by company
           </p>
           <OwnerChartPanel
             legend={
               <OwnerChartLegend
-                items={dispChartLegend(DISPATCH_CHART_THEMES.dueToday, [
-                  "Minerals",
-                  "Microns",
-                ])}
+                items={dispChartLegend(DISPATCH_CHART_THEMES.dueToday, plantLabels)}
               />
             }
           >
@@ -3787,38 +3702,11 @@ const DispatchDashboard = ({ navigate }) => {
         </DispWidget>
 
         <DispWidget
-          title="Overdue dispatches"
-          icon="alert"
-          badge={<Badge tone="danger">{overdue}</Badge>}
-          theme={DISPATCH_CHART_THEMES.overdue.container}
-          footnote="Customers notified. Escalate if not out today."
-        >
-          <p className="disp-dash-chart-caption">Overdue count by plant</p>
-          <OwnerChartPanel>
-            <BarChart
-              data={companyDispatchChartData}
-              keys={["overdue"]}
-              colors={DISPATCH_CHART_THEMES.overdue.colors}
-              groupColors={DISPATCH_CHART_THEMES.overdue.colors}
-              labelKey="plant"
-              tooltipFormatter={dispChartTooltip.count}
-              {...DISPATCH_OPS_CHART_PROPS}
-            />
-          </OwnerChartPanel>
-          <ul className="disp-dash-list disp-dash-list--compact">
-            {OVERDUE_DISPATCHES.map((item) => (
-              <li key={item.text}>
-                <span>{item.text}</span>
-                <CoTag co={item.co} />
-              </li>
-            ))}
-          </ul>
-        </DispWidget>
-
-        <DispWidget
           title="Company-wise dispatch overview"
           icon="factory"
           theme={DISPATCH_CHART_THEMES.company.container}
+          titleHref="/dispatch"
+          navigate={navigate}
         >
           <p className="disp-dash-chart-caption">
             Due vs overdue by plant today
@@ -3852,9 +3740,12 @@ const DispatchDashboard = ({ navigate }) => {
           title="Dispatch calendar"
           icon="calendar"
           theme={DISPATCH_CHART_THEMES.calendar.container}
+          titleHref="/dispatch"
+          navigate={navigate}
         >
           <p className="disp-dash-chart-caption">
-            March 2025 — scheduled dispatches by day
+            Scheduled dispatches by day — {calendarWindow.from} to{" "}
+            {calendarWindow.to}
           </p>
           <OwnerChartPanel
             legend={
@@ -3878,13 +3769,21 @@ const DispatchDashboard = ({ navigate }) => {
         </DispWidget>
 
         <DispWidget
-          title="Due orders today"
+          title="Overdue & due orders"
           icon="truck"
-          badge={<Badge tone="default">{DUE_ORDERS_TODAY.length}</Badge>}
+          badge={
+            <>
+              <Badge tone="danger">{schedule.overdueCount} overdue</Badge>{" "}
+              <Badge tone="default">{schedule.dueCount} due</Badge>
+            </>
+          }
           theme={DISPATCH_CHART_THEMES.dueOrders.container}
+          footnote={`${schedule.totalMt} MT scheduled between ${schedule.from} and ${schedule.to}.`}
+          titleHref="/dispatch"
+          navigate={navigate}
         >
           <p className="disp-dash-chart-caption">
-            Order volume by customer (MT)
+            Order volume by customer (MT) — selected window
           </p>
           <OwnerChartPanel
             legend={
@@ -3896,10 +3795,10 @@ const DispatchDashboard = ({ navigate }) => {
             }
           >
             <BarChart
-              data={dueOrdersChartData}
+              data={scheduleChartData}
               keys={["mt"]}
               colors={DISPATCH_CHART_THEMES.dueOrders.colors}
-              groupColors={dueOrdersChartData.map(
+              groupColors={scheduleChartData.map(
                 (_, i) =>
                   DISPATCH_CHART_THEMES.dueOrders.colors[
                     i % DISPATCH_CHART_THEMES.dueOrders.colors.length
@@ -3910,6 +3809,31 @@ const DispatchDashboard = ({ navigate }) => {
               h={165}
             />
           </OwnerChartPanel>
+          <ul className="disp-dash-list disp-dash-list--compact">
+            {schedule.rows.length === 0 ? (
+              <li>
+                <span className="muted">
+                  Nothing scheduled in this window.
+                </span>
+              </li>
+            ) : (
+              schedule.rows.map((row) => (
+                <DispNavRow
+                  key={row.id}
+                  href={dispRowHref(row)}
+                  navigate={navigate}
+                >
+                  <span>
+                    <Badge tone={row.kind === "overdue" ? "danger" : "default"}>
+                      {row.kind === "overdue" ? "Overdue" : row.dateLabel}
+                    </Badge>{" "}
+                    {row.customer} — {row.qty} {row.product}. {row.note}
+                  </span>
+                  <CoTag label={row.plant} alt={row.plant === plantLabels[1]} />
+                </DispNavRow>
+              ))
+            )}
+          </ul>
         </DispWidget>
       </div>
 
@@ -3917,18 +3841,32 @@ const DispatchDashboard = ({ navigate }) => {
         <DispWidget
           title="Dispatches pending — packaging shortage"
           icon="package"
-          badge={<Badge tone="warning">2</Badge>}
+          badge={<Badge tone="warning">{packagingBlocks.length}</Badge>}
           theme="disp-dash-widget--rose"
-          footnote="Stores/Procurement to confirm. Reschedule slot after material receipt."
+          footnote={`${packagingNote} Stores/Procurement to confirm. Reschedule slot after material receipt.`}
+          titleHref="/inventory/packaging"
+          navigate={navigate}
         >
           <ul className="disp-dash-list disp-dash-list--stack">
-            {PACK_PENDING.map((item) => (
-              <li key={item.id}>
-                <span>
-                  <strong>{item.id}</strong> {item.text}
+            {packagingBlocks.length === 0 ? (
+              <li>
+                <span className="muted">
+                  No dispatch is blocked on packaging stock.
                 </span>
               </li>
-            ))}
+            ) : (
+              packagingBlocks.map((item) => (
+                <DispNavRow
+                  key={item.id}
+                  href={dispRowHref(item)}
+                  navigate={navigate}
+                >
+                  <span>
+                    <strong>{item.id}</strong> {item.text}
+                  </span>
+                </DispNavRow>
+              ))
+            )}
           </ul>
         </DispWidget>
 
@@ -3936,6 +3874,8 @@ const DispatchDashboard = ({ navigate }) => {
           title="Delayed dispatch reasons summary"
           icon="pieChart"
           theme={DISPATCH_CHART_THEMES.delays.container}
+          titleHref="/dispatch"
+          navigate={navigate}
         >
           <p className="disp-dash-chart-caption">Open delay cases by reason</p>
           <OwnerChartPanel
@@ -3958,43 +3898,86 @@ const DispatchDashboard = ({ navigate }) => {
             />
           </OwnerChartPanel>
           <p className="disp-dash-widget__footnote disp-dash-widget__footnote--inline">
-            DP-094 (ITC): vehicle delay. DP-097, 098: packaging.
+            Reasons are inferred from vehicle, packaging and loading state — the
+            schema has no recorded delay-reason field.
           </p>
         </DispWidget>
       </div>
 
       <div className="disp-dash-grid disp-dash-grid--main">
         <div className="disp-dash-main-left">
-          <DispWidget title="Simple vehicle tracking status" icon="truck" theme="disp-dash-widget--blue">
+          <DispWidget
+            title="Simple vehicle tracking status"
+            icon="truck"
+            theme="disp-dash-widget--blue"
+            titleHref="/dispatch"
+            navigate={navigate}
+          >
             <div className="disp-dash-pill-strip">
-              <span className="disp-dash-pill loading">Loading · 1</span>
-              <span className="disp-dash-pill transit">In transit · 2</span>
-              <span className="disp-dash-pill ready">Ready at gate · 2</span>
+              <span className="disp-dash-pill loading">
+                Loading · {trackingCounts.loading}
+              </span>
+              <span className="disp-dash-pill transit">
+                In transit · {trackingCounts.inTransit}
+              </span>
+              <span className="disp-dash-pill ready">
+                Ready at gate · {trackingCounts.ready}
+              </span>
             </div>
             <ul className="disp-dash-list">
-              {TRACKING_ROWS.map((row) => (
-                <li key={row.reg}>
-                  <span className="mono">{row.reg}</span>
-                  <span>{row.status}</span>
+              {vehicleTracking.length === 0 ? (
+                <li>
+                  <span className="muted">No vehicles on the road right now.</span>
                 </li>
-              ))}
+              ) : (
+                vehicleTracking.map((row) => (
+                  <DispNavRow
+                    key={row.id}
+                    href={`/dispatch/${encodeURIComponent(row.id)}`}
+                    navigate={navigate}
+                  >
+                    <span className="mono">{row.reg}</span>
+                    <span>{row.status}</span>
+                  </DispNavRow>
+                ))
+              )}
             </ul>
           </DispWidget>
 
-          <DispWidget title="Driver / vehicle tracking (concept)" icon="pin" theme="disp-dash-widget--ocean">
-            {DRIVER_TRACKING.map((row) => (
-              <div key={row.reg} className="disp-dash-track-row">
-                <span className={`disp-dash-track-dot ${row.tone}`} />
-                <span className="disp-dash-track-reg">{row.reg}</span>
-                <div>
-                  <div>{row.title}</div>
-                  <div className="disp-dash-track-meta">{row.meta}</div>
-                </div>
-              </div>
-            ))}
+          <DispWidget
+            title="Driver / vehicle tracking"
+            icon="pin"
+            theme="disp-dash-widget--ocean"
+            titleHref="/dispatch"
+            navigate={navigate}
+          >
+            {driverTracking.length === 0 ? (
+              <p className="muted" style={{ margin: 0 }}>
+                No driver assigned to an active dispatch.
+              </p>
+            ) : (
+              driverTracking.map((row) => (
+                <button
+                  key={row.id}
+                  type="button"
+                  className="disp-dash-track-row disp-dash-track-row--nav"
+                  onClick={() =>
+                    navigate &&
+                    navigate(`/dispatch/${encodeURIComponent(row.id)}`)
+                  }
+                >
+                  <span className={`disp-dash-track-dot ${row.tone}`} />
+                  <span className="disp-dash-track-reg">{row.reg}</span>
+                  <div>
+                    <div>{row.title}</div>
+                    <div className="disp-dash-track-meta">{row.meta}</div>
+                  </div>
+                </button>
+              ))
+            )}
             <p className="disp-dash-widget__footnote disp-dash-widget__footnote--inline">
-              Concept: driver check-in / GPS ping updates ETA. Full tracking in
-              logistics module.
+              Position comes from the driver check-in GPS ping. Full tracking in
+              the dispatch module.
             </p>
           </DispWidget>
         </div>
@@ -4005,10 +3988,21 @@ const DispatchDashboard = ({ navigate }) => {
               <Icon name="alert" size={13} /> Delayed dispatch alert
             </h4>
             <ul>
-              <li>
-                <strong>DP-2025-094</strong> — ITC Paperboards (15 MT Kaolin).
-                Vehicle delayed ~2 hrs. New ETA 14:30. Customer notified via WA.
-              </li>
+              {delayedAlerts.length === 0 ? (
+                <li>No delayed dispatches.</li>
+              ) : (
+                delayedAlerts.map((alert) => (
+                  <DispNavRow
+                    key={alert.id}
+                    href={`/dispatch/${encodeURIComponent(alert.id)}`}
+                    navigate={navigate}
+                  >
+                    <span>
+                      <strong>{alert.id}</strong> — {alert.text}
+                    </span>
+                  </DispNavRow>
+                ))
+              )}
             </ul>
           </div>
 
@@ -4025,19 +4019,29 @@ const DispatchDashboard = ({ navigate }) => {
             </div>
             <div className="card-body">
               <ul className="disp-dash-vehicles">
-                {VEHICLE_ASSIGNMENTS.map((v) => (
-                  <li key={v.reg}>
-                    <div>
-                      <span className="disp-dash-vehicles__reg">{v.reg}</span>
-                      <div className="disp-dash-vehicles__driver">
-                        {v.driver}
-                      </div>
-                    </div>
-                    <span className={`disp-dash-vehicles__badge ${v.tone}`}>
-                      {v.status}
-                    </span>
+                {vehicleAssignments.length === 0 ? (
+                  <li>
+                    <span className="muted">No vehicle assigned yet.</span>
                   </li>
-                ))}
+                ) : (
+                  vehicleAssignments.map((v) => (
+                    <DispNavRow
+                      key={v.id}
+                      href={`/dispatch/${encodeURIComponent(v.id)}`}
+                      navigate={navigate}
+                    >
+                      <div>
+                        <span className="disp-dash-vehicles__reg">{v.reg}</span>
+                        <div className="disp-dash-vehicles__driver">
+                          {v.driver}
+                        </div>
+                      </div>
+                      <span className={`disp-dash-vehicles__badge ${v.tone}`}>
+                        {v.status}
+                      </span>
+                    </DispNavRow>
+                  ))
+                )}
               </ul>
             </div>
           </div>
@@ -4049,6 +4053,8 @@ const DispatchDashboard = ({ navigate }) => {
         icon="users"
         wide
         theme={DISPATCH_CHART_THEMES.customers.container}
+        titleHref="/customers"
+        navigate={navigate}
       >
         <p className="disp-dash-chart-caption">
           Total MT, dispatched & pending by customer (today)

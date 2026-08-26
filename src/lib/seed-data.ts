@@ -144,32 +144,6 @@ const EMPLOYEES = [
   { id: "E-2023", name: "Pooja Aggarwal",   role: "Field Sales",            dept: "Sales",      status: "active", since: "2023" },
 ];
 
-const PERMISSIONS = [
-  { module: "Raw Material Procurement", owner: "F", admin: "F", rm: "F", pack: "-", spare: "-", prod: "V", disp: "-", hr: "-", sales: "-" },
-  { module: "Packaging Procurement",    owner: "F", admin: "F", rm: "-", pack: "F", spare: "-", prod: "V", disp: "-", hr: "-", sales: "-" },
-  { module: "Spare Parts Procurement",  owner: "F", admin: "F", rm: "-", pack: "-", spare: "F", prod: "V", disp: "-", hr: "-", sales: "-" },
-  { module: "Production",               owner: "F", admin: "F", rm: "-", pack: "-", spare: "-", prod: "F", disp: "V", hr: "-", sales: "-" },
-  { module: "Dispatch",                 owner: "F", admin: "F", rm: "-", pack: "-", spare: "-", prod: "F", disp: "F", hr: "-", sales: "V" },
-  { module: "Stores",                   owner: "F", admin: "F", rm: "E", pack: "E", spare: "E", prod: "F", disp: "V", hr: "-", sales: "-" },
-  { module: "HR",                       owner: "F", admin: "F", rm: "-", pack: "-", spare: "-", prod: "-", disp: "-", hr: "F", sales: "-" },
-  { module: "Accounts",                 owner: "F", admin: "F", rm: "-", pack: "-", spare: "-", prod: "V", disp: "-", hr: "V", sales: "V" },
-  { module: "Field Sales",              owner: "F", admin: "F", rm: "-", pack: "-", spare: "-", prod: "-", disp: "V", hr: "-", sales: "F" },
-  { module: "Reports",                  owner: "F", admin: "F", rm: "V", pack: "V", spare: "V", prod: "F", disp: "F", hr: "V", sales: "V" },
-  { module: "User Management",          owner: "F", admin: "F", rm: "-", pack: "-", spare: "-", prod: "-", disp: "-", hr: "-", sales: "-" },
-];
-
-const ROLES = [
-  { key: "owner", label: "Owner" },
-  { key: "admin", label: "Admin" },
-  { key: "rm",    label: "RM Proc." },
-  { key: "pack",  label: "Pack. Proc." },
-  { key: "spare", label: "Spares Proc." },
-  { key: "prod",  label: "Prod. Mgr" },
-  { key: "disp",  label: "Dispatch Mgr" },
-  { key: "hr",    label: "HR" },
-  { key: "sales", label: "Field Sales" },
-];
-
 const NOTIFS = [
   { id: 1, type: "alert",   text: "PCC Ultra-fine stock below critical (7.8 MT / 15 MT reorder)", time: "12 min", target: "/inventory/raw-material" },
   { id: 2, type: "info",    text: "PO-2026-0142 awaiting invoice verification",                    time: "1 hr",   target: "/procurement" },
@@ -228,8 +202,6 @@ export const SEED_DATA = {
   INVOICES,
   DISPATCHES,
   EMPLOYEES,
-  PERMISSIONS,
-  ROLES,
   NOTIFS,
   REVENUE_DATA,
   PRODUCTION_DATA,

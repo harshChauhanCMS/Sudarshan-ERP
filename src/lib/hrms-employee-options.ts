@@ -38,6 +38,11 @@ export const EMPLOYEE_WORK_LOCATION_OPTIONS = EMPLOYEE_WORK_LOCATION_TYPES.map(
   (value) => ({ value, label: value })
 );
 
+export const EMPLOYEE_COMPANY_OPTIONS = [
+  { value: "smi", label: "Sudarshan Minerals & Industries (SMI)" },
+  { value: "smic", label: "Sudarshan Microns" },
+] as const;
+
 export const EMPLOYEE_LOCATION_UNIT_OPTIONS = [
   { value: "Sudarshan Minerals (Udaipur — Plant 1)", label: "Sudarshan Minerals (Udaipur — Plant 1)" },
   { value: "Sudarshan Minerals (Udaipur — Plant 2)", label: "Sudarshan Minerals (Udaipur — Plant 2)" },

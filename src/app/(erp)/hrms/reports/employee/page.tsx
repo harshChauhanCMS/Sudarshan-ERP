@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "antd";
+import { Button, Space, message } from "antd";
 import dayjs from "dayjs";
+import * as XLSX from "xlsx";
 import {
   DownloadOutlined,
   EyeOutlined,
@@ -11,6 +12,7 @@ import {
   ClockCircleOutlined,
   BankOutlined,
   IdcardOutlined,
+  FileExcelOutlined,
 } from "@ant-design/icons";
 
 import RepHeader from "@/components/hrms/RepHeader";
@@ -27,6 +29,7 @@ import {
   useAttendanceReport,
   type AttendanceSummaryRow,
 } from "@/hooks/use-attendance-report";
+import { downloadDailyAttendanceReportExcel } from "@/lib/daily-attendance-report-excel";
 
 type ReportType = "monthly" | "absent" | "late" | "short" | "overtime";
 type GroupBy = "employee" | "department" | "shift" | "unit" | "empType";
@@ -93,24 +96,31 @@ const GROUP_CHIPS: ReportChipOption<GroupBy>[] = [
   },
 ];
 
+type MusterRow = {
+  employeeId: string;
+  employeeName: string;
+  department: string;
+  designation: string;
+  locationUnit: string;
+  cells: string[];
+  present: number;
+  halfDay: number;
+  weekoff: number;
+  pl: number;
+  cl: number;
+  sl: number;
+  compOff: number;
+  absent: number;
+  otHours: string;
+  paydays: number;
+};
+
 export default function EmployeeReportPage() {
   const r = useAttendanceReport();
   const [reportType, setReportType] = useState<ReportType>("monthly");
   const [groupBy, setGroupBy] = useState<GroupBy>("employee");
-
-  const buildReportHref = (row: AttendanceSummaryRow) => {
-    const params = new URLSearchParams({
-      from: r.range[0].format("YYYY-MM-DD"),
-      to: r.range[1].format("YYYY-MM-DD"),
-    });
-    return `/hrms/reports/employee/${encodeURIComponent(row.employeeId)}?${params}`;
-  };
-
-  useEffect(() => {
-    void r.handleApply();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  const [musterLoading, setMusterLoading] = useState(false);
+  const [exportingDailyExcel, setExportingDailyExcel] = useState(false);
   const filtered = useMemo<AttendanceSummaryRow[]>(() => {
     switch (reportType) {
       case "absent":
@@ -125,6 +135,116 @@ export default function EmployeeReportPage() {
         return r.summary;
     }
   }, [r.summary, reportType]);
+
+  const filteredDaily = useMemo(() => {
+    const validEmpIds = new Set(filtered.map((s) => s.employeeId));
+    let rows = r.daily.filter((d) => validEmpIds.has(d.employeeId));
+    switch (reportType) {
+      case "absent":
+        return rows.filter((d) => d.absent);
+      case "late":
+        return rows.filter((d) => d.late);
+      case "short":
+        return rows.filter((d) => d.shortfall > 0);
+      case "overtime":
+        return rows.filter((d) => d.overtime > 0);
+      default:
+        return rows;
+    }
+  }, [r.daily, filtered, reportType]);
+
+  const handleExportDailyExcel = async () => {
+    if (exportingDailyExcel || filteredDaily.length === 0) return;
+    try {
+      setExportingDailyExcel(true);
+      await downloadDailyAttendanceReportExcel(
+        filteredDaily,
+        r.summary,
+        `employee-attendance-${reportType}`
+      );
+    } finally {
+      setExportingDailyExcel(false);
+    }
+  };
+
+  const buildReportHref = (row: AttendanceSummaryRow) => {
+    const params = new URLSearchParams({
+      from: r.range[0].format("YYYY-MM-DD"),
+      to: r.range[1].format("YYYY-MM-DD"),
+    });
+    return `/hrms/reports/employee/${encodeURIComponent(row.employeeId)}?${params}`;
+  };
+
+  const exportMuster = async () => {
+    setMusterLoading(true);
+    try {
+      const res = await fetch(`/api/hrms/attendance/muster?${r.buildCsvUrl()}`);
+      const json = await res.json();
+      if (!res.ok || json?.error) {
+        throw new Error(json?.error || "Failed to build muster");
+      }
+
+      const dateColumns: string[] = json.data.dateColumns ?? [];
+      const rows: MusterRow[] = json.data.rows ?? [];
+
+      const header = [
+        "Employee Id",
+        "Employee Name",
+        "Department",
+        "Designation",
+        "Location Unit",
+        ...dateColumns,
+        "Present",
+        "Half Day",
+        "Weekoff",
+        "PL",
+        "CL",
+        "SL",
+        "Comp Off",
+        "Absent",
+        "OT Hours",
+        "Paydays",
+      ];
+
+      const body = rows.map((row) => [
+        row.employeeId,
+        row.employeeName,
+        row.department,
+        row.designation,
+        row.locationUnit,
+        ...row.cells,
+        row.present,
+        row.halfDay,
+        row.weekoff,
+        row.pl,
+        row.cl,
+        row.sl,
+        row.compOff,
+        row.absent,
+        row.otHours,
+        row.paydays,
+      ]);
+
+      const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Muster");
+      XLSX.writeFile(
+        wb,
+        `muster_${json.data.from}_to_${json.data.to}.xlsx`,
+      );
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Failed to export muster");
+    } finally {
+      setMusterLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void r.handleApply();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+
 
   const groupedData = useMemo(() => {
     if (groupBy === "employee") return filtered;
@@ -305,17 +425,34 @@ export default function EmployeeReportPage() {
         title="Employee Report"
         subtitle={`${r.rangeLabel} · monthly summary, absent, late, short hours & overtime`}
         actions={
-          <Button
-            icon={<DownloadOutlined />}
-            onClick={() =>
-              window.open(
-                `/api/hrms/attendance/report.csv?${r.buildCsvUrl()}`,
-                "_blank",
-              )
-            }
-          >
-            Export
-          </Button>
+          <Space>
+            <Button
+              icon={<FileExcelOutlined />}
+              onClick={() => void handleExportDailyExcel()}
+              loading={exportingDailyExcel}
+              disabled={filteredDaily.length === 0}
+            >
+              Export Daily Excel
+            </Button>
+            <Button
+              icon={<FileExcelOutlined />}
+              loading={musterLoading}
+              onClick={exportMuster}
+            >
+              Muster Export
+            </Button>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() =>
+                window.open(
+                  `/api/hrms/attendance/report.csv?${r.buildCsvUrl()}`,
+                  "_blank",
+                )
+              }
+            >
+              Export
+            </Button>
+          </Space>
         }
       />
 

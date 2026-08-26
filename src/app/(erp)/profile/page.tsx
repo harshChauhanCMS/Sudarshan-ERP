@@ -1,11 +1,33 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useSessionUser } from "@/hooks/use-session-user";
 import { Btn } from "@/components/erp/ui";
 import { Icon } from "@/components/erp/icons";
 
+type EmployeeMe = {
+  employeeId: string;
+  fullName: string;
+  department?: string;
+  primaryContact?: string;
+  officialEmail?: string;
+  personalEmail?: string;
+  primaryShift?: string;
+};
+
 export default function ProfilePage() {
   const { user, loading } = useSessionUser();
+  const [employee, setEmployee] = useState<EmployeeMe | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    fetch("/api/hrms/employees/me")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data) setEmployee(j.data);
+      })
+      .catch(() => {});
+  }, [user]);
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -83,7 +105,7 @@ export default function ProfilePage() {
                 alignItems: "center",
                 gap: 6
               }}>
-                <Icon name="user" size={13} /> {user.role || "—"}
+                <Icon name="user" size={13} /> {employee?.department || user.role || "—"}
               </div>
             </div>
           </div>
@@ -102,38 +124,50 @@ export default function ProfilePage() {
             </div>
 
             <div>
-              <div style={{ 
-                fontSize: 11, fontWeight: 600, color: "var(--fg-muted)", 
-                textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 
+              <div style={{
+                fontSize: 11, fontWeight: 600, color: "var(--fg-muted)",
+                textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6
               }}>
                 Email Address
               </div>
               <div style={{ fontSize: 14, color: "var(--fg)", fontWeight: 500 }}>
-                {user.email || "—"}
+                {employee?.officialEmail || user.email || "—"}
               </div>
             </div>
 
             <div>
-              <div style={{ 
-                fontSize: 11, fontWeight: 600, color: "var(--fg-muted)", 
-                textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 
-              }}>
-                Role
-              </div>
-              <div style={{ fontSize: 14, color: "var(--fg)", fontWeight: 500, textTransform: "capitalize" }}>
-                {user.role || "—"}
-              </div>
-            </div>
-
-            <div>
-              <div style={{ 
-                fontSize: 11, fontWeight: 600, color: "var(--fg-muted)", 
-                textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 
+              <div style={{
+                fontSize: 11, fontWeight: 600, color: "var(--fg-muted)",
+                textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6
               }}>
                 Employee ID
               </div>
               <div style={{ fontSize: 14, color: "var(--fg)", fontWeight: 500 }}>
-                {user.employeeId || "—"}
+                {employee?.employeeId || user.employeeId || "—"}
+              </div>
+            </div>
+
+            <div>
+              <div style={{
+                fontSize: 11, fontWeight: 600, color: "var(--fg-muted)",
+                textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6
+              }}>
+                Phone Number
+              </div>
+              <div style={{ fontSize: 14, color: "var(--fg)", fontWeight: 500 }}>
+                {employee?.primaryContact || "—"}
+              </div>
+            </div>
+
+            <div>
+              <div style={{
+                fontSize: 11, fontWeight: 600, color: "var(--fg-muted)",
+                textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6
+              }}>
+                Shift
+              </div>
+              <div style={{ fontSize: 14, color: "var(--fg)", fontWeight: 500 }}>
+                {employee?.primaryShift || "—"}
               </div>
             </div>
           </div>

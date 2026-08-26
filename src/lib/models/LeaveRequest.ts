@@ -8,7 +8,7 @@ const LeaveRequestSchema = new Schema(
     reportingManager: { type: String, trim: true },
     leaveType: {
       type: String,
-      enum: ["casual", "sick", "privilege", "unpaid"],
+      enum: ["casual", "sick", "privilege", "compOff", "unpaid"],
       required: true,
       index: true,
     },

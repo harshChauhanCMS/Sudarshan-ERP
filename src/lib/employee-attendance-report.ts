@@ -1,5 +1,6 @@
 import dayjs from "dayjs";
 import type { AttendanceDailyRow } from "@/lib/attendance-report-dummy";
+import { formatWorkedDuration } from "@/lib/format-duration";
 import { API_LEAVE_LABELS } from "@/lib/leave-apply";
 
 export type EmployeeLeaveRow = {
@@ -107,7 +108,7 @@ export function employeeReportToCsv(
     "Day",
     "In",
     "Out",
-    "Worked Hours",
+    "Worked (h m)",
     "Present",
     "Absent",
     "Late",
@@ -131,7 +132,7 @@ export function employeeReportToCsv(
         dayjs(row.day).format("dddd"),
         row.inAt ? dayjs(row.inAt).format("HH:mm") : "",
         row.outAt ? dayjs(row.outAt).format("HH:mm") : "",
-        row.workedHours?.toFixed(2) ?? "0",
+        formatWorkedDuration(row.workedHours),
         row.present ? "Yes" : "No",
         row.absent && !row.onLeave ? "Yes" : "No",
         row.late ? "Yes" : "No",

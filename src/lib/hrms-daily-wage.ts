@@ -1,4 +1,5 @@
 import type { DailyWageWorker, SkillLevel, PayMode } from "@/lib/daily-wage-dummy";
+import { isWeeklyOffDate } from "@/lib/shift-utils";
 
 export const DAILY_WAGE_COMPENSATION = "Daily wage";
 
@@ -47,7 +48,8 @@ export function buildAttendanceStats(
   start: Date,
   end: Date,
   expectedHours: number,
-  otApplicable: boolean
+  otApplicable: boolean,
+  weeklyOff?: string
 ) {
   let days = 0;
   let otHours = 0;
@@ -57,7 +59,7 @@ export function buildAttendanceStats(
   endD.setHours(23, 59, 59, 999);
 
   while (cur <= endD) {
-    if (cur.getDay() !== 0) {
+    if (!isWeeklyOffDate(cur, weeklyOff)) {
       const k = `${employeeId}|${localDayKey(cur)}`;
       const entry = punchDayMap.get(k);
       if (entry?.inAt) {
@@ -87,6 +89,7 @@ type EmployeeInput = {
   paymentMode?: string;
   workingHours?: number;
   overtimeApplicable?: boolean;
+  weeklyOff?: string;
 };
 
 export function employeeToDailyWageWorker(

@@ -10,6 +10,7 @@ import {
   type DeptBreakdownPoint,
 } from "@/lib/attendance-report-dummy";
 import { filterBySearch } from "@/lib/filter-search";
+import type { HolidayInfo } from "@/lib/holiday-rules";
 
 // Prefer the employee's assigned workLocationType; fall back to a
 // department-name guess only for rows that predate that field.
@@ -67,6 +68,10 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
   const [gpsSummary, setGpsSummary] = useState<AttendanceGpsSummary | null>(null);
   const [summary, setSummary] = useState<AttendanceSummaryRow[]>([]);
   const [daily, setDaily] = useState<AttendanceDailyRow[]>([]);
+  // Holidays for the selected range, straight from the shared holiday
+  // source the API reads — the overview shows them even when no employee
+  // has an attendance record on that day.
+  const [holidays, setHolidays] = useState<HolidayInfo[]>([]);
 
   useEffect(() => {
     // Independent master lists, fetched once — not derived from the
@@ -143,6 +148,7 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
     setGpsSummary(EMPTY_GPS);
     setSummary([]);
     setDaily([]);
+    setHolidays([]);
   };
 
   const load = async (opts: {
@@ -215,6 +221,7 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
       }
 
       setKpi(json.data.kpi ?? EMPTY_KPI);
+      setHolidays(json.data.holidays ?? []);
       setWorkingDays(json.data.workingDays ?? 0);
       setGpsSummary(json.data.gpsSummary ?? EMPTY_GPS);
       setSummary(rows);
@@ -248,6 +255,12 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
       setRange(newRange);
     } else if (period === "month") {
       newRange = [dayjs().startOf("month"), dayjs().endOf("month")];
+      setRange(newRange);
+    } else if (period === "custom_month") {
+      newRange = [range[0].startOf("month"), range[0].endOf("month")];
+      setRange(newRange);
+    } else if (period === "custom" || period === "custom_range") {
+      newRange = [range[0].startOf("day"), range[1].endOf("day")];
       setRange(newRange);
     }
     void load({ dept, shift, unit, employeeId, range: newRange });
@@ -444,7 +457,7 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
     search, setSearch,
     departments, units: unitOptions,
     loading,
-    kpi, workingDays, gpsSummary,
+    kpi, workingDays, gpsSummary, holidays,
     summary: searchedSummary,
     daily: searchedDaily,
     weeklyTrend, deptBreakdown,

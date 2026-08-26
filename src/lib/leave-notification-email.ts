@@ -6,6 +6,7 @@ const LEAVE_TYPE_LABELS: Record<string, string> = {
   casual: "Casual Leave (CL)",
   sick: "Sick Leave (SL)",
   privilege: "Privilege Leave (PL)",
+  compOff: "Compensatory Off (Comp.Off)",
   unpaid: "Leave Without Pay (LWP)",
 };
 

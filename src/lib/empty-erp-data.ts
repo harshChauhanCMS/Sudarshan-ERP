@@ -23,8 +23,6 @@ export const EMPTY_ERP_DATA: ErpData = {
   INVOICES: [],
   DISPATCHES: [],
   EMPLOYEES: [],
-  PERMISSIONS: [],
-  ROLES: [],
   NOTIFS: [],
   REVENUE_DATA: [],
   PRODUCTION_DATA: [],

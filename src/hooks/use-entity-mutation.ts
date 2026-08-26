@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useErpData } from "@/context/erp-data-provider";
 import type { EntityKey } from "@/lib/entity-types";
 
 async function parseResponse(res: Response) {
@@ -11,7 +10,6 @@ async function parseResponse(res: Response) {
 }
 
 export function useEntityMutation() {
-  const { refresh } = useErpData();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,9 +23,7 @@ export function useEntityMutation() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ item }),
         });
-        const data = await parseResponse(res);
-        await refresh();
-        return data;
+        return await parseResponse(res);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Save failed";
         setError(msg);
@@ -36,7 +32,7 @@ export function useEntityMutation() {
         setSaving(false);
       }
     },
-    [refresh]
+    []
   );
 
   const update = useCallback(
@@ -54,9 +50,7 @@ export function useEntityMutation() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id, patch, idField }),
         });
-        const data = await parseResponse(res);
-        await refresh();
-        return data;
+        return await parseResponse(res);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Update failed";
         setError(msg);
@@ -65,7 +59,7 @@ export function useEntityMutation() {
         setSaving(false);
       }
     },
-    [refresh]
+    []
   );
 
   const replaceAll = useCallback(
@@ -79,7 +73,6 @@ export function useEntityMutation() {
           body: JSON.stringify({ items }),
         });
         await parseResponse(res);
-        await refresh();
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Update failed";
         setError(msg);
@@ -88,7 +81,7 @@ export function useEntityMutation() {
         setSaving(false);
       }
     },
-    [refresh]
+    []
   );
 
   const createUser = useCallback(
@@ -107,9 +100,7 @@ export function useEntityMutation() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        const data = await parseResponse(res);
-        await refresh();
-        return data;
+        return await parseResponse(res);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Create user failed";
         setError(msg);
@@ -118,7 +109,7 @@ export function useEntityMutation() {
         setSaving(false);
       }
     },
-    [refresh]
+    []
   );
 
   const createVendor = useCallback(
@@ -131,9 +122,7 @@ export function useEntityMutation() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        const data = await parseResponse(res);
-        await refresh();
-        return data;
+        return await parseResponse(res);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Create vendor failed";
         setError(msg);
@@ -142,10 +131,42 @@ export function useEntityMutation() {
         setSaving(false);
       }
     },
-    [refresh]
+    []
+  );
+
+  const updateVendor = useCallback(
+    async (id: string, payload: Record<string, unknown>) => {
+      setSaving(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/procurement/vendors/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        return await parseResponse(res);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Update vendor failed";
+        setError(msg);
+        throw e;
+      } finally {
+        setSaving(false);
+      }
+    },
+    []
   );
 
   const clearError = useCallback(() => setError(null), []);
 
-  return { append, update, replaceAll, createUser, createVendor, saving, error, clearError };
+  return {
+    append,
+    update,
+    replaceAll,
+    createUser,
+    createVendor,
+    updateVendor,
+    saving,
+    error,
+    clearError,
+  };
 }

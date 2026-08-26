@@ -6,8 +6,8 @@ import { message } from "antd";
 import { Icon } from "@/components/erp/icons";
 import { Btn, fmtNum } from "@/components/erp/ui";
 import { DashHead } from "@/components/erp/dashboards";
-import { useDATA } from "@/components/erp/data";
 import { usePackaging } from "@/hooks/use-packaging";
+import { useVendors } from "@/hooks/use-vendors";
 import { useFormState } from "@/components/forms";
 import type { Packaging } from "@/lib/entity-types";
 
@@ -120,7 +120,7 @@ export default function PackagingMasterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editCode = searchParams.get("code")?.trim() ?? "";
-  const DATA = useDATA();
+  const { items: vendors } = useVendors();
   const {
     items: packagingItems,
     loading: packagingLoading,
@@ -147,7 +147,7 @@ export default function PackagingMasterPage() {
       router.replace("/inventory/packaging");
       return;
     }
-    const supplier = DATA.VENDORS.find((v) => v.name === editing.supplier);
+    const supplier = vendors.find((v) => v.name === editing.supplier);
     const typeName = editing.name.includes(" · ")
       ? editing.name.split(" · ")[0]
       : editing.name;
@@ -167,10 +167,10 @@ export default function PackagingMasterPage() {
   }, [editCode, editing?.code, packagingLoading]);
 
   const packagingVendors = useMemo(() => {
-    const packaging = DATA.VENDORS.filter((v) => v.category === "Packaging");
-    const rest = DATA.VENDORS.filter((v) => v.category !== "Packaging");
+    const packaging = vendors.filter((v) => v.category === "Packaging");
+    const rest = vendors.filter((v) => v.category !== "Packaging");
     return [...packaging, ...rest];
-  }, [DATA.VENDORS]);
+  }, [vendors]);
 
   const sampleItems = useMemo(
     () =>
@@ -183,7 +183,7 @@ export default function PackagingMasterPage() {
 
   const livePreview = useMemo(() => {
     const supplierName =
-      DATA.VENDORS.find((v) => v.id === form.values.supplier)?.name ?? "—";
+      vendors.find((v) => v.id === form.values.supplier)?.name ?? "—";
     return {
       title: form.values.capacity.trim()
         ? `Preview — ${form.values.capacity.trim()} kg bag`
@@ -196,7 +196,7 @@ export default function PackagingMasterPage() {
       reorder: form.values.reorderQty,
       unit: form.values.unit,
     };
-  }, [form.values, DATA.VENDORS]);
+  }, [form.values, vendors]);
 
   const validate = (): string | null => {
     const type = form.values.packagingType.trim();
@@ -264,7 +264,7 @@ export default function PackagingMasterPage() {
     const reorder = form.values.reorderQty.trim()
       ? parseFloat(form.values.reorderQty)
       : 0;
-    const supplier = DATA.VENDORS.find((v) => v.id === form.values.supplier);
+    const supplier = vendors.find((v) => v.id === form.values.supplier);
 
     setSaving(true);
     try {
@@ -591,7 +591,7 @@ export default function PackagingMasterPage() {
                     : "HDPE"
               }
               supplier={
-                DATA.VENDORS.find((v) => v.category === "Packaging")?.name ??
+                vendors.find((v) => v.category === "Packaging")?.name ??
                 "—"
               }
               reorder={String(item.reorder)}

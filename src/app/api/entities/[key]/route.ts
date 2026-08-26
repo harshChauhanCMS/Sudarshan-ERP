@@ -4,6 +4,7 @@ import {
   appendEntityItem,
   updateEntityItem,
   removeEntityItem,
+  displayOrderedItems,
   KEY_MAP,
 } from "@/lib/db-entities";
 import { EMPTY_ERP_DATA } from "@/lib/empty-erp-data";
@@ -35,6 +36,9 @@ function requireEntityAccess(
 ) {
   const module = moduleForEntityKey(key);
   if (!module) return fail("Unknown entity key", 404);
+  // Company directory is reference/branding metadata, not sensitive settings —
+  // any authenticated session may read it. Writes stay settings-gated below.
+  if (key === "companies" && action === "view") return null;
   if (["permissions", "roles"].includes(key) && !isAdminOrOwner(user.role)) {
     return requirePermission(user, "user_management", action);
   }
@@ -58,7 +62,7 @@ export async function GET(_req: Request, { params }: Params) {
       }
       const field = REVERSE_MAP[key] as keyof typeof SEED_DATA;
       const value = SEED_DATA[field];
-      return ok(Array.isArray(value) ? value : value);
+      return ok(Array.isArray(value) ? displayOrderedItems(key, value) : value);
     }
     if (key === "attendanceToday") {
       const { EntityStore } = await import("@/models/EntityStore");
@@ -66,7 +70,7 @@ export async function GET(_req: Request, { params }: Params) {
       return ok(doc?.meta ?? EMPTY_ERP_DATA.ATTENDANCE_TODAY);
     }
     const items = await getEntityItems(key);
-    return ok(items);
+    return ok(displayOrderedItems(key, items));
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Load failed", 500);
   }

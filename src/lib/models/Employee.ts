@@ -101,11 +101,27 @@ const EmployeeSchema = new Schema(
     annualCtc: { type: Number, default: 0 },
     monthlyGross: { type: Number, default: 0 },
     basicSalary: { type: Number, default: 0 },
-    da: { type: Number, default: 0 },
     hra: { type: Number, default: 0 },
     otherConveyance: { type: Number, default: 0 },
     specialBonus: { type: Number, default: 0 },
     reimbursementCap: { type: Number, default: 0 },
+    /** One-off pending dues paid out with this month's salary. */
+    arrears: { type: Number, default: 0 },
+    /**
+     * Deductions applied to this employee: which master, and the percentage
+     * used for them. The master supplies the basis/cap/ceiling, the employee
+     * supplies the rate — see models/Deduction.ts.
+     */
+    deductionRates: {
+      type: [
+        {
+          _id: false,
+          deductionId: { type: String, required: true, trim: true },
+          percentage: { type: Number, default: 0, min: 0, max: 100 },
+        },
+      ],
+      default: [],
+    },
     // Daily wage details
     dailyWageRate: { type: Number, default: 0 },
     skillCategory: { type: String, trim: true },

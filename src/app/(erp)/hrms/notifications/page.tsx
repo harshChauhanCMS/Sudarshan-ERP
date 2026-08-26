@@ -58,9 +58,11 @@ export default function NotificationsPage() {
       setRows(json.data?.notifications ?? []);
       setUnreadCount(json.data?.unreadCount ?? 0);
       setTotalCount(json.data?.totalCount ?? json.data?.notifications?.length ?? 0);
+      return true;
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Failed to load notifications");
       setRows([]);
+      return false;
     } finally {
       setLoading(false);
     }
@@ -128,7 +130,7 @@ export default function NotificationsPage() {
         actions={
           <Button
             icon={<ReloadOutlined />}
-            onClick={() => load(activeTab)}
+            onClick={() => void load(activeTab).then((ok) => ok && message.success("Refreshed"))}
             loading={loading}
           >
             Refresh

@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { EmployeeDailyReportRow } from "@/lib/employee-attendance-report";
+import { formatWorkedDuration } from "@/lib/format-duration";
 
 const BRAND = { r: 55, g: 77, b: 149 };
 
@@ -93,7 +94,7 @@ export function downloadEmployeeAttendanceReportPdf(
     dayjs(row.day).format("ddd"),
     row.inAt ? dayjs(row.inAt).format("HH:mm") : "—",
     row.outAt ? dayjs(row.outAt).format("HH:mm") : "—",
-    row.workedHours?.toFixed(2) ?? "0.00",
+    formatWorkedDuration(row.workedHours),
     attendanceStatus(row),
     row.leaveLabel ?? "—",
   ]);
@@ -101,7 +102,7 @@ export function downloadEmployeeAttendanceReportPdf(
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: [["#", "Date", "Day", "In", "Out", "Worked (h)", "Status", "Leave type"]],
+    head: [["#", "Date", "Day", "In", "Out", "Worked", "Status", "Leave type"]],
     body,
     theme: "grid",
     styles: {

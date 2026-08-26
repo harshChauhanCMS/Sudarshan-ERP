@@ -8,7 +8,7 @@ import { LEAVE_PATCH_FIELDS, pickAllowedFields } from "@/lib/field-allowlists";
 import { syncCompletedLeaveStatuses } from "@/lib/leave-status-sync";
 import { getSession } from "@/lib/session";
 
-const VALID_LEAVE_TYPES = new Set(["casual", "sick", "privilege", "unpaid"]);
+const VALID_LEAVE_TYPES = new Set(["casual", "sick", "privilege", "compOff", "unpaid"]);
 
 export async function GET(
   request: Request,

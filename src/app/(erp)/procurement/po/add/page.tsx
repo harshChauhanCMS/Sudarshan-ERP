@@ -8,6 +8,9 @@ import { Btn, fmtINRFull, fmtNum } from "@/components/erp/ui";
 import { DashHead } from "@/components/erp/dashboards";
 import { useDATA } from "@/components/erp/data";
 import { usePackaging } from "@/hooks/use-packaging";
+import { useSpareParts } from "@/hooks/use-spare-parts";
+import { useRawMaterials } from "@/hooks/use-raw-materials";
+import { useVendors } from "@/hooks/use-vendors";
 import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { useFormState } from "@/components/forms";
 import { nextPoId, formatDisplayDate } from "@/lib/id-generators";
@@ -79,6 +82,9 @@ export default function CreatePurchaseOrderPage() {
   const router = useRouter();
   const DATA = useDATA();
   const { items: packagingItems } = usePackaging();
+  const { items: spareParts } = useSpareParts();
+  const { items: rawMaterials } = useRawMaterials();
+  const { items: vendors } = useVendors();
   const { append, saving, error, clearError } = useEntityMutation();
 
   const defaultPoNumber = useMemo(
@@ -94,7 +100,7 @@ export default function CreatePurchaseOrderPage() {
 
   const materials = useMemo<MaterialOption[]>(
     () => [
-      ...DATA.RAW_MATERIALS.map((r) => ({
+      ...rawMaterials.map((r) => ({
         code: r.code,
         name: r.name,
         grade: r.grade,
@@ -108,7 +114,7 @@ export default function CreatePurchaseOrderPage() {
         unit: p.unit,
         kind: "PKG",
       })),
-      ...DATA.SPARE_PARTS.map((s) => ({
+      ...spareParts.map((s) => ({
         code: s.code,
         name: s.name,
         grade: "—",
@@ -116,7 +122,7 @@ export default function CreatePurchaseOrderPage() {
         kind: "SP",
       })),
     ],
-    [DATA.RAW_MATERIALS, packagingItems, DATA.SPARE_PARTS]
+    [rawMaterials, packagingItems, spareParts]
   );
 
   const selectedMaterial = useMemo(
@@ -125,8 +131,8 @@ export default function CreatePurchaseOrderPage() {
   );
 
   const selectedVendor = useMemo(
-    () => DATA.VENDORS.find((v) => v.id === form.values.vendor),
-    [DATA.VENDORS, form.values.vendor]
+    () => vendors.find((v) => v.id === form.values.vendor),
+    [vendors, form.values.vendor]
   );
 
   const orderValue = useMemo(() => {
@@ -217,7 +223,7 @@ export default function CreatePurchaseOrderPage() {
       throw new Error(validationError);
     }
 
-    const vendor = DATA.VENDORS.find((v) => v.id === form.values.vendor);
+    const vendor = vendors.find((v) => v.id === form.values.vendor);
     const material = materials.find((m) => m.code === form.values.material);
     const quantity = parseFloat(form.values.quantity) || 0;
     const rate = parseFloat(form.values.rate) || 0;
@@ -335,7 +341,7 @@ export default function CreatePurchaseOrderPage() {
                     onChange={(e) => form.setField("vendor", e.target.value)}
                   >
                     <option value="">Select vendor</option>
-                    {DATA.VENDORS.map((v) => (
+                    {vendors.map((v) => (
                       <option key={v.id} value={v.id}>
                         {v.name}
                       </option>

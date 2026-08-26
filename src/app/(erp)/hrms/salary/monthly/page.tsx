@@ -44,9 +44,28 @@ type SalaryRow = {
   pfEmployer: number;
   esi: number;
   tds: number;
+  advance?: number;
   otherDeductions?: number;
+  /** Per-rule amounts, printed as their own rows on the payslip. */
+  deductionBreakdown?: { name: string; percentage?: number; amount: number }[];
   overtimeHours: number;
   overtimeAmount: number;
+  cycle?: string;
+  designation?: string;
+  basicSalary?: number;
+  hra?: number;
+  otherConveyance?: number;
+  specialBonus?: number;
+  arrears?: number;
+  holidayDays?: number;
+  // Employee master details printed on the payslip
+  pfUan?: string;
+  esiIp?: string;
+  accountNo?: string;
+  locationUnit?: string;
+  dateJoining?: string;
+  annualCtc?: number;
+  monthlyGross?: number;
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -113,8 +132,10 @@ function MonthlySalaryContent() {
       if (!res.ok) throw new Error(json?.error || "Failed");
       setSheets(json.data || []);
       setSelectedRowKeys([]);
+      return true;
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Failed to load");
+      return false;
     } finally {
       setLoading(false);
     }
@@ -144,9 +165,17 @@ function MonthlySalaryContent() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed");
-      message.success(
-        `Generated ${json.data.generated} sheets for ${cycleLabel}`
-      );
+      const { generated = 0, skipped = 0 } = json.data ?? {};
+      // Employees who already have a sheet for the cycle are left alone.
+      if (generated === 0 && skipped > 0) {
+        message.info(`Salary already generated for all ${skipped} employees in ${cycleLabel}`);
+      } else {
+        message.success(
+          `Generated ${generated} sheet${generated === 1 ? "" : "s"} for ${cycleLabel}${
+            skipped > 0 ? ` · ${skipped} already generated, left untouched` : ""
+          }`
+        );
+      }
       void load();
     } catch (e) {
       message.error(e instanceof Error ? e.message : "Generate failed");
@@ -198,6 +227,7 @@ function MonthlySalaryContent() {
           (r.pfEmployee || 0) +
           (r.esi || 0) +
           (r.tds || 0) +
+          (r.advance || 0) +
           (r.leaveDeduction || 0) +
           (r.otherDeductions || 0)
         ),
@@ -440,7 +470,11 @@ function MonthlySalaryContent() {
         activeFilterCount={statusFilter !== "all" ? 1 : 0}
         trailing={
           <>
-            <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => void load().then((ok) => ok && message.success("Refreshed"))}
+              loading={loading}
+            >
               Refresh
             </Button>
             <Button

@@ -112,6 +112,8 @@ const NAV = [
         icon: "user",
         items: [
           { id: "/hrms/employees", label: "Employees", icon: "user" },
+          { id: "/hrms/shifts", label: "Shift management", icon: "clock" },
+          { id: "/hrms/deductions", label: "Deduction management", icon: "money" },
           { id: "/hrms/salary", label: "Salary", icon: "money" },
         ],
       },
@@ -188,6 +190,41 @@ const ALL_GROUP_IDS = NAV.flatMap((section) =>
   collectNavGroupIds(section.items),
 );
 
+/**
+ * Recursively filters nav sections/groups/items by label. A group/section
+ * whose own label matches is kept in full (unfiltered children); otherwise
+ * it's kept only if at least one descendant matches, with non-matching
+ * siblings pruned.
+ */
+function filterNavBySearch(nav, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return nav;
+
+  const filterItems = (items) => {
+    const out = [];
+    for (const item of items) {
+      const labelMatch = item.label?.toLowerCase().includes(q);
+      if (Array.isArray(item.items)) {
+        const children = labelMatch ? item.items : filterItems(item.items);
+        if (labelMatch || children.length) {
+          out.push({ ...item, items: children });
+        }
+      } else if (labelMatch) {
+        out.push(item);
+      }
+    }
+    return out;
+  };
+
+  return nav
+    .map((section) => {
+      const sectionMatch = section.label?.toLowerCase().includes(q);
+      const items = sectionMatch ? section.items : filterItems(section.items);
+      return { ...section, items };
+    })
+    .filter((section) => section.items.length > 0);
+}
+
 const SB_NAV_ICON_SIZE = 17;
 const SB_NAV_SUB_ICON_SIZE = 15;
 
@@ -201,7 +238,6 @@ const Sidebar = ({
   navigate,
   company,
   companies = [],
-  onCompanyClick,
   badgeMap = {},
   sidebarWidth,
   setSidebarWidth,
@@ -212,14 +248,25 @@ const Sidebar = ({
   permissions,
   userName,
   userRole,
+  userDepartment,
 }) => {
   const filteredNav = useMemo(
     () => filterNavByPermissions(NAV, permissions, userRole),
     [permissions, userRole],
   );
 
+  const [navQuery, setNavQuery] = useState("");
+  const searchInputRef = useRef(null);
+  const isSearching = navQuery.trim().length > 0;
+  const searchedNav = useMemo(
+    () => filterNavBySearch(filteredNav, navQuery),
+    [filteredNav, navQuery],
+  );
+
   const displayName = userName || "User";
-  const displayRole = userRole || "Signed in";
+  // Department is shown here instead of the raw login role — userRole is
+  // still used above for nav filtering, this is display-only.
+  const displayRole = userDepartment || userRole || "Signed in";
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -240,6 +287,17 @@ const Sidebar = ({
   };
 
   const isResizing = useRef(false);
+
+  useEffect(() => {
+    const handleSearchShortcut = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleSearchShortcut);
+    return () => window.removeEventListener("keydown", handleSearchShortcut);
+  }, []);
 
   useEffect(() => {
     if (
@@ -321,7 +379,9 @@ const Sidebar = ({
       item && typeof item === "object" && Array.isArray(item.items);
     if (isGroup) {
       const groupActive = navItemIsActive(item);
-      const isGroupCollapsed = !!collapsedGroups[item.id];
+      // While searching, force every surviving group open — it only
+      // survived filterNavBySearch because it (or a descendant) matched.
+      const isGroupCollapsed = isSearching ? false : !!collapsedGroups[item.id];
       const groupIcon = item.icon || "user";
       return (
         <div
@@ -410,15 +470,7 @@ const Sidebar = ({
       )}
       <div
         className="sb-brand"
-        onClick={(e) => {
-          e.stopPropagation();
-          onCompanyClick?.();
-        }}
-        title={
-          showGroupBrand
-            ? `${companies.map((c) => c.name).join(" · ")} — click to switch company`
-            : `${company.name} — click to switch company`
-        }
+        title={showGroupBrand ? companies.map((c) => c.name).join(" · ") : company.name}
       >
         <div className="sb-brand-text">
           {showGroupBrand ? (
@@ -459,9 +511,6 @@ const Sidebar = ({
             {company.mark === "gold" ? "M" : "S"}
           </div>
         )}
-        <div className="sb-brand-switch">
-          <Icon name="switch" size={14} />
-        </div>
       </div>
       {/* Collapse Toggle — desktop only */}
       <button
@@ -501,14 +550,35 @@ const Sidebar = ({
       <div className="sb-search">
         <div className="sb-search-box">
           <Icon name="search" size={13} />
-          <span>Search…</span>
-          <div
-            className="kbd-group"
-            style={{ marginLeft: "auto", display: "flex", gap: 2 }}
-          >
-            <span className="kbd">⌘</span>
-            <span className="kbd">K</span>
-          </div>
+          <input
+            ref={searchInputRef}
+            type="text"
+            className="sb-search-input"
+            placeholder="Search…"
+            value={navQuery}
+            onChange={(e) => setNavQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.currentTarget.blur();
+                setNavQuery("");
+              }
+            }}
+            aria-label="Search navigation"
+          />
+          {navQuery ? (
+            <button
+              type="button"
+              className="sb-search-clear"
+              onClick={() => {
+                setNavQuery("");
+                searchInputRef.current?.focus();
+              }}
+              title="Clear search"
+              aria-label="Clear search"
+            >
+              <Icon name="x" size={12} />
+            </button>
+          ) : null}
         </div>
         <button
           type="button"
@@ -530,25 +600,29 @@ const Sidebar = ({
       </div>
 
       <nav className="sb-nav">
-        {filteredNav.map((section) => (
-          <div
-            key={section.id}
-            className={`sb-section ${collapsed[section.id] ? "collapsed" : ""}`}
-          >
-            <button
-              type="button"
-              className="sb-section-label"
-              aria-expanded={!collapsed[section.id]}
-              onClick={() => toggle(section.id)}
+        {isSearching && searchedNav.length === 0 ? (
+          <div className="sb-search-empty">No matching menu items</div>
+        ) : (
+          searchedNav.map((section) => (
+            <div
+              key={section.id}
+              className={`sb-section ${!isSearching && collapsed[section.id] ? "collapsed" : ""}`}
             >
-              <span>{section.label}</span>
-              <Icon name="chevDown" size={11} className="chev" />
-            </button>
-            <div className="sb-section-items">
-              {section.items.map((item) => renderNavItem(item))}
+              <button
+                type="button"
+                className="sb-section-label"
+                aria-expanded={isSearching || !collapsed[section.id]}
+                onClick={() => toggle(section.id)}
+              >
+                <span>{section.label}</span>
+                <Icon name="chevDown" size={11} className="chev" />
+              </button>
+              <div className="sb-section-items">
+                {section.items.map((item) => renderNavItem(item))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </nav>
 
       <div className="sb-foot">
@@ -564,7 +638,19 @@ const Sidebar = ({
           >
             <Icon name="settings" size={14} />
           </button>
-          <div className="sb-foot-avatar">{initials || "U"}</div>
+          <div
+            className="sb-foot-avatar"
+            role="button"
+            tabIndex={0}
+            title="View profile"
+            onClick={() => navigate("/profile")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") navigate("/profile");
+            }}
+            style={{ cursor: "pointer" }}
+          >
+            {initials || "U"}
+          </div>
         </div>
       </div>
     </aside>
@@ -620,6 +706,8 @@ const BREADCRUMB_MAP = {
   "/dispatch": ["Operations", "Dispatch Planning"],
   "/dispatch/new": ["Operations", "Dispatch Planning", "New dispatch plan"],
   "/hrms/employees": ["People", "HR Management", "Employees"],
+  "/hrms/shifts": ["People", "HR Management", "Shift management"],
+  "/hrms/deductions": ["People", "HR Management", "Deduction management"],
   "/hrms/employees/add": [
     "People",
     "HR Management",

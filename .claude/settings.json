@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx next *)",
+      "Bash(npx eslint *)",
+      "Bash(echo \"LINT-EXIT=$?\")",
+      "Bash(npx tsc *)",
+      "Bash(npx tsx *)",
+      "Bash(python3 -)",
+      "Bash(git stash *)"
+    ]
+  }
+}

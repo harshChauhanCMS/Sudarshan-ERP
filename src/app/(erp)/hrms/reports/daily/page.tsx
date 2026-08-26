@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
-import { Button, Tag } from "antd";
-import { DownloadOutlined, EyeOutlined } from "@ant-design/icons";
+import { useEffect, useState } from "react";
+import { Button, Space, Tag, Tooltip } from "antd";
+import { DownloadOutlined, EyeOutlined, FileExcelOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
 import RepHeader from "@/components/hrms/RepHeader";
@@ -14,6 +14,9 @@ import AttendanceFilterPanel, {
 import { TableActionIcon } from "@/components/common/TableActionIcons";
 import { useAttendanceReport, type AttendanceDailyRow } from "@/hooks/use-attendance-report";
 import { downloadDailyAttendanceReportPdf } from "@/lib/daily-attendance-report-pdf";
+import { formatWorkedDuration } from "@/lib/format-duration";
+
+import { downloadDailyAttendanceReportExcel } from "@/lib/daily-attendance-report-excel";
 
 function buildEmployeeReportHref(employeeId: string) {
   const params = new URLSearchParams({
@@ -28,7 +31,8 @@ const DAILY_PERIOD_OPTIONS: PeriodOption[] = [
   { value: "date", label: "Pick a date" },
   { value: "month", label: "This month" },
   { value: "last", label: "Last month" },
-  { value: "custom", label: "Pick month…" },
+  { value: "custom_month", label: "Pick month…" },
+  { value: "custom", label: "Custom date range (From – To)" },
 ];
 
 function fmtTime(iso: string | null) {
@@ -66,11 +70,22 @@ function PunchLocationCell({
 
 export default function DailyAttendancePage() {
   const r = useAttendanceReport({ variant: "daily" });
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   useEffect(() => {
     void r.handleApply();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleExportExcel = async () => {
+    if (exportingExcel || r.daily.length === 0) return;
+    try {
+      setExportingExcel(true);
+      await downloadDailyAttendanceReportExcel(r.daily, r.summary);
+    } finally {
+      setExportingExcel(false);
+    }
+  };
 
   const columns: CommonTableColumn<AttendanceDailyRow>[] = [
     {
@@ -143,11 +158,11 @@ export default function DailyAttendancePage() {
       ),
     },
     {
-      title: "Worked (h)",
+      title: "Worked",
       dataIndex: "workedHours",
       key: "worked",
       width: 100,
-      render: (v: number) => v.toFixed(2),
+      render: (v: number) => formatWorkedDuration(v),
     },
     {
       title: "Status",
@@ -155,8 +170,18 @@ export default function DailyAttendancePage() {
       width: 170,
       render: (_: unknown, row: AttendanceDailyRow) => (
         <div className="flex gap-1 flex-wrap">
+          {row.holiday && !row.present && (
+            <Tooltip title={row.holiday.name}>
+              <Tag color="blue">Holiday · {row.holiday.initials}</Tag>
+            </Tooltip>
+          )}
           {row.absent && <Tag color="red">Absent</Tag>}
           {row.present && <Tag color="green">Present</Tag>}
+          {row.present && row.holiday && (
+            <Tooltip title={`Worked on ${row.holiday.name}`}>
+              <Tag color="blue">On holiday</Tag>
+            </Tooltip>
+          )}
           {row.late && <Tag color="orange">Late</Tag>}
         </div>
       ),
@@ -211,12 +236,22 @@ export default function DailyAttendancePage() {
         title="Daily Attendance"
         subtitle={`${r.rangeLabel} · in/out times, GPS locations, worked hours & status per day`}
         actions={
-          <Button
-            icon={<DownloadOutlined />}
-            onClick={() => downloadDailyAttendanceReportPdf(r.rangeLabel, r.daily)}
-          >
-            Export
-          </Button>
+          <Space>
+            <Button
+              icon={<FileExcelOutlined />}
+              onClick={() => void handleExportExcel()}
+              loading={exportingExcel}
+              disabled={r.daily.length === 0}
+            >
+              Export Excel
+            </Button>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() => downloadDailyAttendanceReportPdf(r.rangeLabel, r.daily)}
+            >
+              Export PDF
+            </Button>
+          </Space>
         }
       />
 
