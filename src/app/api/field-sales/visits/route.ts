@@ -22,15 +22,29 @@ export async function GET(request: Request) {
   if (!user) return fail("Unauthorized", 401);
 
   const url = new URL(request.url);
-  const status = url.searchParams.get("status")?.trim();
+  const params = url.searchParams;
+  const status = params.get("status")?.trim();
+  const visitType = params.get("visitType")?.trim();
+  const company = params.get("company")?.trim();
+  const employeeId = params.get("employeeId")?.trim();
+  const from = params.get("from")?.trim();
+  const to = params.get("to")?.trim();
+  const limitParam = Number(params.get("limit"));
+  const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 1000) : 100;
 
   try {
     const isPrivileged = isAdminOrOwner(user.role);
     const visits = await listFieldVisits({
       status: status || undefined,
-      employeeId: !isPrivileged && user.employeeId ? user.employeeId : undefined,
+      visitType: visitType || undefined,
+      company: company || undefined,
+      from: from || undefined,
+      to: to || undefined,
+      employeeId: isPrivileged
+        ? employeeId || undefined
+        : user.employeeId || undefined,
       email: !isPrivileged ? user.email : undefined,
-      limit: 100,
+      limit,
     });
     return ok({
       visits,

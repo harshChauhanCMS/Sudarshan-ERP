@@ -31,6 +31,15 @@ import dayjs from "dayjs";
 import { Icon } from "./icons";
 import { useDATA } from "./data";
 import { useEmployees } from "@/hooks/use-employees";
+import { useFieldVisitHistory } from "@/hooks/use-field-visit-history";
+import { FIELD_VISIT_STATUSES, FIELD_VISIT_TYPES } from "@/lib/field-visit-types";
+import { FIELD_VISIT_COMPANY_OPTIONS } from "@/lib/field-visit-form";
+import {
+  formatVisitDurationMinutes,
+  getVisitAcceptToCloseMinutes,
+  getVisitClosingRemark,
+  visitStatusLabel,
+} from "@/lib/field-visit-display";
 import { useCustomers } from "@/hooks/use-customers";
 import { useInvoices } from "@/hooks/use-invoices";
 import {
@@ -1687,126 +1696,143 @@ const FieldVisitLog = () => {
 /* ============================================================
    FIELD VISIT HISTORY
    ============================================================ */
-const FIELD_VISIT_HISTORY_ROWS = [
-  {
-    id: "1",
-    date: "09 Mar 2025",
-    employee: "Rajesh Mehta",
-    party: "Asian Paints, Kota",
-    visitType: "Customer",
-    start: "08:15",
-    end: "11:45",
-    duration: "3h 30m",
-    area: "Kota",
-    outcome: "Order confirmed",
-    outcomeTone: "positive",
-    followUp: "15 Mar — rate sheet",
-    notes:
-      "Rate discussion completed. Customer agreed on GCC 325 at ₹X per MT for Q2. Order for 50 MT confirmed pending PO. Follow-up call scheduled for dispatch timeline.",
-  },
-  {
-    id: "2",
-    date: "09 Mar 2025",
-    employee: "Mohammed Irfan",
-    party: "Berger Paints — Jaipur branch",
-    visitType: "Customer",
-    start: "07:45",
-    end: "10:20",
-    duration: "2h 35m",
-    area: "Jaipur",
-    outcome: "PO expected",
-    outcomeTone: "positive",
-    followUp: "12 Mar — PO status",
-    notes:
-      "Met purchase manager for annual contract renewal. Discussed volume discount and delivery schedule. PO expected by 12 Mar.",
-  },
-  {
-    id: "3",
-    date: "08 Mar 2025",
-    employee: "Sneha Reddy",
-    party: "Minerals & Chemicals Ltd (Udaipur)",
-    visitType: "Vendor",
-    start: "10:00",
-    end: "12:30",
-    duration: "2h 30m",
-    area: "Udaipur",
-    outcome: "Sample collected",
-    outcomeTone: "positive",
-    followUp: "—",
-    notes: "Collected quality samples for lab testing. Vendor shared updated MSDS and batch certificates.",
-  },
-  {
-    id: "4",
-    date: "08 Mar 2025",
-    employee: "Karthik N.",
-    party: "Market survey — Chittorgarh",
-    visitType: "Market",
-    start: "09:30",
-    end: "—",
-    duration: "In progress",
-    area: "Chittorgarh",
-    outcome: "Data logged",
-    outcomeTone: "neutral",
-    followUp: "10 Mar — report",
-    notes: "Competitor pricing survey in progress. Visited 4 distributors in industrial belt.",
-  },
-  {
-    id: "5",
-    date: "07 Mar 2025",
-    employee: "Rajesh Mehta",
-    party: "ITC Paperboards, Bikaner",
-    visitType: "Customer",
-    start: "11:00",
-    end: "13:15",
-    duration: "2h 15m",
-    area: "Bikaner",
-    outcome: "Proposal sent",
-    outcomeTone: "neutral",
-    followUp: "14 Mar — decision",
-    notes: "Presented Q1 proposal for coated grades. Customer requested revised terms for bulk order.",
-  },
-  {
-    id: "6",
-    date: "07 Mar 2025",
-    employee: "Mohammed Irfan",
-    party: "Nirma Ltd, Ahmedabad",
-    visitType: "Customer",
-    start: "14:00",
-    end: "16:30",
-    duration: "2h 30m",
-    area: "Ahmedabad",
-    outcome: "Rate agreed",
-    outcomeTone: "positive",
-    followUp: "—",
-    notes: "Finalized rate for soda ash supply. Customer confirmed trial batch for next month.",
-  },
-];
-
-const FIELD_TOP_VISITED = [
-  { name: "Asian Paints", visits: 8 },
-  { name: "Berger Paints", visits: 6 },
-  { name: "ITC Paperboards", visits: 4 },
-  { name: "Minerals & Chemicals Ltd", visits: 3 },
-  { name: "Nirma Ltd", visits: 3 },
-  { name: "Hindustan Unilever", visits: 2 },
-];
-
 const visitTypeClass = (type) => {
-  const key = type.toLowerCase();
+  const key = String(type || "").toLowerCase();
   if (key === "customer") return "customer";
   if (key === "vendor") return "vendor";
   if (key === "market") return "market";
   return "other";
 };
 
+const HISTORY_STATUS_OPTIONS = [
+  { value: "all", label: "All statuses" },
+  ...FIELD_VISIT_STATUSES.map((s) => ({ value: s, label: visitStatusLabel(s) })),
+];
+
+const outcomeTone = (status) => {
+  if (status === "completed") return "positive";
+  if (status === "cancelled") return "negative";
+  return "neutral";
+};
+
+/** Scheduled times, overridden by the real accept/complete stamps when present. */
+const historyTime = (iso, fallback) => {
+  if (iso) {
+    return new Date(iso).toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "Asia/Kolkata",
+    });
+  }
+  return fallback || "—";
+};
+
+const historyArea = (visit) =>
+  visit.visitLocation?.city || visit.visitLocation?.address || visit.locationText || "—";
+
+const toHistoryRow = (visit) => {
+  const minutes = getVisitAcceptToCloseMinutes(visit);
+  return {
+    id: visit.id,
+    visitId: visit.visitId,
+    date: dayjs(visit.visitDate).isValid()
+      ? dayjs(visit.visitDate).format("DD MMM YYYY")
+      : visit.visitDate,
+    visitDate: visit.visitDate,
+    employee: visit.assignedEmployeeName,
+    employeeId: visit.assignedEmployeeId,
+    party: visit.partyName,
+    visitType: visit.visitType,
+    start: historyTime(visit.acceptedAt, visit.startTime),
+    end: historyTime(visit.completedAt ?? visit.cancelledAt, visit.returnTime),
+    duration:
+      visit.status === "in-progress" || visit.status === "accepted"
+        ? "In progress"
+        : formatVisitDurationMinutes(minutes),
+    area: historyArea(visit),
+    outcome: visitStatusLabel(visit.status),
+    outcomeTone: outcomeTone(visit.status),
+    followUp: visit.purpose?.trim() || "—",
+    notes:
+      getVisitClosingRemark(visit) ||
+      visit.notes?.trim() ||
+      visit.purpose?.trim() ||
+      "No notes recorded for this visit.",
+  };
+};
+
 const FieldVisitHistory = () => {
-  const [selectedId, setSelectedId] = useState(FIELD_VISIT_HISTORY_ROWS[0].id);
-  const [dateFrom, setDateFrom] = useState(dayjs("2025-03-01"));
-  const [dateTo, setDateTo] = useState(dayjs("2025-03-09"));
+  const [dateFrom, setDateFrom] = useState(dayjs().subtract(30, "day"));
+  const [dateTo, setDateTo] = useState(dayjs());
+  const [appliedRange, setAppliedRange] = useState({
+    from: dayjs().subtract(30, "day").format("YYYY-MM-DD"),
+    to: dayjs().format("YYYY-MM-DD"),
+  });
+  const [employee, setEmployee] = useState("all");
+  const [company, setCompany] = useState("all");
+  const [visitType, setVisitType] = useState("all");
+  const [status, setStatus] = useState("all");
   const [search, setSearch] = useState("");
+  const [selectedId, setSelectedId] = useState(null);
 
+  const { visits, loading, error, reload } = useFieldVisitHistory({
+    from: appliedRange.from,
+    to: appliedRange.to,
+    company,
+  });
 
-  const selected = FIELD_VISIT_HISTORY_ROWS.find((r) => r.id === selectedId) ?? FIELD_VISIT_HISTORY_ROWS[0];
+  const employeeOptions = useMemo(() => {
+    const seen = new Map();
+    visits.forEach((v) => {
+      if (v.assignedEmployeeId && !seen.has(v.assignedEmployeeId)) {
+        seen.set(v.assignedEmployeeId, v.assignedEmployeeName || v.assignedEmployeeId);
+      }
+    });
+    return [
+      { value: "all", label: "All employees" },
+      ...[...seen.entries()].map(([value, label]) => ({ value, label })),
+    ];
+  }, [visits]);
+
+  const rows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return visits
+      .filter((v) => employee === "all" || v.assignedEmployeeId === employee)
+      .filter((v) => visitType === "all" || v.visitType === visitType)
+      .filter((v) => status === "all" || v.status === status)
+      .map(toHistoryRow)
+      .filter(
+        (r) =>
+          !term ||
+          `${r.employee} ${r.party} ${r.area} ${r.visitId}`.toLowerCase().includes(term)
+      );
+  }, [visits, employee, visitType, status, search]);
+
+  const activeFilterCount = [employee, company, visitType, status].filter((v) => v !== "all")
+    .length;
+
+  const selected = rows.find((r) => r.id === selectedId) ?? rows[0] ?? null;
+
+  const topVisited = useMemo(() => {
+    const counts = new Map();
+    visits.forEach((v) => {
+      const key = v.partyName?.trim();
+      if (!key) return;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    });
+    return [...counts.entries()]
+      .map(([name, count]) => ({ name, visits: count }))
+      .sort((a, b) => b.visits - a.visits)
+      .slice(0, 6);
+  }, [visits]);
+
+  const applyFilters = () => {
+    setAppliedRange({
+      from: dateFrom.format("YYYY-MM-DD"),
+      to: dateTo.format("YYYY-MM-DD"),
+    });
+  };
 
   const visitHistoryColumns = useMemo(
     () => [
@@ -1820,16 +1846,16 @@ const FieldVisitHistory = () => {
         title: "Employee",
         dataIndex: "employee",
         key: "employee",
-        render: (employee) => <span className="strong">{employee}</span>,
+        render: (employeeName) => <span className="strong">{employeeName}</span>,
       },
       { title: "Party", dataIndex: "party", key: "party" },
       {
         title: "Visit type",
         dataIndex: "visitType",
         key: "visitType",
-        render: (visitType) => (
-          <span className={`field-visit-history-type field-visit-history-type--${visitTypeClass(visitType)}`}>
-            {visitType}
+        render: (type) => (
+          <span className={`field-visit-history-type field-visit-history-type--${visitTypeClass(type)}`}>
+            {type}
           </span>
         ),
       },
@@ -1860,13 +1886,13 @@ const FieldVisitHistory = () => {
         ),
       },
       {
-        title: "Follow-up",
+        title: "Purpose / follow-up",
         dataIndex: "followUp",
         key: "followUp",
         render: (followUp) => <span className="muted">{followUp}</span>,
       },
     ],
-    [selectedId]
+    []
   );
 
   return (
@@ -1874,63 +1900,64 @@ const FieldVisitHistory = () => {
       <DashHead
         title="Field Visit History"
         sub="Past field visits by employee, beat, and date"
-      />
+      >
+        <Btn
+          icon={loading ? undefined : "refresh"}
+          size="sm"
+          disabled={loading}
+          onClick={() => void reload()}
+        >
+          {loading ? <LoadingOutlined spin /> : null} {loading ? "Refreshing…" : "Refresh"}
+        </Btn>
+      </DashHead>
 
       <div className="field-visit-history-page">
         <PageFilterPanel
           search={search}
           onSearchChange={setSearch}
           searchPlaceholder="Search employee, customer, area…"
-          activeFilterCount={2}
-          onApply={() => {}}
+          activeFilterCount={activeFilterCount}
+          onApply={applyFilters}
         >
           <div className="arf-item">
             <span className="arf-label">Employee</span>
             <Select
               className="w-full"
-              defaultValue="all"
-              options={[
-                { value: "all", label: "All employees" },
-                { value: "rajesh", label: "Rajesh Mehta" },
-                { value: "mohammed", label: "Mohammed Irfan" },
-                { value: "sneha", label: "Sneha Reddy" },
-              ]}
+              value={employee}
+              onChange={setEmployee}
+              options={employeeOptions}
             />
           </div>
           <div className="arf-item">
             <span className="arf-label">Company</span>
             <Select
               className="w-full"
-              defaultValue="all"
+              value={company}
+              onChange={setCompany}
               options={[
                 { value: "all", label: "All companies" },
-                { value: "smi", label: "Sudarshan Minerals (Udaipur)" },
-                { value: "smic", label: "Sudarshan Microns" },
+                ...FIELD_VISIT_COMPANY_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
               ]}
             />
           </div>
           <div className="arf-item">
-            <span className="arf-label">Territory</span>
+            <span className="arf-label">Status</span>
             <Select
               className="w-full"
-              defaultValue="all"
-              options={[
-                { value: "all", label: "All territories" },
-                { value: "rajasthan", label: "Rajasthan" },
-                { value: "gujarat", label: "Gujarat" },
-              ]}
+              value={status}
+              onChange={setStatus}
+              options={HISTORY_STATUS_OPTIONS}
             />
           </div>
           <div className="arf-item">
             <span className="arf-label">Visit type</span>
             <Select
               className="w-full"
-              defaultValue="all"
+              value={visitType}
+              onChange={setVisitType}
               options={[
                 { value: "all", label: "All visit types" },
-                { value: "customer", label: "Customer" },
-                { value: "vendor", label: "Vendor" },
-                { value: "market", label: "Market" },
+                ...FIELD_VISIT_TYPES.map((t) => ({ value: t, label: t })),
               ]}
             />
           </div>
@@ -1954,22 +1981,31 @@ const FieldVisitHistory = () => {
           </div>
         </PageFilterPanel>
 
+        {error ? (
+          <p style={{ color: "var(--danger)", fontSize: 13, margin: "0 0 8px" }}>{error}</p>
+        ) : null}
+
         <div className="field-beat-card field-visit-history-table-card">
           <div className="field-visit-history-table-head">
             <div className="field-visit-history-table-title">
               <UnorderedListOutlined />
               Visit history
             </div>
-            <span className="field-visit-history-table-hint">Click a row to see notes</span>
+            <span className="field-visit-history-table-hint">
+              {loading ? "Loading…" : `${rows.length} visits · click a row to see notes`}
+            </span>
           </div>
           <div style={{ padding: 16 }}>
             <CommonTable
               {...ERP_TABLE_PROPS}
               className="field-visit-history-table"
               columns={visitHistoryColumns}
-              dataSource={FIELD_VISIT_HISTORY_ROWS}
+              dataSource={rows}
+              loading={loading}
               rowKey="id"
-              rowClassName={(row) => (selectedId === row.id ? "field-visit-history-row--selected" : "")}
+              rowClassName={(row) =>
+                selected?.id === row.id ? "field-visit-history-row--selected" : ""
+              }
               onRow={(row) => ({
                 onClick: () => setSelectedId(row.id),
                 style: { cursor: "pointer" },
@@ -1982,15 +2018,21 @@ const FieldVisitHistory = () => {
           <div className="field-beat-card">
             <div className="field-beat-card__head field-visit-history-side__head">
               <LineChartOutlined />
-              Top visited (last 30 days)
+              Top visited (selected period)
             </div>
             <div className="field-visit-history-side__body">
-              {FIELD_TOP_VISITED.map((item) => (
-                <div key={item.name} className="field-visit-history-top-row">
-                  <span>{item.name}</span>
-                  <span className="field-visit-history-top-row__count">{item.visits}</span>
+              {topVisited.length === 0 ? (
+                <div className="field-visit-history-top-row">
+                  <span className="muted">No visits in this period</span>
                 </div>
-              ))}
+              ) : (
+                topVisited.map((item) => (
+                  <div key={item.name} className="field-visit-history-top-row">
+                    <span>{item.name}</span>
+                    <span className="field-visit-history-top-row__count">{item.visits}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -2000,10 +2042,18 @@ const FieldVisitHistory = () => {
               Visit notes preview
             </div>
             <div className="field-visit-history-notes">
-              <div className="field-visit-history-notes__title">
-                {selected.date} · {selected.employee} · {selected.party}
-              </div>
-              <p className="field-visit-history-notes__body">{selected.notes}</p>
+              {selected ? (
+                <>
+                  <div className="field-visit-history-notes__title">
+                    {selected.date} · {selected.employee} · {selected.party}
+                  </div>
+                  <p className="field-visit-history-notes__body">{selected.notes}</p>
+                </>
+              ) : (
+                <p className="field-visit-history-notes__body muted">
+                  Select a visit to see its notes.
+                </p>
+              )}
             </div>
           </div>
         </div>

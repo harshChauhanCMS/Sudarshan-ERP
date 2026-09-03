@@ -60,18 +60,18 @@ const NAV = [
   },
   {
     id: "field-sales",
-    label: "Field sales and Beat tracking",
+    label: "Field sales and history",
     items: [
       {
         id: "/field-sales/activity-dashboard",
         label: "Field Activity Dashboard",
         icon: "chart",
       },
-      {
-        id: "/field-sales/visits-beat-tracking",
-        label: "Field Visits & Beat Tracking",
-        icon: "pin",
-      },
+      // {
+      //   id: "/field-sales/visits-beat-tracking",
+      //   label: "Field Visits & Beat Tracking",
+      //   icon: "pin",
+      // },
       {
         id: "/field-sales/visit-log",
         label: "Field Visit Log (Employee view)",
@@ -82,11 +82,11 @@ const NAV = [
         label: "Field Visit History",
         icon: "clock",
       },
-      {
-        id: "/field-sales/beat-territory",
-        label: "Beat Territory Management",
-        icon: "map",
-      },
+      // {
+      //   id: "/field-sales/beat-territory",
+      //   label: "Beat Territory Management",
+      //   icon: "map",
+      // },
     ],
   },
   // {
@@ -113,7 +113,11 @@ const NAV = [
         items: [
           { id: "/hrms/employees", label: "Employees", icon: "user" },
           { id: "/hrms/shifts", label: "Shift management", icon: "clock" },
-          { id: "/hrms/deductions", label: "Deduction management", icon: "money" },
+          {
+            id: "/hrms/deductions",
+            label: "Deduction management",
+            icon: "money",
+          },
           { id: "/hrms/salary", label: "Salary", icon: "money" },
         ],
       },
@@ -369,6 +373,12 @@ const Sidebar = ({
       }
       return item.items.some((child) => navItemIsActive(child));
     }
+    if (
+      item.id === "/dashboard/dispatch" &&
+      (route === "/dispatch" || route?.startsWith("/dispatch/"))
+    ) {
+      return true;
+    }
     return route === item.id || (route && route.startsWith(`${item.id}/`));
   };
 
@@ -470,7 +480,11 @@ const Sidebar = ({
       )}
       <div
         className="sb-brand"
-        title={showGroupBrand ? companies.map((c) => c.name).join(" · ") : company.name}
+        title={
+          showGroupBrand
+            ? companies.map((c) => c.name).join(" · ")
+            : company.name
+        }
       >
         <div className="sb-brand-text">
           {showGroupBrand ? (

@@ -3494,6 +3494,13 @@ const DispatchDashboard = ({ navigate }) => {
       title="Dispatch Dashboard"
       sub="Due today, overdue, vehicles, packaging blocks & company overview"
     >
+      <Btn
+        icon="truck"
+        size="sm"
+        onClick={() => navigate && navigate("/dispatch")}
+      >
+        Dispatch planning
+      </Btn>
       <DispatchMapHoverButton assignments={data?.vehicleAssignments ?? []}>
         <Btn
           icon="map"

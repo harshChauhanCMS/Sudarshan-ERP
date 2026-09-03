@@ -143,6 +143,10 @@ export async function listFieldVisits(filters?: {
   employeeId?: string;
   email?: string;
   status?: string;
+  visitType?: string;
+  company?: string;
+  from?: string;
+  to?: string;
   limit?: number;
 }): Promise<FieldVisitView[]> {
   await connectDB();
@@ -150,6 +154,14 @@ export async function listFieldVisits(filters?: {
   if (filters?.employeeId) query.assignedEmployeeId = filters.employeeId;
   if (filters?.email) query.assignedEmployeeEmail = filters.email.trim().toLowerCase();
   if (filters?.status) query.status = filters.status;
+  if (filters?.visitType) query.visitType = filters.visitType;
+  if (filters?.company) query.company = filters.company;
+  if (filters?.from || filters?.to) {
+    const range: Record<string, Date> = {};
+    if (filters.from) range.$gte = fieldVisitDayBoundsIST(parseFieldVisitDateYmd(filters.from)).start;
+    if (filters.to) range.$lte = fieldVisitDayBoundsIST(parseFieldVisitDateYmd(filters.to)).end;
+    query.visitDate = range;
+  }
 
   const rows = await FieldVisitAssignment.find(query)
     .sort({ visitDate: -1, createdAt: -1 })
