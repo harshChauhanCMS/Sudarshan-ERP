@@ -13,6 +13,7 @@ import { canManagePayroll } from "@/lib/hrms-access";
 import { User } from "@/models/User";
 import Notification from "@/lib/models/Notification";
 import { isWeeklyOffDate } from "@/lib/shift-utils";
+import { leaveDaysInWindow } from "@/lib/leave-window";
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function endOfDay(d: Date)   { const x = new Date(d); x.setHours(23,59,59,999); return x; }
@@ -44,8 +45,9 @@ export async function POST(request: Request) {
 
     // Accept either: { from, to } date strings  OR  legacy { cycle: "YYYY-MM" }
     let start: Date, end: Date, cycle: string;
+    const explicitRange = Boolean(body.from && body.to);
 
-    if (body.from && body.to) {
+    if (explicitRange) {
       start = startOfDay(new Date(body.from));
       end   = endOfDay(new Date(body.to));
       if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
@@ -64,6 +66,30 @@ export async function POST(request: Request) {
       start = new Date(year, month - 1, 1, 0, 0, 0, 0);
       end   = new Date(year, month, 0, 23, 59, 59, 999);
       cycle = c;
+    }
+
+    // `daysPresent` can only count days that have already happened, so a window
+    // running past today is never valid: left un-clamped it turned the rest of
+    // an in-progress month into absence (half pay for a fully present
+    // employee); clamped, a whole-month cycle would instead pay a full month's
+    // gross against a part-month of attendance. Neither figure is payable.
+    //
+    // So: an explicit from/to range is a deliberate part-period run and is
+    // clamped, while a whole-month cycle must actually be complete.
+    const todayEnd = endOfDay(new Date());
+    if (start > todayEnd) {
+      return fail("Cannot generate salary for a future period.", 400);
+    }
+    if (end > todayEnd) {
+      if (explicitRange) {
+        end = todayEnd;
+      } else {
+        return fail(
+          `Cycle ${cycle} has not finished yet. Generate it once the month ends, ` +
+            `or pass an explicit from/to range for a part-period run.`,
+          400,
+        );
+      }
     }
 
     // Informational only — each employee's actual working-day count below
@@ -98,9 +124,12 @@ export async function POST(request: Request) {
       ]),
     );
 
-    // Build attendance map
+    // Build attendance map.
+    // The window runs past `end` so a night shift that starts on the last day
+    // of the cycle still finds its out-punch the following morning.
+    const NIGHT_SHIFT_TAIL_MS = 18 * 36e5;
     const punches = await AttendancePunch.find({
-      punchedAt: { $gte: start, $lte: end },
+      punchedAt: { $gte: start, $lte: new Date(end.getTime() + NIGHT_SHIFT_TAIL_MS) },
     }).sort({ punchedAt: 1 }).lean();
 
     const punchDayMap = new Map<string, { inAt: Date | null; outAt: Date | null }>();
@@ -116,6 +145,23 @@ export async function POST(request: Request) {
       punchDayMap.set(k, cur);
     }
 
+    // A night shift punches out after midnight, so the out lands on the next
+    // day's key and the shift looked open-ended — overtime was never credited
+    // for night staff. Pair a day that has an in but no out with the next
+    // day's orphan out (an out with no in of its own).
+    const MAX_SHIFT_MS = 16 * 36e5;
+    for (const [key, entry] of punchDayMap) {
+      if (!entry.inAt || entry.outAt) continue;
+      const sep = key.lastIndexOf("|");
+      const eid = key.slice(0, sep);
+      const next = new Date(entry.inAt);
+      next.setDate(next.getDate() + 1);
+      const nextEntry = punchDayMap.get(`${eid}|${dayKey(next)}`);
+      if (!nextEntry?.outAt || nextEntry.inAt) continue;
+      if (nextEntry.outAt.getTime() - entry.inAt.getTime() > MAX_SHIFT_MS) continue;
+      entry.outAt = nextEntry.outAt;
+    }
+
     // Approved leaves in the range (includes leaves auto-marked "completed"
     // once their end date has passed — see syncCompletedLeaveStatuses)
     const leaves = await LeaveRequest.find({
@@ -124,13 +170,14 @@ export async function POST(request: Request) {
       toDate:   { $gte: start },
     }).lean();
 
-    const leaveByEmp = new Map<string, { paid: number; unpaid: number }>();
+    // Group the raw records — the day count has to be worked out per employee
+    // below, since it depends on that employee's own weekly off.
+    const leavesByEmp = new Map<string, typeof leaves>();
     for (const l of leaves) {
       const eid = String(l.employeeId);
-      const cur = leaveByEmp.get(eid) ?? { paid: 0, unpaid: 0 };
-      if (l.leaveType === "unpaid") cur.unpaid += l.days;
-      else cur.paid += l.days;
-      leaveByEmp.set(eid, cur);
+      const list = leavesByEmp.get(eid) ?? [];
+      list.push(l);
+      leavesByEmp.set(eid, list);
     }
 
     // Deduction masters resolved once for the whole run. Each employee's rate
@@ -193,7 +240,15 @@ export async function POST(request: Request) {
         cur.setDate(cur.getDate() + 1);
       }
 
-      const leaveInfo = leaveByEmp.get(eid) ?? { paid: 0, unpaid: 0 };
+      const leaveInfo = { paid: 0, unpaid: 0 };
+      for (const l of leavesByEmp.get(eid) ?? []) {
+        const d = leaveDaysInWindow(l, start, end, emp.weeklyOff, holidayMap);
+        if (d <= 0) continue;
+        if (l.leaveType === "unpaid") leaveInfo.unpaid += d;
+        else leaveInfo.paid += d;
+      }
+      leaveInfo.paid = Math.round(leaveInfo.paid * 100) / 100;
+      leaveInfo.unpaid = Math.round(leaveInfo.unpaid * 100) / 100;
 
       // The employee supplies a pinned rate where they have one; otherwise it
       // follows the master's current default (see resolveEmployeeDeductions).

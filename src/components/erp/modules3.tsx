@@ -8,9 +8,17 @@ import dayjs from "dayjs";
 import { Icon } from "./icons";
 import { useRawMaterials } from "@/hooks/use-raw-materials";
 import { useVendors } from "@/hooks/use-vendors";
+import { useEntityList } from "@/hooks/use-entity-list";
 import { useEmployees } from "@/hooks/use-employees";
 import { useAttendanceToday } from "@/hooks/use-attendance-today";
 import { useAttendanceReport } from "@/hooks/use-attendance-report";
+import {
+  buildVendorReport,
+  buildProfitReport,
+  buildProductionReport,
+  buildDispatchReport,
+  buildInventoryReport,
+} from "@/lib/reports-data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import PageFilterPanel from "@/components/common/PageFilterPanel";
 import { Select, DatePicker, Input, message, Dropdown } from "antd";
@@ -699,12 +707,12 @@ const Reports = () => {
         </div>
 
         <div style={{ minWidth: 0 }}>
-          {active === "profit" && <ProfitReport periodLabel={periodLabel} registerExport={(fn) => registerExport("profit", fn)} />}
-          {active === "inventory" && <InventoryReport periodLabel={periodLabel} registerExport={(fn) => registerExport("inventory", fn)} />}
-          {active === "production" && <ProductionReport periodLabel={periodLabel} registerExport={(fn) => registerExport("production", fn)} />}
-          {active === "dispatch" && <DispatchReport periodLabel={periodLabel} registerExport={(fn) => registerExport("dispatch", fn)} />}
-          {active === "vendor" && <VendorReport periodLabel={periodLabel} registerExport={(fn) => registerExport("vendor", fn)} />}
-          {active === "hr" && <HRReport periodLabel={periodLabel} registerExport={(fn) => registerExport("hr", fn)} />}
+          {active === "profit" && <ProfitReport period={period} periodLabel={periodLabel} registerExport={(fn) => registerExport("profit", fn)} />}
+          {active === "inventory" && <InventoryReport period={period} periodLabel={periodLabel} registerExport={(fn) => registerExport("inventory", fn)} />}
+          {active === "production" && <ProductionReport period={period} periodLabel={periodLabel} registerExport={(fn) => registerExport("production", fn)} />}
+          {active === "dispatch" && <DispatchReport period={period} periodLabel={periodLabel} registerExport={(fn) => registerExport("dispatch", fn)} />}
+          {active === "vendor" && <VendorReport period={period} periodLabel={periodLabel} registerExport={(fn) => registerExport("vendor", fn)} />}
+          {active === "hr" && <HRReport period={period} periodLabel={periodLabel} registerExport={(fn) => registerExport("hr", fn)} />}
         </div>
       </div>
 
@@ -721,7 +729,12 @@ const Reports = () => {
               size="sm"
               icon="download"
               onClick={() => {
-                exportHandlers.current[customReportId]?.();
+                const handler = exportHandlers.current[customReportId]?.pdf;
+                if (!handler) {
+                  message.info("Open that report once so it can build its rows, then export.");
+                  return;
+                }
+                runReportExport(handler);
                 setCustomOpen(false);
               }}
             >
@@ -800,111 +813,162 @@ const ReportShell = ({ title, sub, onExportPdf, onExportExcel, search, onSearchC
   );
 };
 
-const ProfitReport = ({ periodLabel, registerExport }) => {
+/** Shown wherever a metric has no source record, so an empty cell is never
+ *  mistaken for a zero. */
+const NoData = ({ note }) => (
+  <span className="subtle" title={note} style={{ fontSize: 12 }}>—</span>
+);
+
+/** Explains, in the report itself, which columns the schema cannot yet support. */
+const UnavailableNote = ({ items }) =>
+  items?.length ? (
+    <div
+      style={{
+        marginTop: 14, padding: "8px 12px", borderRadius: 6,
+        background: "var(--warning-soft, rgba(245,158,11,.08))",
+        border: "1px solid var(--border)", fontSize: 11.5, color: "var(--fg-muted)",
+      }}
+    >
+      <strong style={{ color: "var(--fg)" }}>Not available from stored data: </strong>
+      {items.join(" ")}
+    </div>
+  ) : null;
+
+const ProfitReport = ({ period, periodLabel, registerExport }) => {
+  const { items: orders, loading } = useEntityList("orders");
   const [search, setSearch] = useState("");
-  const profitRows = [
-    { name: "Talcum Powder", r: 3_22_00_000, c: 2_05_00_000, m: 36.3, d: 8.4 },
-    { name: "Calcium Carbonate", r: 2_45_00_000, c: 1_64_00_000, m: 33.1, d: 4.2 },
-    { name: "China Clay", r: 1_96_00_000, c: 1_28_00_000, m: 34.7, d: -1.8 },
-    { name: "Dolomite & Quartz", r: 1_58_00_000, c: 1_18_00_000, m: 25.3, d: 2.4 },
-    { name: "Chemicals", r: 1_32_00_000, c: 87_00_000, m: 34.1, d: 6.7 },
-    { name: "FIBC + PP Woven", r: 2_87_00_000, c: 1_84_00_000, m: 35.9, d: 14.2 },
-    { name: "BOPP & Fabrics", r: 1_42_00_000, c: 94_00_000, m: 33.8, d: 4.8 },
-  ];
+
+  const report = useMemo(() => buildProfitReport(orders, period), [orders, period]);
+  const profitRows = report.rows;
+
   const profitColumns = [
     {
       title: "Product line",
-      dataIndex: "name",
-      key: "name",
-      render: (name) => <span className="strong">{name}</span>,
+      dataIndex: "line",
+      key: "line",
+      render: (line) => <span className="strong">{line}</span>,
     },
     {
-      title: "Revenue",
-      dataIndex: "r",
+      title: "Orders",
+      dataIndex: "orders",
+      key: "orders",
+      align: "right",
+      sorter: (a, b) => a.orders - b.orders,
+      render: (n) => <span className="num">{n}</span>,
+    },
+    {
+      title: "Qty (MT)",
+      dataIndex: "qty",
+      key: "qty",
+      align: "right",
+      sorter: (a, b) => a.qty - b.qty,
+      render: (q) => <span className="num">{fmtNum(q)}</span>,
+    },
+    {
+      title: "Revenue booked",
+      dataIndex: "revenue",
       key: "revenue",
       align: "right",
-      render: (r) => <span className="num">{fmtINR(r)}</span>,
+      sorter: (a, b) => a.revenue - b.revenue,
+      render: (r) => <span className="num strong">{fmtINR(r)}</span>,
     },
     {
-      title: "COGS",
-      dataIndex: "c",
-      key: "cogs",
+      title: "Revenue shipped",
+      dataIndex: "dispatchedRevenue",
+      key: "dispatchedRevenue",
       align: "right",
-      render: (c) => <span className="num">{fmtINR(c)}</span>,
-    },
-    {
-      title: "GP",
-      key: "gp",
-      align: "right",
-      render: (_, r) => <span className="num strong">{fmtINR(r.r - r.c)}</span>,
-    },
-    {
-      title: "GM%",
-      dataIndex: "m",
-      key: "gm",
-      align: "right",
-      render: (m) => <span className="num">{m}%</span>,
-    },
-    {
-      title: "vs Apr",
-      dataIndex: "d",
-      key: "vsApr",
-      render: (d) => (
-        <span style={{ fontSize: 12, color: d >= 0 ? "var(--success)" : "var(--danger)", fontWeight: 500 }}>
-          {d >= 0 ? "↑" : "↓"} {Math.abs(d)}%
+      render: (r, row) => (
+        <span className="num">
+          {fmtINR(r)}
+          {row.revenue > 0 ? (
+            <span className="subtle" style={{ fontSize: 11, marginLeft: 6 }}>
+              {Math.round((r / row.revenue) * 100)}%
+            </span>
+          ) : null}
         </span>
       ),
     },
+    {
+      title: "Avg realisation / MT",
+      dataIndex: "avgRealisation",
+      key: "avgRealisation",
+      align: "right",
+      render: (v) => (v == null ? <NoData note="No quantity recorded on these orders" /> : <span className="num">{fmtINR(v)}</span>),
+    },
+    {
+      title: "COGS",
+      key: "cogs",
+      align: "right",
+      render: () => <NoData note="No bill of materials or standard cost is stored" />,
+    },
+    {
+      title: "GM%",
+      key: "gm",
+      align: "right",
+      render: () => <NoData note="Requires COGS" />,
+    },
   ];
 
-  const filteredRows = filterBySearch(profitRows, search, (r) => [r.name]);
+  const filteredRows = filterBySearch(profitRows, search, (r) => [r.line]);
 
   const profitExportArgs = () => [
     "Profit Analysis",
-    `${periodLabel ?? ""} · Revenue, COGS, gross margin by product line`,
-    ["Product line", "Revenue", "COGS", "GP", "GM%", "vs Apr"],
+    `${periodLabel ?? ""} · Revenue by product line, from sales orders`,
+    ["Product line", "Orders", "Qty (MT)", "Revenue booked", "Revenue shipped", "Avg realisation / MT", "COGS", "GM%"],
     profitRows.map((r) => [
-      r.name, fmtINR(r.r), fmtINR(r.c), fmtINR(r.r - r.c), `${r.m}%`, `${r.d >= 0 ? "+" : ""}${r.d}%`,
+      r.line, r.orders, r.qty, r.revenue, r.dispatchedRevenue,
+      r.avgRealisation == null ? "—" : r.avgRealisation,
+      "Not available", "Not available",
     ]),
   ] as const;
   const handleExportPdf = () => downloadGenericTablePdf(...profitExportArgs());
   const handleExportExcel = () => downloadGenericTableExcel(...profitExportArgs());
-  registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
+  useEffect(() => {
+    registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
+  });
 
   return (
     <ReportShell
-      title={`Profit Analysis · ${periodLabel ?? new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" })}`}
-      sub="Revenue, COGS, gross margin by product line — both companies"
+      title={`Profit Analysis · ${periodLabel ?? ""}`}
+      sub="Revenue by product line — from sales orders in the selected month"
       search={search}
       onSearchChange={setSearch}
       onExportPdf={handleExportPdf}
       onExportExcel={handleExportExcel}
     >
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <Kpi icon="money" label="Revenue" value={fmtINR(11_82_00_000)} delta={12.4} spark={[8, 9, 10, 10, 11, 11, 12]} />
-        <Kpi icon="layers" label="COGS" value={fmtINR(7_70_00_000)} delta={9.1} spark={[5, 6, 6, 6, 7, 7, 8]} sparkColor="var(--danger)" />
-        <Kpi icon="chart" label="Gross profit" value={fmtINR(4_12_00_000)} delta={20.5} spark={[2, 2, 3, 3, 4, 4, 4]} sparkColor="var(--success)" />
-        <Kpi icon="bolt" label="Gross margin" value="34.8" unit="%" delta={2.4} spark={[31, 32, 33, 34, 34, 34, 35]} sparkColor="var(--success)" />
+        <Kpi icon="money" label="Revenue booked" value={report.kpis.revenue > 0 ? fmtINR(report.kpis.revenue) : "—"} />
+        <Kpi icon="truck" label="Revenue shipped" value={report.kpis.dispatchedRevenue > 0 ? fmtINR(report.kpis.dispatchedRevenue) : "—"} />
+        <Kpi icon="layers" label="Volume" value={report.kpis.qty > 0 ? fmtNum(report.kpis.qty) : "—"} unit={report.kpis.qty > 0 ? "MT" : undefined} />
+        <Kpi icon="chart" label="Avg realisation / MT" value={report.kpis.avgRealisation != null ? fmtINR(report.kpis.avgRealisation) : "—"} />
       </div>
       <CommonTable
         {...ERP_TABLE_PROPS}
         columns={profitColumns}
         dataSource={filteredRows}
-        rowKey="name"
+        rowKey="line"
+        loading={loading}
         scroll={{ x: "max-content" }}
+        locale={{ emptyText: <span className="muted">No sales orders dated in {periodLabel}.</span> }}
       />
+      <UnavailableNote items={report.unavailable} />
     </ReportShell>
   );
 };
 
-const InventoryReport = ({ periodLabel, registerExport }) => {
-  const { items: rawMaterials } = useRawMaterials();
+const FREQUENCY_LABEL = { high: "High", medium: "Medium", low: "Low" };
+
+const InventoryReport = ({ period, periodLabel, registerExport }) => {
+  const { items: rawMaterials, loading: rmLoading } = useRawMaterials();
+  const { items: purchaseOrders, loading: poLoading } = useEntityList("purchaseOrders");
   const [search, setSearch] = useState("");
-  const inventoryRows = rawMaterials.map((r, i) => ({
-    ...r,
-    classCode: i < 3 ? "A" : i < 7 ? "B" : "C",
-    movementCode: i % 3 === 0 ? "fast" : i % 3 === 1 ? "medium" : "slow",
-  }));
+
+  const report = useMemo(
+    () => buildInventoryReport(rawMaterials, purchaseOrders, period),
+    [rawMaterials, purchaseOrders, period]
+  );
+  const inventoryRows = report.rows;
+
   const inventoryColumns = [
     {
       title: "SKU",
@@ -921,160 +985,251 @@ const InventoryReport = ({ periodLabel, registerExport }) => {
       title: "Stock",
       key: "stock",
       align: "right",
-      render: (_, r) => <span className="num">{r.stock} {r.unit}</span>,
+      sorter: (a, b) => a.stock - b.stock,
+      render: (_, r) => <span className="num">{fmtNum(r.stock)} {r.unit}</span>,
     },
     {
-      title: "Value",
-      dataIndex: "value",
-      key: "value",
+      title: "Stock value",
+      dataIndex: "stockValue",
+      key: "stockValue",
       align: "right",
-      render: (value) => <span className="num">{fmtINR(value)}</span>,
+      sorter: (a, b) => a.stockValue - b.stockValue,
+      render: (v) => <span className="num">{v > 0 ? fmtINR(v) : <NoData note="No value recorded on this material" />}</span>,
     },
     {
-      title: "Class",
-      dataIndex: "classCode",
-      key: "classCode",
-      render: (classCode) => <Badge tone={classCode === "A" ? "primary" : classCode === "B" ? "info" : "default"}>{classCode}</Badge>,
+      title: "Purchased (12m)",
+      dataIndex: "purchaseValue",
+      key: "purchaseValue",
+      align: "right",
+      sorter: (a, b) => a.purchaseValue - b.purchaseValue,
+      render: (v, r) =>
+        r.poCount === 0 ? (
+          <NoData note="No purchase orders for this material in the last 12 months" />
+        ) : v > 0 ? (
+          <span className="num">
+            {fmtINR(v)}
+            <span className="subtle" style={{ fontSize: 11, marginLeft: 6 }}>{r.poCount} PO{r.poCount === 1 ? "" : "s"}</span>
+          </span>
+        ) : (
+          <NoData note={`${r.poCount} multi-line PO(s) — value not attributable to this material alone`} />
+        ),
     },
     {
-      title: "Movement",
-      dataIndex: "movementCode",
-      key: "movementCode",
-      render: (movementCode) => <Badge tone={movementCode === "fast" ? "success" : movementCode === "medium" ? "warning" : "default"} dot>{movementCode}</Badge>,
+      title: "ABC · purchase value",
+      dataIndex: "abcClass",
+      key: "abcClass",
+      render: (abcClass, r) =>
+        abcClass == null ? (
+          <NoData note={r.poCount === 0 ? "Never purchased in the last 12 months" : "Purchase value not attributable to this material"} />
+        ) : (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Badge tone={abcClass === "A" ? "primary" : abcClass === "B" ? "info" : "default"}>{abcClass}</Badge>
+            <span className="subtle" style={{ fontSize: 11 }}>{r.purchaseSharePct}%</span>
+          </span>
+        ),
     },
     {
-      title: "Last 30d",
-      key: "last30d",
+      title: "Purchase frequency",
+      dataIndex: "frequency",
+      key: "frequency",
+      render: (frequency, r) =>
+        frequency == null ? (
+          <NoData note="No purchase orders in the last 12 months" />
+        ) : (
+          <Badge tone={frequency === "high" ? "success" : frequency === "medium" ? "warning" : "default"} dot>
+            {FREQUENCY_LABEL[frequency]}
+          </Badge>
+        ),
+    },
+    {
+      title: "Purchases (12m)",
+      key: "monthlyQty",
       width: 90,
-      render: (_, __, i) => (
-        <Sparkline values={[20 + i * 3, 22, 18, 24, 28, 26, 30 + i * 2]} w={70} h={20} color="var(--primary)" />
-      ),
+      render: (_, r) =>
+        r.poCount === 0 ? (
+          <NoData note="Nothing purchased in the window" />
+        ) : (
+          <Sparkline values={r.monthlyQty} w={70} h={20} color="var(--primary)" />
+        ),
+    },
+    {
+      title: "Last purchased",
+      dataIndex: "lastPurchasedAt",
+      key: "lastPurchasedAt",
+      render: (v) =>
+        v ? <span className="mono" style={{ fontSize: 12 }}>{dayjs(v).format("DD MMM YYYY")}</span>
+          : <NoData note="No purchase order on record" />,
     },
   ];
 
-  const filteredRows = filterBySearch(inventoryRows, search, (r) => [r.code, r.name, r.classCode, r.movementCode]);
+  const filteredRows = filterBySearch(inventoryRows, search, (r) => [r.code, r.name, r.abcClass ?? ""]);
 
   const inventoryExportArgs = () => [
     "Inventory Report",
-    `${periodLabel ?? ""} · Stock value, ABC analysis, ageing`,
-    ["SKU", "Material", "Stock", "Value", "Class", "Movement"],
+    `${periodLabel ?? ""} · Stock value, ABC and purchase frequency over the 12 months to period end`,
+    ["SKU", "Material", "Stock", "Unit", "Stock value", "POs (12m)", "Qty purchased (12m)", "Purchase value (12m)", "ABC class", "Share %", "Purchase frequency", "Last purchased"],
     inventoryRows.map((r) => [
-      r.code, r.name, `${r.stock} ${r.unit}`, fmtINR(r.value), r.classCode, r.movementCode,
+      r.code, r.name, r.stock, r.unit, r.stockValue, r.poCount, r.purchaseQty,
+      r.purchaseValue > 0 ? r.purchaseValue : "—",
+      r.abcClass ?? "—",
+      r.purchaseSharePct == null ? "—" : `${r.purchaseSharePct}%`,
+      r.frequency ? FREQUENCY_LABEL[r.frequency] : "—",
+      r.lastPurchasedAt ? dayjs(r.lastPurchasedAt).format("YYYY-MM-DD") : "—",
     ]),
   ] as const;
   const handleExportPdf = () => downloadGenericTablePdf(...inventoryExportArgs());
   const handleExportExcel = () => downloadGenericTableExcel(...inventoryExportArgs());
-  registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
+  useEffect(() => {
+    registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
+  });
 
   return (
   <ReportShell
-    title={`Inventory Report · ${periodLabel ?? `As of ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`}`}
-    sub="Stock value, ABC analysis, ageing"
+    title={`Inventory Report · ${periodLabel ?? ""}`}
+    sub="Stock value, ABC and purchase frequency — 12 months to period end"
     search={search}
     onSearchChange={setSearch}
     onExportPdf={handleExportPdf}
     onExportExcel={handleExportExcel}
   >
-    <div className="grid grid-3" style={{ marginBottom: 20 }}>
-      <Kpi icon="money" label="Total inventory value" value={fmtINR(2_50_00_000)} delta={4.8} spark={[2.2,2.3,2.3,2.4,2.4,2.5,2.5]} />
-      <Kpi icon="loader" label="Inventory turns (annualized)" value="6.2x" delta={0.4} spark={[5.5,5.7,5.9,6.0,6.0,6.1,6.2]} sparkColor="var(--success)" />
-      <Kpi icon="alert" label="Slow-moving SKUs" value="3" delta={0} spark={[3,3,3,3,3,3,3]} sparkColor="var(--warning)" />
+    <div className="grid grid-4" style={{ marginBottom: 20 }}>
+      <Kpi icon="money" label="Stock value" value={report.kpis.stockValue > 0 ? fmtINR(report.kpis.stockValue) : "—"} />
+      <Kpi icon="box" label="Purchased (12m)" value={report.kpis.purchaseValue12m > 0 ? fmtINR(report.kpis.purchaseValue12m) : "—"} />
+      <Kpi icon="loader" label="Purchase : stock ratio" value={report.kpis.purchaseToStockRatio != null ? `${report.kpis.purchaseToStockRatio}x` : "—"} />
+      <Kpi icon="alert" label="Not purchased (12m)" value={String(report.kpis.neverPurchased)} unit={`of ${report.kpis.materials}`} />
     </div>
     <CommonTable
       {...ERP_TABLE_PROPS}
       columns={inventoryColumns}
       dataSource={filteredRows}
       rowKey="code"
+      loading={rmLoading || poLoading}
       scroll={{ x: "max-content" }}
+      locale={{ emptyText: <span className="muted">No raw materials in the database.</span> }}
     />
+    <UnavailableNote items={report.unavailable} />
   </ReportShell>
   );
 };
 
-const PRODUCTION_DOWNTIME = [
-  { l: "Changeover",      v: 14, color: "var(--primary)" },
-  { l: "Power outage",    v: 9,  color: "var(--secondary)" },
-  { l: "Maintenance",     v: 8,  color: "var(--info)" },
-  { l: "Material delay",  v: 6,  color: "var(--warning)" },
-  { l: "Other",           v: 5,  color: "var(--fg-faint)" },
-];
+const ProductionReport = ({ period, periodLabel, registerExport }) => {
+  const { items: productionData, loading: prodLoading } = useEntityList("productionData");
+  const { items: orders, loading: ordersLoading } = useEntityList("orders");
+  const [search, setSearch] = useState("");
 
-const ProductionReport = ({ periodLabel, registerExport }) => {
+  const report = useMemo(
+    () => buildProductionReport(productionData, orders, period),
+    [productionData, orders, period]
+  );
+
+  const productionColumns = [
+    {
+      title: "Product line",
+      dataIndex: "line",
+      key: "line",
+      render: (line) => <span className="strong">{line}</span>,
+    },
+    {
+      title: "Orders",
+      dataIndex: "orders",
+      key: "orders",
+      align: "right",
+      render: (n) => <span className="num">{n}</span>,
+    },
+    {
+      title: "Ordered (MT)",
+      dataIndex: "qty",
+      key: "qty",
+      align: "right",
+      sorter: (a, b) => a.qty - b.qty,
+      render: (q) => <span className="num">{fmtNum(q)}</span>,
+    },
+    {
+      title: "Completed (MT)",
+      dataIndex: "completedQty",
+      key: "completedQty",
+      align: "right",
+      render: (q) => <span className="num">{fmtNum(q)}</span>,
+    },
+    {
+      title: "Completion",
+      key: "completionPct",
+      width: 160,
+      render: (_, r) =>
+        r.completionPct == null ? (
+          <NoData note="No quantity recorded on these orders" />
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Bar value={r.completionPct} tone={r.completionPct >= 80 ? "success" : r.completionPct >= 40 ? "warning" : "danger"} />
+            <span className="mono" style={{ fontSize: 11, width: 42, textAlign: "right" }}>{r.completionPct}%</span>
+          </div>
+        ),
+    },
+  ];
+
+  const filteredRows = filterBySearch(report.rows, search, (r) => [r.line]);
+
   const productionExportArgs = () => [
     "Production Report",
-    `${periodLabel ?? ""} · Throughput, yield, downtime, defect rate`,
-    ["Metric", "Value"],
-    [
-      ["Total output", "2,420 MT"],
-      ["Yield", "96.8%"],
-      ["Downtime", "42 hrs"],
-      ["Defect rate", "3.8 ppm"],
-      ...PRODUCTION_DOWNTIME.map((r) => [`Downtime — ${r.l}`, `${r.v} hrs`]),
-    ],
+    `${periodLabel ?? ""} · Plan attainment and order completion by product line`,
+    ["Product line", "Orders", "Ordered (MT)", "Completed (MT)", "Completion %"],
+    report.rows.map((r) => [
+      r.line, r.orders, r.qty, r.completedQty,
+      r.completionPct == null ? "—" : `${r.completionPct}%`,
+    ]),
   ] as const;
   const handleExportPdf = () => downloadGenericTablePdf(...productionExportArgs());
   const handleExportExcel = () => downloadGenericTableExcel(...productionExportArgs());
-  registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
+  useEffect(() => {
+    registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
+  });
 
   return (
   <ReportShell
-    title={`Production Report · ${periodLabel ?? "Last 30 days"}`}
-    sub="Throughput, yield, downtime, defect rate"
+    title={`Production Report · ${periodLabel ?? ""}`}
+    sub="Plan attainment and order completion"
+    search={search}
+    onSearchChange={setSearch}
     onExportPdf={handleExportPdf}
     onExportExcel={handleExportExcel}
   >
     <div className="grid grid-4" style={{ marginBottom: 20 }}>
-      <Kpi icon="factory" label="Total output" value="2,420" unit="MT" delta={8.4} spark={[300,310,320,330,340,350,360]} />
-      <Kpi icon="bolt"    label="Yield"        value="96.8" unit="%"  delta={1.2} spark={[95,96,96,96,97,97,97]} sparkColor="var(--success)" />
-      <Kpi icon="clock"   label="Downtime"     value="42"   unit="hrs" delta={-12} spark={[60,55,50,48,45,42,42]} sparkColor="var(--success)" />
-      <Kpi icon="alert"   label="Defect rate"  value="3.8"  unit="ppm" delta={-15} spark={[5,4.5,4.2,4,3.9,3.8,3.8]} sparkColor="var(--success)" />
+      <Kpi icon="factory" label="Planned output" value={report.kpis.planned > 0 ? fmtNum(report.kpis.planned) : "—"} unit={report.kpis.planned > 0 ? "MT" : undefined} />
+      <Kpi icon="bolt" label="Actual output" value={report.kpis.actual > 0 ? fmtNum(report.kpis.actual) : "—"} unit={report.kpis.actual > 0 ? "MT" : undefined} />
+      <Kpi icon="chart" label="Plan attainment" value={report.kpis.attainmentPct != null ? String(report.kpis.attainmentPct) : "—"} unit={report.kpis.attainmentPct != null ? "%" : undefined} />
+      <Kpi icon="layers" label="Ordered volume" value={report.kpis.orderedQty > 0 ? fmtNum(report.kpis.orderedQty) : "—"} unit={report.kpis.orderedQty > 0 ? "MT" : undefined} />
     </div>
-    <div className="grid grid-2">
-      <div className="card" style={{ padding: 14 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Output by product line (MT)</div>
+    {report.series.length ? (
+      <div className="card" style={{ padding: 14, marginBottom: 20 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Planned vs actual output (MT)</div>
         <BarChart
-          data={[
-            { day: "Talc", planned: 540, actual: 562 },
-            { day: "CaCO3", planned: 420, actual: 408 },
-            { day: "Dolomite", planned: 380, actual: 392 },
-            { day: "PCC", planned: 160, actual: 142 },
-            { day: "Quartz", planned: 320, actual: 338 },
-            { day: "Chemical", planned: 580, actual: 578 },
-          ]}
+          data={report.series}
           keys={["planned", "actual"]}
           colors={["var(--border-strong)", "var(--primary)"]}
           h={180}
         />
       </div>
-      <div className="card" style={{ padding: 14 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Downtime by reason</div>
-        {PRODUCTION_DOWNTIME.map((r) => (
-          <div key={r.l} style={{ marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-              <span>{r.l}</span>
-              <span className="mono">{r.v} hrs</span>
-            </div>
-            <div className="bar" style={{ height: 4 }}>
-              <span style={{ width: `${(r.v / 14) * 100}%`, background: r.color }}></span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+    ) : null}
+    <CommonTable
+      {...ERP_TABLE_PROPS}
+      columns={productionColumns}
+      dataSource={filteredRows}
+      rowKey="line"
+      loading={prodLoading || ordersLoading}
+      scroll={{ x: "max-content" }}
+      locale={{ emptyText: <span className="muted">No sales orders dated in {periodLabel}.</span> }}
+    />
+    <UnavailableNote items={report.unavailable} />
   </ReportShell>
   );
 };
 
-const DispatchReport = ({ periodLabel, registerExport }) => {
+const DispatchReport = ({ period, periodLabel, registerExport }) => {
+  const { items: dispatches, loading } = useEntityList("dispatches");
   const [search, setSearch] = useState("");
-  const dispatchRows = [
-    { route: "Udaipur → Mumbai", trips: 48, volume: 1140, onTime: 96.0, leadTime: 10.4, freightCost: 21_45_000 },
-    { route: "Udaipur → Pune", trips: 22, volume: 528, onTime: 95.5, leadTime: 11.2, freightCost: 11_84_000 },
-    { route: "Udaipur → Kolkata", trips: 14, volume: 386, onTime: 88.4, leadTime: 28.6, freightCost: 12_40_000 },
-    { route: "Ahmedabad → Mumbai", trips: 38, volume: 912, onTime: 97.4, leadTime: 8.2, freightCost: 12_84_000 },
-    { route: "Ahmedabad → Bhavnagar", trips: 41, volume: 984, onTime: 98.2, leadTime: 3.4, freightCost: 5_20_000 },
-    { route: "Udaipur → Gotan", trips: 12, volume: 324, onTime: 95.0, leadTime: 4.8, freightCost: 2_60_000 },
-  ];
+
+  const report = useMemo(() => buildDispatchReport(dispatches, period), [dispatches, period]);
+
   const dispatchColumns = [
     {
       title: "Route",
@@ -1087,6 +1242,7 @@ const DispatchReport = ({ periodLabel, registerExport }) => {
       dataIndex: "trips",
       key: "trips",
       align: "right",
+      sorter: (a, b) => a.trips - b.trips,
       render: (trips) => <span className="num">{trips}</span>,
     },
     {
@@ -1094,80 +1250,108 @@ const DispatchReport = ({ periodLabel, registerExport }) => {
       dataIndex: "volume",
       key: "volume",
       align: "right",
-      render: (volume) => <span className="num">{volume}</span>,
+      sorter: (a, b) => a.volume - b.volume,
+      render: (volume) => <span className="num">{fmtNum(volume)}</span>,
     },
     {
-      title: "On-time %",
-      dataIndex: "onTime",
-      key: "onTime",
+      title: "Delivered",
+      key: "delivered",
       align: "right",
-      render: (onTime) => <span className="num" style={{ color: onTime >= 95 ? "var(--success)" : "var(--warning)", fontWeight: 500 }}>{onTime}%</span>,
+      render: (_, r) => <span className="num">{r.delivered} / {r.trips}</span>,
     },
     {
-      title: "Avg lead (hrs)",
-      dataIndex: "leadTime",
-      key: "leadTime",
+      title: "In transit",
+      dataIndex: "inTransit",
+      key: "inTransit",
       align: "right",
-      render: (leadTime) => <span className="num">{leadTime}</span>,
+      render: (n) => <span className="num">{n}</span>,
     },
     {
-      title: "Freight cost",
-      dataIndex: "freightCost",
-      key: "freightCost",
+      title: "Delivered %",
+      dataIndex: "deliveredPct",
+      key: "deliveredPct",
       align: "right",
-      render: (freightCost) => <span className="num">{fmtINR(freightCost)}</span>,
+      render: (pct) =>
+        pct == null ? (
+          <NoData note="No trips on this route in the period" />
+        ) : (
+          <span className="num" style={{ color: pct >= 95 ? "var(--success)" : pct >= 50 ? "var(--fg-muted)" : "var(--warning)", fontWeight: 500 }}>{pct}%</span>
+        ),
+    },
+    {
+      title: "Avg progress",
+      dataIndex: "avgProgress",
+      key: "avgProgress",
+      width: 150,
+      render: (pct) =>
+        pct == null ? <NoData note="No progress recorded" /> : (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Bar value={pct} tone={pct >= 80 ? "success" : "warning"} />
+            <span className="mono" style={{ fontSize: 11, width: 36, textAlign: "right" }}>{pct}%</span>
+          </div>
+        ),
     },
   ];
 
-  const filteredRows = filterBySearch(dispatchRows, search, (r) => [r.route]);
+  const filteredRows = filterBySearch(report.rows, search, (r) => [r.route]);
 
   const dispatchExportArgs = () => [
     "Dispatch Report",
-    `${periodLabel ?? ""} · On-time delivery, lead time, route P&L`,
-    ["Route", "Trips", "Vol (MT)", "On-time %", "Avg lead (hrs)", "Freight cost"],
-    dispatchRows.map((r) => [
-      r.route, r.trips, r.volume, `${r.onTime}%`, r.leadTime, fmtINR(r.freightCost),
+    `${periodLabel ?? ""} · Trips, tonnage and delivery status by route`,
+    ["Route", "Trips", "Vol (MT)", "Delivered", "In transit", "Delivered %", "Avg progress %"],
+    report.rows.map((r) => [
+      r.route, r.trips, r.volume, r.delivered, r.inTransit,
+      r.deliveredPct == null ? "—" : `${r.deliveredPct}%`,
+      r.avgProgress == null ? "—" : `${r.avgProgress}%`,
     ]),
   ] as const;
   const handleExportPdf = () => downloadGenericTablePdf(...dispatchExportArgs());
   const handleExportExcel = () => downloadGenericTableExcel(...dispatchExportArgs());
-  registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
+  useEffect(() => {
+    registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
+  });
 
   return (
     <ReportShell
-      title={`Dispatch Report · ${periodLabel ?? new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" })}`}
-      sub="On-time delivery, lead time, route P&L"
+      title={`Dispatch Report · ${periodLabel ?? ""}`}
+      sub="Trips, tonnage and delivery status by route"
       search={search}
       onSearchChange={setSearch}
       onExportPdf={handleExportPdf}
       onExportExcel={handleExportExcel}
     >
       <div className="grid grid-4" style={{ marginBottom: 20 }}>
-        <Kpi icon="truck" label="Vehicles dispatched" value="218" delta={11} spark={[180, 190, 200, 205, 210, 215, 218]} />
-        <Kpi icon="bolt" label="On-time %" value="94.2" unit="%" delta={1.2} sparkColor="var(--success)" spark={[91, 92, 93, 93, 93, 94, 94]} />
-        <Kpi icon="clock" label="Avg lead time" value="11.4" unit="hrs" delta={-4} sparkColor="var(--success)" spark={[12, 12, 12, 11.5, 11.4, 11.4, 11.4]} />
-        <Kpi icon="money" label="Freight cost / MT" value="₹482" delta={-3.2} sparkColor="var(--success)" spark={[510, 500, 495, 490, 488, 485, 482]} />
+        <Kpi icon="truck" label="Trips dispatched" value={String(report.kpis.trips)} />
+        <Kpi icon="layers" label="Tonnage moved" value={report.kpis.volume > 0 ? fmtNum(report.kpis.volume) : "—"} unit={report.kpis.volume > 0 ? "MT" : undefined} />
+        <Kpi icon="check" label="Delivered" value={report.kpis.deliveredPct != null ? String(report.kpis.deliveredPct) : "—"} unit={report.kpis.deliveredPct != null ? "%" : undefined} />
+        <Kpi icon="clock" label="Active routes" value={String(report.kpis.routes)} />
       </div>
       <CommonTable
         {...ERP_TABLE_PROPS}
         columns={dispatchColumns}
         dataSource={filteredRows}
         rowKey="route"
+        loading={loading}
         scroll={{ x: "max-content" }}
+        locale={{ emptyText: <span className="muted">No dispatches dated in {periodLabel}.</span> }}
       />
+      <UnavailableNote items={report.unavailable} />
     </ReportShell>
   );
 };
 
-const VendorReport = ({ periodLabel, registerExport }) => {
-  const { items: vendors } = useVendors();
+const VendorReport = ({ period, periodLabel, registerExport }) => {
+  const { items: vendors, loading: vendorsLoading } = useVendors();
+  const { items: purchaseOrders, loading: poLoading } = useEntityList("purchaseOrders");
+  const { items: invoices, loading: invLoading } = useEntityList("invoices");
   const [search, setSearch] = useState("");
-  const vendorRows = vendors.map((v, i) => ({
-    ...v,
-    rowIndex: i,
-    poMtd: Math.round(v.poCount / 6),
-    spendMtd: Math.round(v.ytd / 6),
-  }));
+
+  const report = useMemo(
+    () => buildVendorReport(vendors, purchaseOrders, invoices, period),
+    [vendors, purchaseOrders, invoices, period]
+  );
+  const vendorRows = report.rows;
+
   const vendorColumns = [
     {
       title: "Vendor",
@@ -1175,7 +1359,7 @@ const VendorReport = ({ periodLabel, registerExport }) => {
       key: "vendor",
       render: (_, v) => (
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Avatar name={v.name} color={(v.rowIndex % 5) + 1} />
+          <Avatar name={v.name} color={(vendorRows.indexOf(v) % 5) + 1} />
           <div><div className="strong">{v.name}</div><div className="subtle" style={{ fontSize: 11 }}>{v.city}</div></div>
         </div>
       ),
@@ -1191,6 +1375,7 @@ const VendorReport = ({ periodLabel, registerExport }) => {
       dataIndex: "poMtd",
       key: "poMtd",
       align: "right",
+      sorter: (a, b) => a.poMtd - b.poMtd,
       render: (poMtd) => <span className="num">{poMtd}</span>,
     },
     {
@@ -1198,14 +1383,23 @@ const VendorReport = ({ periodLabel, registerExport }) => {
       dataIndex: "spendMtd",
       key: "spendMtd",
       align: "right",
-      render: (spendMtd) => <span className="num">{fmtINR(spendMtd)}</span>,
+      sorter: (a, b) => a.spendMtd - b.spendMtd,
+      render: (spendMtd) => <span className="num">{spendMtd > 0 ? fmtINR(spendMtd) : <NoData note="No purchase orders in this month" />}</span>,
     },
     {
-      title: "YTD",
-      dataIndex: "ytd",
-      key: "ytd",
+      title: "POs YTD",
+      dataIndex: "poYtd",
+      key: "poYtd",
       align: "right",
-      render: (ytd) => <span className="num">{fmtINR(ytd)}</span>,
+      render: (poYtd) => <span className="num">{poYtd}</span>,
+    },
+    {
+      title: "Spend YTD",
+      dataIndex: "spendYtd",
+      key: "spendYtd",
+      align: "right",
+      sorter: (a, b) => a.spendYtd - b.spendYtd,
+      render: (spendYtd) => <span className="num">{spendYtd > 0 ? fmtINR(spendYtd) : <NoData note="No purchase orders this year" />}</span>,
     },
     {
       title: "Rating",
@@ -1214,10 +1408,16 @@ const VendorReport = ({ periodLabel, registerExport }) => {
       render: (rating) => <><span style={{ color: "var(--secondary)" }}>★</span> <span className="mono strong">{rating}</span></>,
     },
     {
-      title: "Payment SLA",
-      dataIndex: "rating",
-      key: "paymentSla",
-      render: (rating) => <Badge tone={rating >= 4.5 ? "success" : "warning"} dot>{rating >= 4.5 ? "On time" : "Avg 4d late"}</Badge>,
+      title: "Invoice match",
+      key: "invoiceMatch",
+      render: (_, v) =>
+        v.invoiceMatchPct == null ? (
+          <NoData note="No invoices raised in this month" />
+        ) : (
+          <Badge tone={v.invoiceMatchPct === 100 ? "success" : v.invoiceMatchPct >= 50 ? "warning" : "danger"} dot>
+            {v.invoiceMatchPct}% of {v.invoicesMtd}
+          </Badge>
+        ),
     },
   ];
 
@@ -1225,32 +1425,43 @@ const VendorReport = ({ periodLabel, registerExport }) => {
 
   const vendorExportArgs = () => [
     "Vendor Purchase Report",
-    `${periodLabel ?? ""} · PO volume, spend, rating, payment history`,
-    ["Vendor", "City", "Category", "POs MTD", "Spend MTD", "YTD", "Rating"],
+    `${periodLabel ?? ""} · PO volume and spend from purchase orders; match rate from invoices`,
+    ["Vendor", "City", "Category", "POs MTD", "Spend MTD", "POs YTD", "Spend YTD", "Rating", "Invoices MTD", "Invoice match %"],
     vendorRows.map((v) => [
-      v.name, v.city, v.category, v.poMtd, fmtINR(v.spendMtd), fmtINR(v.ytd), v.rating,
+      v.name, v.city, v.category, v.poMtd, v.spendMtd, v.poYtd, v.spendYtd, v.rating,
+      v.invoicesMtd, v.invoiceMatchPct == null ? "—" : `${v.invoiceMatchPct}%`,
     ]),
   ] as const;
   const handleExportPdf = () => downloadGenericTablePdf(...vendorExportArgs());
   const handleExportExcel = () => downloadGenericTableExcel(...vendorExportArgs());
-  registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
+  useEffect(() => {
+    registerExport?.({ pdf: handleExportPdf, excel: handleExportExcel });
+  });
 
   return (
   <ReportShell
     title={`Vendor Purchase Report · ${periodLabel ?? ""}`}
-    sub="PO volume, spend, rating, payment history"
+    sub="PO volume, spend, rating, invoice match rate"
     search={search}
     onSearchChange={setSearch}
     onExportPdf={handleExportPdf}
     onExportExcel={handleExportExcel}
   >
+    <div className="grid grid-4" style={{ marginBottom: 20 }}>
+      <Kpi icon="users" label="Vendors transacting" value={String(report.kpis.vendorsTransacting)} />
+      <Kpi icon="fileText" label="POs raised" value={String(report.kpis.poMtd)} />
+      <Kpi icon="money" label="Spend (month)" value={report.kpis.spendMtd > 0 ? fmtINR(report.kpis.spendMtd) : "—"} />
+      <Kpi icon="check" label="Invoice match" value={report.kpis.invoiceMatchPct != null ? String(report.kpis.invoiceMatchPct) : "—"} unit={report.kpis.invoiceMatchPct != null ? "%" : undefined} />
+    </div>
     <CommonTable
       {...ERP_TABLE_PROPS}
       columns={vendorColumns}
       dataSource={filteredRows}
       rowKey="id"
+      loading={vendorsLoading || poLoading || invLoading}
       scroll={{ x: "max-content" }}
     />
+    <UnavailableNote items={["Payment SLA / days-late needs a payment-date field on the invoice — not recorded."]} />
   </ReportShell>
   );
 };
@@ -1268,16 +1479,21 @@ function parseJoiningDate(value) {
   return loose.isValid() ? loose : null;
 }
 
-const HRReport = ({ periodLabel, registerExport }) => {
+const HRReport = ({ period, periodLabel, registerExport }) => {
   const [search, setSearch] = useState("");
   const { items: employees } = useEmployees();
   const attendanceReport = useAttendanceReport();
   const [payrollByDept, setPayrollByDept] = useState({});
   const [payrollLoading, setPayrollLoading] = useState(true);
-  const cycle = dayjs().format("YYYY-MM");
+  // Salary cycle and attendance window both follow the page's month picker.
+  const cycle = (period ?? dayjs()).format("YYYY-MM");
 
+  // Re-pull attendance whenever the picked month changes. `cycle` is the dep
+  // rather than `period` so a new dayjs object for the same month is a no-op.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { attendanceReport.handleApply(); }, []);
+  useEffect(() => {
+    attendanceReport.applyMonth(dayjs(cycle, "YYYY-MM"));
+  }, [cycle]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1313,7 +1529,10 @@ const HRReport = ({ periodLabel, registerExport }) => {
   }, [attendanceReport.deptCompliance]);
 
   const hrRows = useMemo(() => {
-    const now = dayjs();
+    // Tenure is measured to the end of the selected month, so a past period
+    // reports tenure as it stood then rather than as it stands today.
+    const monthEnd = dayjs(cycle, "YYYY-MM").endOf("month");
+    const now = monthEnd.isAfter(dayjs()) ? dayjs() : monthEnd;
     const byDept = new Map();
     for (const emp of employees) {
       const dept = emp.department || "Unassigned";
@@ -1337,7 +1556,7 @@ const HRReport = ({ periodLabel, registerExport }) => {
         p: payrollByDept[dept] ?? 0,
       }))
       .sort((x, y) => y.h - x.h);
-  }, [employees, attendancePctByDept, payrollByDept]);
+  }, [employees, attendancePctByDept, payrollByDept, cycle]);
 
   const kpiTotals = useMemo(() => {
     const headcount = employees.length;
@@ -1386,7 +1605,7 @@ const HRReport = ({ periodLabel, registerExport }) => {
       render: (t) => (t == null ? <span className="subtle">—</span> : <span className="num">{t} yrs</span>),
     },
     {
-      title: "Payroll MTD",
+      title: "Payroll",
       dataIndex: "p",
       key: "payrollMtd",
       align: "right",
@@ -1399,7 +1618,7 @@ const HRReport = ({ periodLabel, registerExport }) => {
   const hrExportArgs = () => [
     "HR Report",
     `${periodLabel ?? ""} · Attendance and payroll summary by department`,
-    ["Department", "Headcount", "Attendance %", "Avg tenure", "Payroll MTD"],
+    ["Department", "Headcount", "Attendance %", "Avg tenure", "Payroll"],
     hrRows.map((r) => [
       r.d,
       r.h,
@@ -1415,7 +1634,7 @@ const HRReport = ({ periodLabel, registerExport }) => {
   return (
     <ReportShell
       title={`HR Report · ${periodLabel ?? new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" })}`}
-      sub="Attendance and payroll summary by department — current month"
+      sub="Attendance and payroll summary by department"
       search={search}
       onSearchChange={setSearch}
       onExportPdf={handleExportPdf}
@@ -1425,7 +1644,7 @@ const HRReport = ({ periodLabel, registerExport }) => {
         <Kpi icon="users" label="Headcount" value={String(kpiTotals.headcount)} />
         <Kpi
           icon="check"
-          label="Avg attendance (MTD)"
+          label={`Avg attendance · ${periodLabel ?? ""}`}
           value={kpiTotals.attendancePct != null ? kpiTotals.attendancePct.toFixed(1) : "—"}
           unit={kpiTotals.attendancePct != null ? "%" : undefined}
         />
@@ -1437,7 +1656,7 @@ const HRReport = ({ periodLabel, registerExport }) => {
         />
         <Kpi
           icon="money"
-          label="Payroll MTD"
+          label={`Payroll · ${periodLabel ?? ""}`}
           value={kpiTotals.payrollTotal > 0 ? fmtINR(kpiTotals.payrollTotal) : "—"}
         />
       </div>
@@ -1592,16 +1811,17 @@ const PackagingInventory = () => {
           );
         },
       },
-      {
-        title: "Trend",
-        dataIndex: "trend",
-        key: "trend",
-        render: (trend) => (
-          <span style={{ fontSize: 12, color: trend > 0 ? "var(--success)" : "var(--danger)", fontWeight: 500 }}>
-            {trend > 0 ? "↑" : "↓"} {Math.abs(trend)}%
-          </span>
-        ),
-      },
+      // Trend is a stored field nothing ever computes — hidden until a stock-movement history exists.
+      // {
+      //   title: "Trend",
+      //   dataIndex: "trend",
+      //   key: "trend",
+      //   render: (trend) => (
+      //     <span style={{ fontSize: 12, color: trend > 0 ? "var(--success)" : "var(--danger)", fontWeight: 500 }}>
+      //       {trend > 0 ? "↑" : "↓"} {Math.abs(trend)}%
+      //     </span>
+      //   ),
+      // },
       {
         title: "Status",
         dataIndex: "status",
@@ -1631,10 +1851,10 @@ const PackagingInventory = () => {
   const handlePackExport = (type: 'xls' | 'pdf') => {
     const title = "Packaging Inventory";
     const subtitle = `Exported ${new Date().toISOString().split("T")[0]}`;
-    const head = ["SKU", "Description", "Stock", "Unit", "Reorder At", "Trend", "Status"];
+    const head = ["SKU", "Description", "Stock", "Unit", "Reorder At", /* "Trend", */ "Status"];
     const body = filteredPackaging.map(p => [
       p.code, p.name, p.stock, p.unit, p.reorder,
-      `${p.trend > 0 ? "↑" : "↓"} ${Math.abs(p.trend)}%`, p.status
+      /* `${p.trend > 0 ? "↑" : "↓"} ${Math.abs(p.trend)}%`, */ p.status
     ]);
     if (type === 'pdf') {
       downloadGenericTablePdf(title, subtitle, head, body);

@@ -1,4 +1,5 @@
 import { connectDB } from "@/lib/db";
+import { normalizeLeaveType } from "@/lib/leave-apply";
 import { ok, fail } from "@/lib/api-response";
 import LeaveRequest from "@/lib/models/LeaveRequest";
 import { assertEmployeeVisibleToViewer } from "@/lib/hr-staff-visibility";
@@ -64,7 +65,11 @@ export async function PATCH(
     const body = pickAllowedFields(raw as Record<string, unknown>, LEAVE_PATCH_FIELDS);
 
     if (typeof body.leaveType === "string") {
-      if (!VALID_LEAVE_TYPES.has(body.leaveType)) {
+      // Normalise first so a legacy spelling is accepted and rewritten to the
+      // canonical key, rather than rejected as an invalid type.
+      const canonical = normalizeLeaveType(body.leaveType);
+      body.leaveType = canonical;
+      if (!VALID_LEAVE_TYPES.has(canonical)) {
         return fail("Invalid leave type.", 400);
       }
     }

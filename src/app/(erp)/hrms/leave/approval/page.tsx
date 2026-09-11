@@ -248,15 +248,22 @@ export default function LeaveApprovalPage() {
     try {
       const fromDate = values.fromDate.format("YYYY-MM-DD");
       const toDate = values.toDate.format("YYYY-MM-DD");
-      const days = values.toDate.diff(values.fromDate, "day") + 1;
+      // No client-side day count: the server derives it from the dates, the
+      // employee's weekly off and the holiday calendar. This form previously
+      // sent a raw `to - from + 1` calendar span.
       const res = await fetch("/api/hrms/leave", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...values, fromDate, toDate, days }),
+        body: JSON.stringify({ ...values, fromDate, toDate, duration: "full" }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed");
-      message.success("Leave applied successfully");
+      const applied = Number(json?.data?.leave?.days);
+      message.success(
+        Number.isFinite(applied)
+          ? `Leave applied — ${applied} working day(s).`
+          : "Leave applied successfully",
+      );
       setApplyOpen(false);
       applyForm.resetFields();
       void load();

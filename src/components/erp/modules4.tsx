@@ -25,7 +25,9 @@ import { useSpareParts } from "@/hooks/use-spare-parts";
 import { useEntityList } from "@/hooks/use-entity-list";
 import { DashHead, SectionH } from "./dashboards";
 import PageFilterPanel from "@/components/common/PageFilterPanel";
-import { Select, message, Dropdown } from "antd";
+import { Select, message, Dropdown, Tooltip, Button } from "antd";
+import { ExportOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
 import type { MenuProps } from "antd";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
@@ -39,6 +41,50 @@ import autoTable from "jspdf-autotable";
 /* ============================================================
    SPARE PARTS INVENTORY
    ============================================================ */
+
+/** Anything older than this reads as dead stock and is flagged in the table. */
+const STALE_ISSUE_DAYS = 365;
+
+/**
+ * Renders the `lastIssuedAt` timestamp as an absolute date plus its age.
+ * Falls back to the deprecated free-text `lastIssued` for rows seeded before
+ * the issue ledger existed, so history is shown but visibly marked legacy.
+ */
+function lastIssuedCell(part) {
+  if (part.lastIssuedAt) {
+    const d = dayjs(part.lastIssuedAt);
+    const days = dayjs().startOf("day").diff(d.startOf("day"), "day");
+    const stale = days > STALE_ISSUE_DAYS;
+    const age = days === 0 ? "today" : days === 1 ? "yesterday" : `${days}d ago`;
+    return (
+      <span style={{ display: "inline-flex", flexDirection: "column", lineHeight: 1.3 }}>
+        <span className="mono" style={{ fontSize: 12 }}>{d.format("DD MMM YYYY")}</span>
+        <span
+          style={{ fontSize: 11, color: stale ? "var(--danger)" : "var(--muted)" }}
+          title={stale ? `Not issued in over a year — possible dead stock` : undefined}
+        >
+          {age}
+        </span>
+      </span>
+    );
+  }
+  if (part.lastIssued && part.lastIssued !== "\u2014") {
+    return (
+      <Tooltip title="Legacy record — predates the issue ledger">
+        <span className="subtle" style={{ fontSize: 12, fontStyle: "italic" }}>
+          {part.lastIssued}
+        </span>
+      </Tooltip>
+    );
+  }
+  return <span className="subtle" style={{ fontSize: 12 }}>Never issued</span>;
+}
+
+function lastIssuedSortValue(part) {
+  if (part.lastIssuedAt) return dayjs(part.lastIssuedAt).valueOf();
+  return -1; // never-issued rows sort to the bottom
+}
+
 const SparePartsInventory = () => {
   const router = useRouter();
   const { items: sparePartItems, loading, error: loadError, reload } = useSpareParts();
@@ -72,6 +118,97 @@ const SparePartsInventory = () => {
     },
     [reload]
   );
+
+  const [issueItem, setIssueItem] = useState(null);
+  const [issueForm, setIssueForm] = useState(null);
+  const [issuing, setIssuing] = useState(false);
+  const [historyFor, setHistoryFor] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const openIssue = useCallback((part) => {
+    setIssueItem(part);
+    setIssueForm({
+      qty: "",
+      machineId: part.machineName ?? "",
+      issuedTo: "",
+      workOrder: "",
+      issuedAt: dayjs().format("YYYY-MM-DD"),
+      notes: "",
+    });
+  }, []);
+
+  const loadHistory = useCallback(async (code) => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(
+        `/api/inventory/spare-parts/${encodeURIComponent(code)}/issue`,
+        { cache: "no-store" }
+      );
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      setHistory(Array.isArray(json.data) ? json.data : []);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Could not load issue history");
+      setHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  const openHistory = useCallback(
+    (part) => {
+      setHistoryFor(part);
+      setHistory([]);
+      void loadHistory(part.code);
+    },
+    [loadHistory]
+  );
+
+  const submitIssue = useCallback(async () => {
+    if (!issueItem || !issueForm) return;
+    const qty = parseFloat(issueForm.qty);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      message.error("Enter a quantity greater than zero.");
+      return;
+    }
+    if (qty > issueItem.stock) {
+      message.error(`Only ${issueItem.stock} ${issueItem.unit} on hand.`);
+      return;
+    }
+    if (!issueForm.issuedTo.trim()) {
+      message.error("Enter who the part was issued to.");
+      return;
+    }
+    setIssuing(true);
+    try {
+      const res = await fetch(
+        `/api/inventory/spare-parts/${encodeURIComponent(issueItem.code)}/issue`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            qty,
+            machineId: issueForm.machineId,
+            issuedTo: issueForm.issuedTo,
+            workOrder: issueForm.workOrder,
+            issuedAt: dayjs(issueForm.issuedAt).toISOString(),
+            notes: issueForm.notes,
+          }),
+        }
+      );
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      message.success(`Issued ${qty} ${issueItem.unit} of ${issueItem.code}.`);
+      setIssueItem(null);
+      setIssueForm(null);
+      await reload(true);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "Issue failed");
+    } finally {
+      setIssuing(false);
+    }
+  }, [issueItem, issueForm, reload]);
 
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -170,9 +307,25 @@ const SparePartsInventory = () => {
       },
       {
         title: "Last issued",
-        dataIndex: "lastIssued",
         key: "lastIssued",
-        render: (v) => <span className="muted">{v}</span>,
+        sorter: (a, b) => lastIssuedSortValue(a) - lastIssuedSortValue(b),
+        render: (_, p) => (
+          <span
+            role="button"
+            tabIndex={0}
+            style={{ cursor: "pointer" }}
+            title="View issue history"
+            onClick={() => openHistory(p)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                openHistory(p);
+              }
+            }}
+          >
+            {lastIssuedCell(p)}
+          </span>
+        ),
       },
       {
         title: "Status",
@@ -183,9 +336,21 @@ const SparePartsInventory = () => {
       {
         title: "Actions",
         key: "actions",
-        width: 120,
+        width: 150,
         align: "center",
         render: (_, p) => (
+          <>
+            <Tooltip title={p.stock > 0 ? "Issue to machine" : "No stock to issue"}>
+              <Button
+                type="text"
+                size="small"
+                icon={<ExportOutlined />}
+                aria-label="Issue"
+                className="hrms-table-actions__btn"
+                disabled={p.stock <= 0}
+                onClick={() => openIssue(p)}
+              />
+            </Tooltip>
           <ViewEditActions
             onView={() => setViewItem(p)}
             editHref={`/inventory/spare-parts/add?code=${encodeURIComponent(p.code)}`}
@@ -194,17 +359,20 @@ const SparePartsInventory = () => {
             deleteLabel={deletingCode === p.code ? "Deleting…" : "Delete"}
             deleteConfirmTitle={`Delete ${p.code}? This cannot be undone.`}
           />
+          </>
         ),
       },
     ],
-    [deletingCode, deleteSparePart]
+    [deletingCode, deleteSparePart, openIssue, openHistory]
   );
 
   const handleExport = (type: 'xls' | 'pdf') => {
     const headers = ["SKU", "Part", "Category", "Vendor", "Location", "Stock", "Unit", "Reorder At", "Value", "Last Issued", "Status", "Critical"];
     const exportData = filtered.map(p => [
       p.code, p.name, p.category, p.vendor, p.location, p.stock, p.unit,
-      p.reorder, p.value, p.lastIssued ?? "", p.status, p.critical ? "Yes" : "No"
+      p.reorder, p.value,
+      p.lastIssuedAt ? dayjs(p.lastIssuedAt).format("YYYY-MM-DD") : (p.lastIssued || ""),
+      p.status, p.critical ? "Yes" : "No"
     ]);
     const fileName = `spare_parts_${new Date().toISOString().split("T")[0]}`;
 
@@ -374,6 +542,195 @@ const SparePartsInventory = () => {
         ) : (
           <p className="muted" style={{ margin: 0 }}>
             Spare part details unavailable.
+          </p>
+        )}
+      </Modal>
+
+      {/* Issue stock out — the transaction that stamps `lastIssuedAt`. */}
+      <Modal
+        open={!!issueItem}
+        onClose={() => {
+          setIssueItem(null);
+          setIssueForm(null);
+        }}
+        title={`Issue ${issueItem?.name ?? ""}`}
+        sub={
+          issueItem
+            ? `${issueItem.code} · ${issueItem.stock} ${issueItem.unit} on hand`
+            : undefined
+        }
+        footer={
+          <>
+            <Btn
+              variant="ghost"
+              onClick={() => {
+                setIssueItem(null);
+                setIssueForm(null);
+              }}
+            >
+              Cancel
+            </Btn>
+            <Btn variant="primary" size="sm" disabled={issuing} onClick={submitIssue}>
+              {issuing ? "Issuing…" : "Confirm issue"}
+            </Btn>
+          </>
+        }
+      >
+        {issueForm ? (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <label className="field-label" htmlFor="issue-qty">
+                  Quantity ({issueItem?.unit}) *
+                </label>
+                <input
+                  id="issue-qty"
+                  className="input"
+                  type="number"
+                  min="0"
+                  step="any"
+                  max={issueItem?.stock}
+                  value={issueForm.qty}
+                  onChange={(e) =>
+                    setIssueForm((f) => ({ ...f, qty: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="field-label" htmlFor="issue-date">
+                  Issue date *
+                </label>
+                <input
+                  id="issue-date"
+                  className="input"
+                  type="date"
+                  max={dayjs().format("YYYY-MM-DD")}
+                  value={issueForm.issuedAt}
+                  onChange={(e) =>
+                    setIssueForm((f) => ({ ...f, issuedAt: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <label className="field-label" htmlFor="issue-to">
+                  Issued to *
+                </label>
+                <input
+                  id="issue-to"
+                  className="input"
+                  placeholder="Technician / department"
+                  value={issueForm.issuedTo}
+                  onChange={(e) =>
+                    setIssueForm((f) => ({ ...f, issuedTo: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="field-label" htmlFor="issue-machine">
+                  Machine
+                </label>
+                <input
+                  id="issue-machine"
+                  className="input"
+                  placeholder="e.g. BM1"
+                  value={issueForm.machineId}
+                  onChange={(e) =>
+                    setIssueForm((f) => ({ ...f, machineId: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div>
+              <label className="field-label" htmlFor="issue-wo">
+                Work order
+              </label>
+              <input
+                id="issue-wo"
+                className="input"
+                placeholder="Optional reference"
+                value={issueForm.workOrder}
+                onChange={(e) =>
+                  setIssueForm((f) => ({ ...f, workOrder: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="issue-notes">
+                Notes
+              </label>
+              <textarea
+                id="issue-notes"
+                className="input"
+                rows={2}
+                value={issueForm.notes}
+                onChange={(e) =>
+                  setIssueForm((f) => ({ ...f, notes: e.target.value }))
+                }
+              />
+            </div>
+            <p className="muted" style={{ fontSize: 12, margin: 0 }}>
+              Stock drops to{" "}
+              <strong>
+                {Math.max(
+                  0,
+                  (issueItem?.stock ?? 0) - (parseFloat(issueForm.qty) || 0)
+                )}{" "}
+                {issueItem?.unit}
+              </strong>{" "}
+              and the last-issued date is set to{" "}
+              {dayjs(issueForm.issuedAt).format("DD MMM YYYY")}.
+            </p>
+          </div>
+        ) : null}
+      </Modal>
+
+      {/* Issue history — the ledger behind the Last issued column. */}
+      <Modal
+        open={!!historyFor}
+        onClose={() => setHistoryFor(null)}
+        title={`Issue history — ${historyFor?.name ?? ""}`}
+        sub={historyFor?.code}
+        wide
+        footer={
+          <Btn variant="ghost" onClick={() => setHistoryFor(null)}>
+            Close
+          </Btn>
+        }
+      >
+        {historyLoading ? (
+          <p className="muted" style={{ margin: 0 }}>Loading…</p>
+        ) : history.length ? (
+          <table className="erp-plain-table" style={{ width: "100%", fontSize: 13 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left" }}>Date</th>
+                <th style={{ textAlign: "right" }}>Qty</th>
+                <th style={{ textAlign: "left" }}>Machine</th>
+                <th style={{ textAlign: "left" }}>Issued to</th>
+                <th style={{ textAlign: "left" }}>Work order</th>
+                <th style={{ textAlign: "left" }}>By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map((h) => (
+                <tr key={h.id}>
+                  <td className="mono">{dayjs(h.issuedAt).format("DD MMM YYYY")}</td>
+                  <td className="mono" style={{ textAlign: "right" }}>
+                    {h.qty} {h.unit}
+                  </td>
+                  <td>{h.machineId || "—"}</td>
+                  <td>{h.issuedTo}</td>
+                  <td>{h.workOrder || "—"}</td>
+                  <td className="muted">{h.issuedBy || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="muted" style={{ margin: 0 }}>
+            No issues recorded for this part yet.
           </p>
         )}
       </Modal>

@@ -184,11 +184,29 @@ export type SparePart = {
   status: string;
   trend: number;
   critical: boolean;
+  /** @deprecated Legacy seeder label — display fallback only. Use `lastIssuedAt`. */
   lastIssued: string;
+  /** ISO timestamp of the newest issue, or null when never issued. */
+  lastIssuedAt?: string | null;
   machineName?: string;
   standardRate?: number;
   criticality?: string;
   notes?: string;
+};
+
+export type SparePartIssue = {
+  id: string;
+  partCode: string;
+  qty: number;
+  unit: string;
+  machineId: string;
+  issuedTo: string;
+  workOrder: string;
+  rateAtIssue: number;
+  /** ISO timestamp. */
+  issuedAt: string;
+  issuedBy: string;
+  notes: string;
 };
 
 export type DispatchLocation = {

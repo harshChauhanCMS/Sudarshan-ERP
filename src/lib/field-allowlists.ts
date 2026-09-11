@@ -107,6 +107,7 @@ export const LEAVE_POLICY_WRITABLE_FIELDS = [
   "carryForwardAllowed",
   "carryForwardMax",
   "applicableTo",
+  "maxDaysPerRequest",
   "isActive",
   "description",
 ] as const;

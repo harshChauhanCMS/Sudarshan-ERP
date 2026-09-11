@@ -14,15 +14,16 @@ import {
   APPLY_LEAVE_TYPES,
   API_LEAVE_TO_UI,
   API_LEAVE_LABELS,
-  calcLeaveDays,
   uiTypeToApi,
 } from "@/lib/leave-apply";
+import { countLeaveWorkingDays, isLeaveDuration } from "@/lib/leave-window";
 
 type SelfEmployee = {
   employeeId: string;
   fullName: string;
   department?: string;
   designation?: string;
+  weeklyOff?: string;
 };
 
 type BalanceRow = {
@@ -73,6 +74,7 @@ export default function LeaveApplyPage() {
 
   const [leaveType, setLeaveType] = useState<string>("PL");
   const [duration, setDuration] = useState("full");
+  const [holidayKeys, setHolidayKeys] = useState<Set<string>>(() => new Set());
   const [fromDate, setFromDate] = useState<Dayjs | null>(dayjs());
   const [toDate, setToDate] = useState<Dayjs | null>(dayjs());
   const [reason, setReason] = useState("");
@@ -108,6 +110,13 @@ export default function LeaveApplyPage() {
       }
 
       setEmployee(profile);
+      setHolidayKeys(
+        new Set(
+          Array.isArray(json.data?.holidayKeys)
+            ? (json.data.holidayKeys as unknown[]).map(String)
+            : [],
+        ),
+      );
       setBalance(Array.isArray(json.data?.balance) ? json.data.balance : []);
       const leaves = Array.isArray(json.data?.recent) ? json.data.recent : [];
       setRecent(
@@ -136,10 +145,18 @@ export default function LeaveApplyPage() {
     void loadData();
   }, [loadData]);
 
+  // Same function the server runs on submit, with the same weekly off and
+  // holiday inputs — so the number shown here is the number that gets stored.
   const totalDays = useMemo(() => {
     if (!fromDate || !toDate) return 0;
-    return calcLeaveDays(fromDate, toDate, duration);
-  }, [fromDate, toDate, duration]);
+    return countLeaveWorkingDays(
+      fromDate.toDate(),
+      toDate.toDate(),
+      isLeaveDuration(duration) ? duration : "full",
+      employee?.weeklyOff,
+      holidayKeys,
+    );
+  }, [fromDate, toDate, duration, employee?.weeklyOff, holidayKeys]);
 
   const apiLeaveType = uiTypeToApi(leaveType);
 
@@ -209,7 +226,9 @@ export default function LeaveApplyPage() {
         leaveType: apiLeaveType,
         fromDate: fromDate.format("YYYY-MM-DD"),
         toDate: toDate.format("YYYY-MM-DD"),
-        days: totalDays,
+        // The server derives the day count itself; `duration` is the only
+        // part of it the client is authoritative for.
+        duration,
         reason: contact.trim()
           ? `${reason.trim()} (Contact: ${contact.trim()})`
           : reason.trim(),

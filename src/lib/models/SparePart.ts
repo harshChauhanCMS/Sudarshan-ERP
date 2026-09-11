@@ -93,10 +93,17 @@ const SparePartSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    /** @deprecated Legacy free-text label from the seeder — read-only fallback for
+     *  un-migrated rows. `lastIssuedAt` is the source of truth. */
     lastIssued: {
       type: String,
       trim: true,
-      default: "—",
+      default: "",
+    },
+    /** Derived from the newest SparePartIssue — never written by the master form. */
+    lastIssuedAt: {
+      type: Date,
+      default: null,
     },
     machineName: {
       type: String,
@@ -143,7 +150,7 @@ SparePartSchema.pre("validate", function computeDerived() {
 });
 
 // Next.js HMR can cache a stale schema across reloads in dev — re-register when fields are missing.
-if (mongoose.models.SparePart && !mongoose.models.SparePart.schema.path("criticality")) {
+if (mongoose.models.SparePart && !mongoose.models.SparePart.schema.path("lastIssuedAt")) {
   mongoose.deleteModel("SparePart");
 }
 

@@ -55,8 +55,8 @@ export interface SalaryResult {
   grossSalary: number;
   overtimeAmount: number;
   holidayDays: number;        // paid holidays credited in this period
-  absentDays: number;         // days neither present, on paid leave, nor a holiday
-  totalDeductionDays: number; // unpaidLeaveDays + absentDays
+  absentDays: number;         // absent WITHOUT leave — excludes unpaid-leave days
+  totalDeductionDays: number; // absentDays + unpaidLeaveDays, capped at workingDays
   leaveDeduction: number;     // deduction for totalDeductionDays
   pfEmployee: number;
   pfEmployer: number;
@@ -139,7 +139,8 @@ export function calcOvertimeAmount(
 
 /**
  * Deduction for days not worked and not covered by paid leave.
- * deductionDays = unpaidLeaveDays + absentDays (absent = not present + not on paid leave)
+ * `deductionDays` is unexplained absence plus explicitly unpaid leave — the two
+ * are disjoint, so neither day is charged twice.
  */
 export function calcLeaveDeduction(
   grossSalary: number,
@@ -150,32 +151,61 @@ export function calcLeaveDeduction(
   return round2((grossSalary / workingDays) * deductionDays);
 }
 
+/**
+ * Every numeric input is coerced to a finite, non-negative number before use.
+ * A single NaN (an unset employee field, a bad stored day count) otherwise
+ * propagates all the way to `netPayable` and gets written to the salary sheet,
+ * where it is far harder to trace back.
+ */
+const safe = (n: unknown): number => {
+  const v = Number(n);
+  return Number.isFinite(v) && v > 0 ? v : 0;
+};
+
 export function calcSalary(inputs: SalaryInputs): SalaryResult {
-  const {
-    basicSalary, hra, otherConveyance, specialBonus,
-    workingDays, daysPresent, approvedLeaveDays,
-    overtimeHours, workingHoursPerDay,
-    overtimeApplicable, unpaidLeaveDays,
-    holidayDays = 0,
-    arrears = 0,
-    deductions = [],
-    tds = 0, otherDeductions: otherDed = 0,
-  } = inputs;
+  const basicSalary = safe(inputs.basicSalary);
+  const hra = safe(inputs.hra);
+  const otherConveyance = safe(inputs.otherConveyance);
+  const specialBonus = safe(inputs.specialBonus);
+  const workingDays = safe(inputs.workingDays);
+  const daysPresent = safe(inputs.daysPresent);
+  const approvedLeaveDays = safe(inputs.approvedLeaveDays);
+  const unpaidLeaveDays = safe(inputs.unpaidLeaveDays);
+  const overtimeHours = safe(inputs.overtimeHours);
+  const workingHoursPerDay = safe(inputs.workingHoursPerDay);
+  const holidayDays = safe(inputs.holidayDays);
+  const arrears = safe(inputs.arrears);
+  const tds = safe(inputs.tds);
+  const otherDed = safe(inputs.otherDeductions);
+  const overtimeApplicable = inputs.overtimeApplicable === true;
+  const deductions = inputs.deductions ?? [];
 
   const grossSalary = round2(basicSalary + hra + otherConveyance + specialBonus);
 
-  // Days covered = present + paid leave + company holidays (capped to workingDays).
+  // Paid days = present + paid leave + company holidays (capped to workingDays).
   // Holidays are counted here — and nowhere else — so they are paid without
   // being recorded as leave or absence, and without changing the per-day rate
   // (gross / workingDays), which stays exactly as it was.
-  const coveredDays = Math.min(
+  const paidDays = Math.min(
     daysPresent + approvedLeaveDays + holidayDays,
     workingDays
   );
-  // Absent = working days not covered by attendance, paid leave, or a holiday
-  const absentDays = Math.max(0, workingDays - coveredDays);
-  // Total days to deduct = absent + explicitly unpaid leaves
-  const totalDeductionDays = round2(absentDays + unpaidLeaveDays);
+
+  // `absentDays` means absent *without* leave. An unpaid-leave day is already
+  // a non-present day, so it must be excluded here before being added back as
+  // a deduction day below — counting it in both places deducted it twice and
+  // made approved unpaid leave cost more than simply not turning up.
+  const absentDays = Math.max(
+    0,
+    round2(workingDays - paidDays - unpaidLeaveDays)
+  );
+
+  // Total days to deduct = unexplained absence + explicitly unpaid leave.
+  // Capped at workingDays so a leave record spanning weekly offs (its `days`
+  // is a calendar span) can never deduct more than a full month's pay.
+  const totalDeductionDays = round2(
+    Math.min(workingDays, absentDays + unpaidLeaveDays)
+  );
 
   const leaveDeduction = calcLeaveDeduction(grossSalary, workingDays, totalDeductionDays);
 

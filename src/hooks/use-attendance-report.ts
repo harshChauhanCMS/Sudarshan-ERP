@@ -266,6 +266,22 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
     void load({ dept, shift, unit, employeeId, range: newRange });
   };
 
+  /**
+   * Loads an explicit month range, bypassing the `period` state machine.
+   * For callers that drive the range from their own picker (the Reports page).
+   * The range is passed straight to `load` rather than read back from state,
+   * so there is no stale-closure gap between setRange and the fetch.
+   */
+  const applyMonth = (month: dayjs.Dayjs) => {
+    const nextRange: [dayjs.Dayjs, dayjs.Dayjs] = [
+      month.startOf("month"),
+      month.endOf("month"),
+    ];
+    setPeriod("custom_month");
+    setRange(nextRange);
+    void load({ dept, shift, unit, employeeId, range: nextRange });
+  };
+
   const handleClearFilters = () => {
     const nextRange = defaultRange();
     setPeriod(defaultPeriod);
@@ -462,7 +478,7 @@ export function useAttendanceReport(options?: AttendanceReportOptions) {
     daily: searchedDaily,
     weeklyTrend, deptBreakdown,
     fieldRows, officeStats, unitTable, deptCompliance,
-    handleApply, handleClearFilters, buildCsvUrl,
+    handleApply, applyMonth, handleClearFilters, buildCsvUrl,
     rangeLabel,
   };
 }

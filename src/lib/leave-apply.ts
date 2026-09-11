@@ -11,8 +11,39 @@ export const UI_LEAVE_TO_API: Record<ApplyLeaveUiType, string> = {
   LWP: "unpaid",
 };
 
+/**
+ * Historic spellings for a canonical leave type.
+ *
+ * Live data carries `earned` for what the code calls `privilege` — the
+ * LeavePolicy row, and leave records created before the rename. Because the
+ * policy lookup keyed on `privilege` and no such policy existed, the quota
+ * check silently found nothing and Privilege Leave went entirely unenforced.
+ * Everything now normalises through here, so either spelling resolves.
+ */
+export const LEAVE_TYPE_ALIASES: Record<string, string> = {
+  earned: "privilege",
+  el: "privilege",
+  pl: "privilege",
+};
+
+/** Canonical leave-type key for anything read from storage or a client. */
+export function normalizeLeaveType(raw: unknown): string {
+  const key = String(raw ?? "").trim();
+  if (!key) return "";
+  return LEAVE_TYPE_ALIASES[key.toLowerCase()] ?? key;
+}
+
+/** Every spelling that should be matched when querying storage for a type. */
+export function leaveTypeQueryValues(canonical: string): string[] {
+  const aliases = Object.entries(LEAVE_TYPE_ALIASES)
+    .filter(([, target]) => target === canonical)
+    .map(([alias]) => alias);
+  return [canonical, ...aliases];
+}
+
 export const API_LEAVE_TO_UI: Record<string, ApplyLeaveUiType> = {
   privilege: "PL",
+  earned: "PL",
   casual: "CL",
   sick: "SL",
   compOff: "Comp.Off",
@@ -21,12 +52,19 @@ export const API_LEAVE_TO_UI: Record<string, ApplyLeaveUiType> = {
 
 export const API_LEAVE_LABELS: Record<string, string> = {
   privilege: "Privilege Leave (PL)",
+  earned: "Privilege Leave (PL)",
   casual: "Casual Leave (CL)",
   sick: "Sick Leave (SL)",
   compOff: "Compensatory Off (Comp.Off)",
   unpaid: "Leave Without Pay (LWP)",
 };
 
+/**
+ * @deprecated Counts a raw calendar span — it charges weekly offs and holidays
+ * as leave, and no caller is authoritative for the day count any more.
+ * Use `countLeaveWorkingDays` from `@/lib/leave-window`, which the leave API
+ * itself runs on submit. Kept only so nothing silently breaks on an old import.
+ */
 export function calcLeaveDays(
   from: Dayjs,
   to: Dayjs,

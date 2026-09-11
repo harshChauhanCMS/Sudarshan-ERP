@@ -178,7 +178,16 @@ export function buildSparePartView(item: SparePart, microns: boolean): Inventory
         value: item.critical ? "Yes" : "No",
         tone: item.critical ? "warn" : "default",
       },
-      { label: "Last issued", value: item.lastIssued || "—" },
+      {
+        label: "Last issued",
+        value: item.lastIssuedAt
+          ? new Date(item.lastIssuedAt).toLocaleDateString("en-IN", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })
+          : item.lastIssued || "Never issued",
+      },
       {
         label: "Trend (7d)",
         value: `${item.trend > 0 ? "+" : ""}${item.trend}%`,

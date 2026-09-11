@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx scripts/seed.ts",
-    "seed:employees": "tsx scripts/seed-employees.ts"
+    "seed:employees": "tsx scripts/seed-employees.ts",
+    "verify:payroll": "tsx scripts/verify-salary-calc.ts && tsx scripts/verify-leave-window.ts"
   },
   "dependencies": {
     "@ant-design/icons": "^6.2.3",

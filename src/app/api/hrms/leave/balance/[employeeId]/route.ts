@@ -1,4 +1,5 @@
 import { connectDB } from "@/lib/db";
+import { normalizeLeaveType } from "@/lib/leave-apply";
 import { ok, fail } from "@/lib/api-response";
 import LeaveRequest from "@/lib/models/LeaveRequest";
 import LeavePolicy, { DEFAULT_LEAVE_POLICIES } from "@/lib/models/LeavePolicy";
@@ -38,16 +39,24 @@ export async function GET(
 
     const usedByType: Record<string, number> = {};
     for (const l of usedLeaves) {
-      usedByType[l.leaveType] = (usedByType[l.leaveType] || 0) + l.days;
+      // Legacy aliases (`earned`) fold into their canonical type.
+      const key = normalizeLeaveType(l.leaveType);
+      usedByType[key] = (usedByType[key] || 0) + l.days;
     }
 
-    const balance = policies.map((p) => ({
-      leaveType: p.leaveType,
-      label: p.label,
-      annualQuota: p.annualQuota,
-      used: usedByType[p.leaveType] || 0,
-      remaining: Math.max(0, p.annualQuota - (usedByType[p.leaveType] || 0)),
-    }));
+    // The policy row's own key is normalised too, so a legacy `earned` row
+    // lines up with usage recorded under `privilege`.
+    const balance = policies.map((p) => {
+      const key = normalizeLeaveType(p.leaveType);
+      const used = usedByType[key] || 0;
+      return {
+        leaveType: key,
+        label: p.label,
+        annualQuota: p.annualQuota,
+        used,
+        remaining: Math.max(0, p.annualQuota - used),
+      };
+    });
 
     return ok({ employeeId, year, balance });
   } catch (e) {

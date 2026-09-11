@@ -132,6 +132,11 @@ export async function GET(request: Request) {
       return ok({
         holidays,
         holidayDays: nonSundays.length - workingDays,
+        // Payroll pays holidays, attendance cannot attend them — so the two
+        // subsystems legitimately count different "working days". Exposing the
+        // payroll basis here lets the UI show both without them looking like a
+        // contradiction: payrollWorkingDays = workingDays + holidayDays.
+        payrollWorkingDays: nonSundays.length,
         from: `${fromD.getFullYear()}-${String(fromD.getMonth() + 1).padStart(2, "0")}-${String(fromD.getDate()).padStart(2, "0")}`,
         to: `${toD.getFullYear()}-${String(toD.getMonth() + 1).padStart(2, "0")}-${String(toD.getDate()).padStart(2, "0")}`,
         workingDays,
@@ -336,6 +341,10 @@ export async function GET(request: Request) {
       to: toD.toISOString(),
       workingDays,
       holidayDays: nonSundayDays.length - workingDays,
+      // See the note on the early-return above: this is the payroll basis
+      // (holidays included), kept alongside the attendance basis so the two
+      // reconcile instead of appearing to disagree.
+      payrollWorkingDays: nonSundayDays.length,
       holidays,
       kpi,
       gpsSummary,

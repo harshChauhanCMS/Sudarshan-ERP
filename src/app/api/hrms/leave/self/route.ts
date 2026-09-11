@@ -2,6 +2,8 @@ import { connectDB } from "@/lib/db";
 import { ok, fail } from "@/lib/api-response";
 import LeaveRequest from "@/lib/models/LeaveRequest";
 import LeavePolicy, { DEFAULT_LEAVE_POLICIES } from "@/lib/models/LeavePolicy";
+import { getHolidayMap } from "@/lib/holiday-service";
+import { normalizeLeaveType } from "@/lib/leave-apply";
 import { resolveSessionEmployee } from "@/lib/resolve-session-employee";
 import { getUserFromRequest } from "@/lib/api-request-auth";
 import {
@@ -48,32 +50,46 @@ export async function GET(request: Request) {
 
     const usedByType: Record<string, number> = {};
     for (const leave of usedLeaves) {
-      usedByType[leave.leaveType] =
-        (usedByType[leave.leaveType] || 0) + Number(leave.days || 0);
+      // Legacy aliases (`earned`) fold into their canonical type so the
+      // balance reflects every day actually consumed.
+      const key = normalizeLeaveType(leave.leaveType);
+      usedByType[key] = (usedByType[key] || 0) + Number(leave.days || 0);
     }
 
-    const balance = policies.map((policy) => ({
-      leaveType: policy.leaveType,
-      label: policy.label,
-      annualQuota: policy.annualQuota,
-      used: usedByType[policy.leaveType] || 0,
-      remaining: Math.max(
-        0,
-        policy.annualQuota - (usedByType[policy.leaveType] || 0),
-      ),
-    }));
+    // The policy row's own key is normalised too — a DB still holding the
+    // `earned` row must line up with usage recorded under `privilege`.
+    const balance = policies.map((policy) => {
+      const key = normalizeLeaveType(policy.leaveType);
+      const used = usedByType[key] || 0;
+      return {
+        leaveType: key,
+        label: policy.label,
+        annualQuota: policy.annualQuota,
+        used,
+        remaining: Math.max(0, policy.annualQuota - used),
+      };
+    });
 
     const recent = await LeaveRequest.find({ employeeId })
       .sort({ createdAt: -1 })
       .limit(5)
       .lean();
 
+    // Holiday keys for the year, so the apply form can exclude them from its
+    // preview exactly as the server does.
+    const holidayMap = await getHolidayMap(start, end);
+    const holidayKeys = [...holidayMap.keys()];
+
     return ok({
+      holidayKeys,
       employee: {
         employeeId,
         fullName: employee.fullName,
         department: employee.department,
         designation: employee.designation,
+        // Needed by the apply form so its day-count preview matches the
+        // figure the server will derive on submit.
+        weeklyOff: employee.weeklyOff ?? "Sunday",
         primaryContact: employee.primaryContact ?? "",
         officialEmail: employee.officialEmail ?? "",
         personalEmail: employee.personalEmail ?? "",

@@ -2790,7 +2790,7 @@ const ProductionDashboard = ({ navigate }) => {
         />
       </div>
 
-      <div className="prod-dash-grid prod-dash-grid--3">
+      <div className="prod-dash-grid">
         <ProdWidget
           title="Actual consumption pending entry"
           badge={
@@ -2820,39 +2820,6 @@ const ProductionDashboard = ({ navigate }) => {
               <li className="prod-dash-empty">Nothing pending entry</li>
             )}
           </ul>
-        </ProdWidget>
-
-        <ProdWidget title="Bag stock auto-impact summary">
-          {packagingRequired.length ? (
-            packagingRequired.map((row) => (
-              <div key={row.type} className="prod-dash-bag-row">
-                <span>{row.type} (reserved)</span>
-                <span className={row.status !== "OK" ? "warn" : ""}>
-                  {fmtNum(row.required)}
-                  {row.status !== "OK" ? ` — ${row.status.toLowerCase()}` : ""}
-                </span>
-              </div>
-            ))
-          ) : (
-            <p className="prod-dash-widget__footnote" style={{ margin: 0 }}>
-              No packaging reserved for active orders right now.
-            </p>
-          )}
-          <p className="prod-dash-widget__footnote">
-            Stock is auto-reserved against current jobs. Updates on consumption
-            entry.
-          </p>
-        </ProdWidget>
-
-        <ProdWidget title="Production summary">
-          <div className="prod-dash-co-box">
-            <div className="prod-dash-co-box__v">{stats.todayActualMt} MT</div>
-            <div className="prod-dash-co-box__l">Today’s production</div>
-            <p className="prod-dash-co-box__sub">
-              {completedBatches.length} at 100% · {stats.activeJobsCount} jobs
-              running
-            </p>
-          </div>
         </ProdWidget>
       </div>
 
@@ -2956,7 +2923,7 @@ const ProductionDashboard = ({ navigate }) => {
         </ProdWidget>
       </div>
 
-      <div className="prod-dash-grid prod-dash-grid--2">
+      <div className="prod-dash-grid">
         <ProdWidget
           title="Machine spare parts at risk"
           badge={
@@ -2981,15 +2948,6 @@ const ProductionDashboard = ({ navigate }) => {
               <li className="prod-dash-empty">No spare parts at risk</li>
             )}
           </ul>
-        </ProdWidget>
-
-        <ProdWidget title="Dynamic production mix note">
-          <div className="prod-dash-mix-note">
-            <strong>Mix is demand-driven.</strong> Current plan is based on
-            today’s queue and orders. New orders or priority changes can shift
-            the mix; consumption entry and bag reservation update accordingly.
-            Review queue and RM availability before committing to new dates.
-          </div>
         </ProdWidget>
       </div>
 
@@ -3059,24 +3017,6 @@ const ProductionDashboard = ({ navigate }) => {
             )}
           </ul>
         </ProdWidget>
-      </div>
-
-      <div className="prod-dash-eod">
-        <div className="prod-dash-eod__title">
-          <Icon name="invoice" size={16} /> End-of-day consumption entry
-        </div>
-        <div className="prod-dash-eod__desc">
-          Enter actual RM and packaging consumption for completed batches before
-          shift close. Keeps stock and costs accurate.
-        </div>
-        <Btn
-          variant="primary"
-          size="sm"
-          icon="check"
-          onClick={() => navigate && navigate("/production")}
-        >
-          Open consumption entry
-        </Btn>
       </div>
 
       <ProdWidget

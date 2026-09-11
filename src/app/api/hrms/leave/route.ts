@@ -20,6 +20,16 @@ import {
   resolveSessionEmployee,
 } from "@/lib/resolve-session-employee";
 import { getUserFromRequest } from "@/lib/api-request-auth";
+import { getHolidayMap } from "@/lib/holiday-service";
+import {
+  countLeaveWorkingDays,
+  isLeaveDuration,
+  type LeaveDuration,
+} from "@/lib/leave-window";
+import {
+  normalizeLeaveType,
+  leaveTypeQueryValues,
+} from "@/lib/leave-apply";
 import { getSession } from "@/lib/session";
 
 export async function GET(request: Request) {
@@ -92,8 +102,9 @@ async function getLeaveUsageForYear(employeeId: string, year: number) {
 
   const usedByType: Record<string, number> = {};
   for (const leave of leaves) {
-    usedByType[leave.leaveType] =
-      (usedByType[leave.leaveType] || 0) + Number(leave.days || 0);
+    // Legacy rows stored under an alias count against the same entitlement.
+    const key = normalizeLeaveType(leave.leaveType);
+    usedByType[key] = (usedByType[key] || 0) + Number(leave.days || 0);
   }
   return usedByType;
 }
@@ -108,11 +119,19 @@ export async function POST(request: Request) {
     if (!body) return fail("Invalid body", 400);
 
     const selfApply = body.selfApply === true;
-    const leaveType =
-      typeof body.leaveType === "string" ? body.leaveType.trim() : "";
+    // Normalised so a legacy spelling (`earned`) resolves to its canonical
+    // key (`privilege`) and is stored, validated and quota-checked as one type.
+    const leaveType = normalizeLeaveType(body.leaveType);
     const fromDate = typeof body.fromDate === "string" ? body.fromDate : "";
     const toDate = typeof body.toDate === "string" ? body.toDate : "";
-    const days = Number(body.days);
+    // `body.days` is deliberately ignored — the client used to send its own
+    // figure, so any caller could apply for a one-day leave worth 9,999 days,
+    // and an honest client still sent a raw calendar span that charged weekly
+    // offs and holidays as leave. The count is derived below from the dates,
+    // the employee's weekly off and the holiday calendar.
+    const duration: LeaveDuration = isLeaveDuration(body.duration)
+      ? body.duration
+      : "full";
     const reason = typeof body.reason === "string" ? body.reason.trim() : "";
 
     let employeeId = "";
@@ -162,8 +181,8 @@ export async function POST(request: Request) {
       employeeRecord = await Employee.findOne({ employeeId }).lean();
     }
 
-    if (!employeeId || !leaveType || !fromDate || !toDate || !days) {
-      return fail("leaveType, fromDate, toDate, and days are required", 400);
+    if (!employeeId || !leaveType || !fromDate || !toDate) {
+      return fail("leaveType, fromDate and toDate are required", 400);
     }
 
     const reasonErr = validateLeaveReason(reason);
@@ -171,10 +190,6 @@ export async function POST(request: Request) {
 
     if (!VALID_LEAVE_TYPES.has(leaveType)) {
       return fail("Invalid leave type.", 400);
-    }
-
-    if (!Number.isFinite(days) || days < 0.5) {
-      return fail("Leave days must be at least 0.5.", 400);
     }
 
     const from = new Date(fromDate);
@@ -191,18 +206,50 @@ export async function POST(request: Request) {
     }
     const employee = employeeRecord;
 
-    if (leaveType !== "unpaid") {
+    // Authoritative day count: working days only, honouring this employee's
+    // weekly off and the company holiday calendar.
+    const holidayMap = await getHolidayMap(from, to);
+    const days = countLeaveWorkingDays(
+      from,
+      to,
+      duration,
+      employee.weeklyOff,
+      new Set(holidayMap.keys()),
+    );
+    if (days < 0.5) {
+      return fail(
+        "That range contains no working days — it falls entirely on weekly offs or holidays.",
+        400,
+      );
+    }
+
+    {
       const policyCount = await LeavePolicy.countDocuments();
       if (policyCount === 0) {
         await LeavePolicy.insertMany(DEFAULT_LEAVE_POLICIES);
       }
 
+      // Matches the canonical key *or* a legacy alias, so a DB still holding
+      // the `earned` policy row is found instead of silently returning null —
+      // which is what disabled the Privilege Leave quota check entirely.
       const policy = await LeavePolicy.findOne({
-        leaveType,
+        leaveType: { $in: leaveTypeQueryValues(leaveType) },
         isActive: true,
       }).lean();
 
-      if (policy && policy.annualQuota > 0) {
+      // Per-request cap. This is the only limit unpaid leave has — its
+      // `annualQuota` is 0, which means "no entitlement to draw down", not
+      // "unlimited", so the balance check below never constrains it.
+      const maxPerRequest = Number(policy?.maxDaysPerRequest) || 0;
+      if (maxPerRequest > 0 && days > maxPerRequest) {
+        return fail(
+          `${policy?.label ?? leaveType} is limited to ${maxPerRequest} working day(s) per request. ` +
+            `This request is ${days}. Split it into shorter requests, or ask HR to raise the limit.`,
+          400,
+        );
+      }
+
+      if (leaveType !== "unpaid" && policy && policy.annualQuota > 0) {
         const year = from.getFullYear();
         const usedByType = await getLeaveUsageForYear(employeeId, year);
         const used = usedByType[leaveType] || 0;
@@ -225,6 +272,7 @@ export async function POST(request: Request) {
       fromDate: from,
       toDate: to,
       days,
+      duration,
       reason,
       status: "pending",
     });

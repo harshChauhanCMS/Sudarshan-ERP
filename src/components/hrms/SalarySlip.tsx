@@ -107,11 +107,23 @@ function pairColumns(left: SlipRow[], right: SlipRow[]): [SlipRow, SlipRow][] {
 
 /** Single source of truth for what the on-screen slip and the PDF render. */
 function buildSlipView(sheet: SalarySlipData) {
-  const days = monthDays(sheet.cycle) || sheet.workingDays || 0;
+  // The slip must count days on the same basis the money was calculated on.
+  // `sheet.workingDays` is what the salary engine divided by (weekly offs
+  // excluded); the calendar month length is only a fallback for legacy rows
+  // that never stored one. Preferring the calendar figure printed "31 pay
+  // days" against a salary computed over 26, so the days and the rupees on
+  // the page did not reconcile.
+  const days = sheet.workingDays || monthDays(sheet.cycle) || 0;
   const lwpDays = sheet.unpaidLeaveDays || 0;
   const payDays = Math.max(0, days - lwpDays);
   const workedDays = sheet.daysPresent || 0;
-  const paidNonWorkingDays = Math.max(0, payDays - workedDays);
+  // Paid days that were not worked: paid leave plus company holidays. Both are
+  // on the sheet, so they are read rather than inferred by subtraction, which
+  // previously swept weekly offs into this figure too.
+  const paidNonWorkingDays = Math.max(
+    0,
+    round2((sheet.leaveDays || 0) + (sheet.holidayDays || 0)),
+  );
 
   const monthlyCtc = sheet.annualCtc
     ? Math.round(sheet.annualCtc / 12)
@@ -160,15 +172,15 @@ function buildSlipView(sheet: SalarySlipData) {
     ],
     [
       { label: "Designation :", value: text(sheet.designation) },
-      { label: "Working Days:", value: String(workedDays) },
+      { label: "Days Worked :", value: String(workedDays) },
     ],
     [
       { label: "Employee CTC", value: amt(monthlyCtc), bold: true },
-      { label: "Week Off , CL & PL", value: String(paidNonWorkingDays) },
+      { label: "Paid Leave & Holidays", value: String(paidNonWorkingDays) },
     ],
     [
       { label: "Location :", value: text(sheet.locationUnit) },
-      { label: "Pay Days", value: String(payDays) },
+      { label: "Working Days", value: String(days) },
     ],
     [
       {
@@ -179,7 +191,7 @@ function buildSlipView(sheet: SalarySlipData) {
             : sheet.dateJoining
           : "-",
       },
-      { label: "LWP Days", value: String(lwpDays) },
+      { label: `LWP Days / Pay Days`, value: `${lwpDays} / ${payDays}` },
     ],
   ];
 
