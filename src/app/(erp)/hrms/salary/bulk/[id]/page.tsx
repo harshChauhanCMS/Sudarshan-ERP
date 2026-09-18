@@ -42,7 +42,6 @@ type SalarySheetForm = {
   overtimeHours: number;
   overtimeAmount: number;
   pfEmployee: number;
-  pfEmployer: number;
   esi: number;
   tds: number;
   advance: number;
@@ -143,7 +142,6 @@ function EditSalaryContent({
         overtimeHours: sheet.overtimeHours ?? 0,
         overtimeAmount: sheet.overtimeAmount ?? 0,
         pfEmployee: sheet.pfEmployee ?? 0,
-        pfEmployer: sheet.pfEmployer ?? 0,
         esi: sheet.esi ?? 0,
         tds: sheet.tds ?? 0,
         advance: sheet.advance ?? 0,
@@ -450,9 +448,6 @@ function EditSalaryContent({
                   <InputNumber min={0} style={{ width: "100%" }} />
                 </Form.Item>
                 <Form.Item name="pfEmployee" label="PF (employee)">
-                  <InputNumber min={0} style={{ width: "100%" }} />
-                </Form.Item>
-                <Form.Item name="pfEmployer" label="PF (employer)">
                   <InputNumber min={0} style={{ width: "100%" }} />
                 </Form.Item>
                 <Form.Item name="esi" label="ESI">

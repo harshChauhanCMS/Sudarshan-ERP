@@ -218,7 +218,7 @@ const UserManagement = () => {
   const [assignees, setAssignees] = useState<RoleAssignee[]>([]);
   const [assigneesLoading, setAssigneesLoading] = useState(false);
   const [assignSearch, setAssignSearch] = useState("");
-  const [assignSelectedId, setAssignSelectedId] = useState<string | null>(null);
+  const [assignSelectedIds, setAssignSelectedIds] = useState<string[]>([]);
   const [assignSaving, setAssignSaving] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
 
@@ -480,7 +480,7 @@ const UserManagement = () => {
     setAssignRole(role);
     setAssignRoleKey(role.roleKey);
     setAssignSearch("");
-    setAssignSelectedId(null);
+    setAssignSelectedIds([]);
     setAssignDesignation("");
     void loadAssignees();
   };
@@ -489,7 +489,7 @@ const UserManagement = () => {
     if (assignSaving) return;
     setAssignRole(null);
     setAssignRoleKey("");
-    setAssignSelectedId(null);
+    setAssignSelectedIds([]);
     setAssignSearch("");
     setAssignDesignation("");
   };
@@ -499,13 +499,27 @@ const UserManagement = () => {
   const targetRoleIsKnown = roles.some((r) => r.roleKey === targetRoleKey);
   const targetRoleLabel = roleLabelFor(targetRoleKey);
   const targetRoleKeyValid = ROLE_KEY_PATTERN.test(targetRoleKey);
-  const selectedAssignee =
-    assignees.find((row) => row.employeeId === assignSelectedId) ?? null;
-  const roleWillChange =
-    Boolean(selectedAssignee) && selectedAssignee!.role?.toLowerCase() !== targetRoleKey;
+  /**
+   * Employees who already hold the role being assigned are dropped from the
+   * picker entirely — there is nothing to assign them.
+   */
+  const assignableAssignees = useMemo(
+    () => assignees.filter((row) => String(row.role ?? "").toLowerCase() !== targetRoleKey),
+    [assignees, targetRoleKey],
+  );
+  const alreadyOnRoleCount = assignees.length - assignableAssignees.length;
+  /** Selection is scoped to the visible rows, so switching role key drops stale picks. */
+  const selectedAssignees = useMemo(
+    () => assignableAssignees.filter((row) => assignSelectedIds.includes(row.employeeId)),
+    [assignableAssignees, assignSelectedIds],
+  );
+  /** Designation is a per-person job title, so it is only editable for one pick. */
+  const singleAssignee = selectedAssignees.length === 1 ? selectedAssignees[0] : null;
+  const assigneesNeedingRole = selectedAssignees;
+  const roleWillChange = assigneesNeedingRole.length > 0;
   const designationWillChange =
-    Boolean(selectedAssignee) &&
-    assignDesignation.trim() !== (selectedAssignee!.designation ?? "").trim();
+    Boolean(singleAssignee) &&
+    assignDesignation.trim() !== (singleAssignee!.designation ?? "").trim();
   const hasAssignChanges = roleWillChange || designationWillChange;
   const roleKeyOptions = useMemo(
     () =>
@@ -525,81 +539,147 @@ const UserManagement = () => {
 
   const filteredAssignees = useMemo(() => {
     const q = assignSearch.trim().toLowerCase();
-    if (!q) return assignees;
-    return assignees.filter(
+    if (!q) return assignableAssignees;
+    return assignableAssignees.filter(
       (row) =>
         row.fullName.toLowerCase().includes(q) ||
         row.employeeId.toLowerCase().includes(q) ||
         roleLabelFor(row.role).toLowerCase().includes(q),
     );
-  }, [assignees, assignSearch, roleLabelFor]);
+  }, [assignableAssignees, assignSearch, roleLabelFor]);
 
-  /** Picking an employee seeds the designation box with what they hold today. */
-  const selectAssignee = (employeeId: string | null) => {
-    setAssignSelectedId(employeeId);
-    const row = assignees.find((r) => r.employeeId === employeeId);
-    setAssignDesignation(row?.designation ?? "");
+  /** Picking exactly one employee seeds the designation box with what they hold today. */
+  const selectAssignees = (employeeIds: string[]) => {
+    setAssignSelectedIds(employeeIds);
+    if (employeeIds.length === 1) {
+      const row = assignees.find((r) => r.employeeId === employeeIds[0]);
+      setAssignDesignation(row?.designation ?? "");
+    } else {
+      setAssignDesignation("");
+    }
   };
 
+  const toggleAssignee = (employeeId: string) => {
+    selectAssignees(
+      assignSelectedIds.includes(employeeId)
+        ? assignSelectedIds.filter((id) => id !== employeeId)
+        : [...assignSelectedIds, employeeId],
+    );
+  };
+
+  /**
+   * Assigns the chosen role to every selected employee. The API takes one
+   * employee per call, so this walks the selection and reports a single
+   * aggregated result — employees already on the role are skipped, not failed.
+   */
   const assignSelected = async () => {
-    if (!assignRole || !assignSelectedId) return;
+    if (!assignRole || selectedAssignees.length === 0) return;
     if (!targetRoleKeyValid) {
       messageApi.error("Role key must use lowercase letters, numbers, and hyphens only");
       return;
     }
-    if (!assignDesignation.trim()) {
+    if (singleAssignee && !assignDesignation.trim()) {
       messageApi.error("Designation cannot be empty");
       return;
     }
     if (!hasAssignChanges) return;
-    const target = assignees.find((row) => row.employeeId === assignSelectedId);
+
+    const designation = assignDesignation.trim();
+    const succeeded: string[] = [];
+    const skipped: string[] = [];
+    const failed: string[] = [];
+    const updates = new Map<string, { role: string; designation: string }>();
+    let sawCustomRole = false;
+    let someNotifyFailed = false;
+    let lastWhat = "";
 
     setAssignSaving(true);
     try {
-      const res = await fetch("/api/system/role-assignments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          employeeId: assignSelectedId,
-          roleKey: targetRoleKey,
-          designation: assignDesignation.trim(),
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok || json.error) {
-        throw new Error(json.error || "Failed to assign role");
+      for (const row of selectedAssignees) {
+        try {
+          const res = await fetch("/api/system/role-assignments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              employeeId: row.employeeId,
+              roleKey: targetRoleKey,
+              // Designation is per-person — only sent when a single employee
+              // is selected, so a bulk assign never rewrites job titles.
+              ...(singleAssignee ? { designation } : {}),
+            }),
+          });
+          const json = await res.json();
+          if (!res.ok || json.error) {
+            const msg = String(json.error || "");
+            if (/nothing to update/i.test(msg)) {
+              skipped.push(row.fullName);
+              continue;
+            }
+            throw new Error(msg || "Failed to assign role");
+          }
+
+          const name = json.data?.fullName || row.fullName;
+          const savedDesignation = String(json.data?.designation ?? row.designation ?? "");
+          succeeded.push(name);
+          updates.set(row.employeeId, {
+            role: String(json.data?.role ?? targetRoleKey),
+            designation: savedDesignation,
+          });
+          if (json.data?.isCustomRole) sawCustomRole = true;
+          if (!json.data?.notified?.employeeNotified) someNotifyFailed = true;
+          lastWhat = json.data?.roleChanged
+            ? json.data?.designationChanged
+              ? `is now ${targetRoleLabel}, designated ${savedDesignation}`
+              : `is now ${targetRoleLabel}`
+            : `is now designated ${savedDesignation}`;
+        } catch (err) {
+          failed.push(
+            `${row.fullName}${err instanceof Error && err.message ? ` (${err.message})` : ""}`,
+          );
+        }
       }
 
-      const name = json.data?.fullName || target?.fullName || assignSelectedId;
-      const notified = json.data?.notified;
-      const savedDesignation = String(json.data?.designation ?? assignDesignation.trim());
-      const what = json.data?.roleChanged
-        ? json.data?.designationChanged
-          ? `is now ${targetRoleLabel}, designated ${savedDesignation}`
-          : `is now ${targetRoleLabel}`
-        : `is now designated ${savedDesignation}`;
-      messageApi.success(
-        notified?.employeeNotified
-          ? `${name} ${what} — notified by email, along with owners and admins.`
-          : `${name} ${what}. Email notification could not be sent.`,
-      );
-      if (json.data?.isCustomRole) {
-        messageApi.warning(
-          `"${targetRoleKey}" has no permissions defined — create a role with this key, or ${name} will sign in with no access.`,
-          6,
+      if (updates.size) {
+        setAssignees((prev) =>
+          prev.map((row) => {
+            const update = updates.get(row.employeeId);
+            return update ? { ...row, ...update } : row;
+          }),
         );
       }
 
-      setAssignees((prev) =>
-        prev.map((row) =>
-          row.employeeId === assignSelectedId
-            ? { ...row, role: targetRoleKey, designation: savedDesignation }
-            : row,
-        ),
-      );
-      selectAssignee(null);
-    } catch (err) {
-      messageApi.error(err instanceof Error ? err.message : "Failed to assign role");
+      if (succeeded.length === 1) {
+        messageApi.success(
+          someNotifyFailed
+            ? `${succeeded[0]} ${lastWhat}. Email notification could not be sent.`
+            : `${succeeded[0]} ${lastWhat} — notified by email, along with owners and admins.`,
+        );
+      } else if (succeeded.length > 1) {
+        messageApi.success(
+          someNotifyFailed
+            ? `${succeeded.length} employees are now ${targetRoleLabel}. Some email notifications could not be sent.`
+            : `${succeeded.length} employees are now ${targetRoleLabel} — notified by email, along with owners and admins.`,
+        );
+      }
+      if (skipped.length) {
+        messageApi.info(
+          skipped.length === 1
+            ? `${skipped[0]} already has this role — skipped.`
+            : `${skipped.length} employees already had this role — skipped.`,
+        );
+      }
+      if (failed.length) {
+        messageApi.error(`Could not update ${failed.join("; ")}`, 6);
+      }
+      if (sawCustomRole) {
+        messageApi.warning(
+          `"${targetRoleKey}" has no permissions defined — create a role with this key, or these users will sign in with no access.`,
+          6,
+        );
+      }
+      if (succeeded.length && !failed.length) {
+        selectAssignees([]);
+      }
     } finally {
       setAssignSaving(false);
     }
@@ -945,7 +1025,9 @@ const UserManagement = () => {
         footer={
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 12, color: "var(--fg-muted)", textAlign: "left" }}>
-              The employee, and every owner and admin, are notified by email.
+              {selectedAssignees.length > 1
+                ? `${selectedAssignees.length} employees selected — each one, and every owner and admin, are notified by email.`
+                : "The employee, and every owner and admin, are notified by email."}
             </span>
             <div style={{ display: "flex", gap: 8 }}>
               <Button onClick={closeAssign} disabled={assignSaving} style={{ fontWeight: 500 }}>
@@ -956,17 +1038,19 @@ const UserManagement = () => {
                 onClick={() => void assignSelected()}
                 loading={assignSaving}
                 disabled={
-                  !assignSelectedId ||
+                  selectedAssignees.length === 0 ||
                   !targetRoleKeyValid ||
-                  !assignDesignation.trim() ||
+                  (Boolean(singleAssignee) && !assignDesignation.trim()) ||
                   !hasAssignChanges
                 }
               >
-                {roleWillChange && designationWillChange
-                  ? "Save changes"
-                  : designationWillChange && !roleWillChange
-                    ? "Update designation"
-                    : "Assign role"}
+                {selectedAssignees.length > 1
+                  ? `Assign role to ${selectedAssignees.length} employees`
+                  : roleWillChange && designationWillChange
+                    ? "Save changes"
+                    : designationWillChange && !roleWillChange
+                      ? "Update designation"
+                      : "Assign role"}
               </Button>
             </div>
           </div>
@@ -1015,16 +1099,22 @@ const UserManagement = () => {
             <Input
               value={assignDesignation}
               onChange={(e) => setAssignDesignation(e.target.value)}
-              disabled={assignSaving || !assignSelectedId}
+              disabled={assignSaving || !singleAssignee}
               placeholder={
-                assignSelectedId
-                  ? "e.g. Shift Supervisor"
-                  : "Select an employee below to edit their designation"
+                selectedAssignees.length > 1
+                  ? "Not editable for multiple employees — each keeps their own designation"
+                  : singleAssignee
+                    ? "e.g. Shift Supervisor"
+                    : "Select an employee below to edit their designation"
               }
             />
-            {assignSelectedId && !assignDesignation.trim() ? (
+            {singleAssignee && !assignDesignation.trim() ? (
               <span style={{ fontSize: 11, color: "var(--danger)" }}>
                 Designation is required.
+              </span>
+            ) : selectedAssignees.length > 1 ? (
+              <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>
+                Designations are left untouched when assigning a role to several employees.
               </span>
             ) : (
               <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>
@@ -1042,6 +1132,37 @@ const UserManagement = () => {
             disabled={assigneesLoading}
           />
 
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              fontSize: 12,
+              color: "var(--fg-muted)",
+            }}
+          >
+            <span>
+              {selectedAssignees.length
+                ? `${selectedAssignees.length} selected`
+                : "Tick one or more employees to assign this role."}
+              {alreadyOnRoleCount
+                ? ` · ${alreadyOnRoleCount} hidden (already ${targetRoleLabel})`
+                : ""}
+            </span>
+            {selectedAssignees.length ? (
+              <Button
+                type="link"
+                size="small"
+                disabled={assignSaving}
+                onClick={() => selectAssignees([])}
+                style={{ padding: 0, height: "auto" }}
+              >
+                Clear selection
+              </Button>
+            ) : null}
+          </div>
+
           <Table<RoleAssignee>
             size="small"
             rowKey="employeeId"
@@ -1049,18 +1170,28 @@ const UserManagement = () => {
             dataSource={filteredAssignees}
             pagination={{ pageSize: 8, size: "small", showSizeChanger: false }}
             scroll={{ y: 320 }}
-            locale={{ emptyText: <Empty description="No employees found" /> }}
+            locale={{
+              emptyText: (
+                <Empty
+                  description={
+                    !assignSearch.trim() && alreadyOnRoleCount && !assignableAssignees.length
+                      ? `Every employee already has the ${targetRoleLabel} role`
+                      : "No employees found"
+                  }
+                />
+              ),
+            }}
             onRow={(row) => ({
               onClick: () => {
                 if (assignSaving) return;
-                selectAssignee(row.employeeId);
+                toggleAssignee(row.employeeId);
               },
               style: { cursor: "pointer" },
             })}
             rowSelection={{
-              type: "radio",
-              selectedRowKeys: assignSelectedId ? [assignSelectedId] : [],
-              onChange: (keys) => selectAssignee(keys[0] ? String(keys[0]) : null),
+              type: "checkbox",
+              selectedRowKeys: selectedAssignees.map((row) => row.employeeId),
+              onChange: (keys) => selectAssignees(keys.map((key) => String(key))),
               getCheckboxProps: () => ({ disabled: assignSaving }),
             }}
             columns={[
@@ -1089,13 +1220,9 @@ const UserManagement = () => {
                 dataIndex: "role",
                 width: 220,
                 render: (value: string, row: RoleAssignee) => {
-                  const isCurrent = value?.toLowerCase() === targetRoleKey;
                   return (
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <Tag
-                        color={isCurrent ? "green" : "default"}
-                        style={{ margin: 0, fontSize: 11, borderRadius: 4 }}
-                      >
+                      <Tag color="default" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>
                         {roleLabelFor(value)}
                       </Tag>
                       {!row.hasAccount ? (

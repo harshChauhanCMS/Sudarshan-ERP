@@ -25,6 +25,8 @@ export type PayrollSheetRow = {
   netPay: number;
   status: "draft" | "approved" | "disbursed" | "pending";
   remarks: string;
+  /** ISO timestamp of when the sheet was generated; "" while pending. */
+  generatedAt: string;
 };
 
 export type SalarySheetSource = {
@@ -49,6 +51,7 @@ export type SalarySheetSource = {
   netPayable?: number;
   status?: string;
   notes?: string;
+  createdAt?: string | Date;
 };
 
 export type EmployeePayrollSource = {
@@ -136,6 +139,8 @@ export function mapToPayrollSheetRow(
     remarks:
       sheet.notes?.trim() ||
       (isPending ? "Salary not generated" : ""),
+    generatedAt:
+      isPending || !sheet.createdAt ? "" : new Date(sheet.createdAt).toISOString(),
   };
 }
 

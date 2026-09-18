@@ -14,6 +14,7 @@ import { User } from "@/models/User";
 import Notification from "@/lib/models/Notification";
 import { isWeeklyOffDate } from "@/lib/shift-utils";
 import { leaveDaysInWindow } from "@/lib/leave-window";
+import { cycleLockedReason, isWholeMonthRange } from "@/lib/salary-generation-window";
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function endOfDay(d: Date)   { const x = new Date(d); x.setHours(23,59,59,999); return x; }
@@ -80,6 +81,15 @@ export async function POST(request: Request) {
     if (start > todayEnd) {
       return fail("Cannot generate salary for a future period.", 400);
     }
+    // A from/to pair covering a whole calendar month is a month run, however it
+    // was phrased, so it waits for the month to finish just like the cycle
+    // form below. Only a genuinely partial range is treated as a part-period.
+    if (explicitRange && isWholeMonthRange(start, end)) {
+      const locked = cycleLockedReason(
+        `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
+      );
+      if (locked) return fail(locked, 400);
+    }
     if (end > todayEnd) {
       if (explicitRange) {
         end = todayEnd;
@@ -114,6 +124,11 @@ export async function POST(request: Request) {
     // they are still drafts: an approved or disbursed sheet is a record of what
     // was paid and is never rewritten.
     const regenerate = body.regenerate === true;
+    // A dry run: everything is computed exactly as a real run would, but
+    // nothing is written and nobody is notified. It backs the confirmation
+    // modal, so what HR checks is what gets saved.
+    const preview = body.preview === true;
+    const previewRows: Record<string, unknown>[] = [];
     const existingSheets = await SalarySheet.find({ cycle })
       .select({ employeeId: 1, status: 1 })
       .lean();
@@ -308,7 +323,13 @@ export async function POST(request: Request) {
         status: "draft",
       };
 
-      if (existing) {
+      if (preview) {
+        previewRows.push(sheet);
+        results.push({
+          employeeId: eid,
+          action: existing ? "updated" : "created",
+        });
+      } else if (existing) {
         await SalarySheet.findByIdAndUpdate(existing.id, { $set: sheet });
         results.push({ employeeId: eid, action: "updated" });
       } else {
@@ -321,7 +342,7 @@ export async function POST(request: Request) {
     const locked = results.filter((r) => r.action === "locked").length;
     const generated = results.length - skipped - locked;
 
-    if (generated > 0) {
+    if (generated > 0 && !preview) {
       try {
         const targetRoles = ["admin", "owner", "master", "hr"];
         const admins = await User.find({ role: { $in: targetRoles } }).select("email").lean();
@@ -347,6 +368,10 @@ export async function POST(request: Request) {
       from: start.toISOString().slice(0, 10),
       to: end.toISOString().slice(0, 10),
       workingDays,
+      preview,
+      // Only a dry run returns the computed sheets; a real run already saved
+      // them, and the page reloads the register instead.
+      rows: preview ? previewRows : undefined,
       generated,
       skipped,
       locked,

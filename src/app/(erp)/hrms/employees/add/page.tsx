@@ -103,6 +103,8 @@ export default function AddEmployeePage() {
   const watchedArrears = Form.useWatch("arrears", form);
   const dateJoining = Form.useWatch("dateJoining", form);
   const probationMonths = Form.useWatch("probationMonths", form);
+  const shiftMode = Form.useWatch("shiftMode", form);
+  const isMultiShift = shiftMode === "Multiple shifts (rotating)";
   // Confirmation date the employee becomes permanent on, projected from the
   // joining date + probation length — recalculated as either changes.
   const permanentFromDate = useMemo(() => {
@@ -268,15 +270,6 @@ export default function AddEmployeePage() {
       }
     })();
   }, [form, messageApi]);
-
-  const handleAnnualCtcChange = (value: number | null) => {
-    if (value) {
-      form.setFieldsValue({
-        monthlyGross: Math.round(value / 12),
-        basicSalary: Math.round((value / 12) * 0.5),
-      });
-    }
-  };
 
   const handleCurrentAddressCopy = (checked: boolean) => {
     if (checked) {
@@ -833,11 +826,16 @@ export default function AddEmployeePage() {
           <Form.Item
             name="eligibleShifts"
             label="Eligible Shifts"
-            extra="Every shift this employee can be rostered on. Leave empty to use the primary shift only."
+            extra={
+              isMultiShift
+                ? "Every shift this employee can be rostered on. Leave empty to use the primary shift only."
+                : "Only available when Shift Mode is set to Multiple shifts (rotating)."
+            }
           >
             <Select
               mode="multiple"
               allowClear
+              disabled={!isMultiShift}
               loading={shiftsLoading}
               placeholder={
                 shiftsLoading ? "Loading shifts…" : "Select one or more shifts"
@@ -909,7 +907,11 @@ export default function AddEmployeePage() {
                 </div>
               </div>
               <div className="emp-form-grid">
-                <Form.Item name="annualCtc" label="Annual CTC (₹)">
+                <Form.Item
+                  name="annualCtc"
+                  label="Annual CTC (₹)"
+                  tooltip="Entered manually — it does not fill in Monthly Gross or Basic Salary."
+                >
                   <InputNumber
                     style={{ width: "100%" }}
                     formatter={(v) =>
@@ -920,7 +922,6 @@ export default function AddEmployeePage() {
                         v?.toString().replace(/\₹\s?|(,*)/g, "") || "0",
                       ) || 0
                     }
-                    onChange={handleAnnualCtcChange}
                   />
                 </Form.Item>
                 <Form.Item name="monthlyGross" label="Monthly Gross (₹)">
@@ -1158,6 +1159,14 @@ export default function AddEmployeePage() {
           form={form}
           layout="vertical"
           onFinish={onFinish}
+          onValuesChange={(changed) => {
+            if (
+              "shiftMode" in changed &&
+              changed.shiftMode !== "Multiple shifts (rotating)"
+            ) {
+              form.setFieldValue("eligibleShifts", undefined);
+            }
+          }}
           preserve
           requiredMark="optional"
           initialValues={{

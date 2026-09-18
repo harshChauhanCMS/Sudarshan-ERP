@@ -20,6 +20,7 @@ import autoTable from "jspdf-autotable";
 
 import RepHeader from "@/components/hrms/RepHeader";
 import { HRMS_BACK } from "@/lib/hrms-nav";
+import { cycleLockedReason } from "@/lib/salary-generation-window";
 import CommonTable from "@/components/common/CommonTable";
 import StatCard from "@/components/common/StatCard";
 import ReportSection from "@/components/hrms/ReportSection";
@@ -41,7 +42,6 @@ type SalaryRow = {
   unpaidLeaveDays?: number;
   leaveDeduction: number;
   pfEmployee: number;
-  pfEmployer: number;
   esi: number;
   tds: number;
   advance?: number;
@@ -51,6 +51,8 @@ type SalaryRow = {
   overtimeHours: number;
   overtimeAmount: number;
   cycle?: string;
+  /** Set once the sheet exists — the moment the cycle was generated. */
+  createdAt?: string;
   designation?: string;
   basicSalary?: number;
   hra?: number;
@@ -151,6 +153,33 @@ function MonthlySalaryContent() {
     setStatusFilter("all");
     setMonth(dayjs());
   };
+
+  /** Salary runs wait for the month's last day — see salary-generation-window. */
+  const generateLockedReason = cycleLockedReason(cycleKey);
+
+  /** A cycle is generated once; the date of that run is shown under the button. */
+  const generatedOn = useMemo(() => {
+    const stamps = sheets
+      .filter((row) => row.status !== "pending" && row.createdAt)
+      .map((row) => dayjs(row.createdAt))
+      .filter((d) => d.isValid());
+    if (!stamps.length) return null;
+    return stamps.reduce((latest, d) => (d.isAfter(latest) ? d : latest), stamps[0]);
+  }, [sheets]);
+
+  /** Employees with no sheet yet — all that a Generate run would create. */
+  const pendingCount = useMemo(
+    () => sheets.filter((row) => row.status === "pending").length,
+    [sheets],
+  );
+
+  const generateBlockedReason =
+    generateLockedReason ??
+    (generatedOn && pendingCount === 0
+      ? `Salary for ${cycleLabel} was already generated on ${generatedOn.format(
+          "D MMM YYYY",
+        )} — it is not generated twice.`
+      : null);
 
   const generate = async () => {
     setGenerating(true);
@@ -345,7 +374,7 @@ function MonthlySalaryContent() {
           <span className="text-zinc-400">—</span>
         ) : (
           <Tooltip
-            title={`PF (Emp): ${fmt(r.pfEmployee)} | PF (Empr): ${fmt(r.pfEmployer)} | ESI: ${fmt(r.esi)} | TDS: ${fmt(r.tds)}`}
+            title={`PF: ${fmt(r.pfEmployee)} | ESI: ${fmt(r.esi)} | TDS: ${fmt(r.tds)}`}
           >
             <span className="font-semibold text-amber-600 cursor-help">
               – {fmt((r.pfEmployee || 0) + (r.esi || 0))}
@@ -477,18 +506,34 @@ function MonthlySalaryContent() {
             >
               Refresh
             </Button>
-            <Button
-              icon={<ThunderboltOutlined />}
-              onClick={generate}
-              loading={generating}
-              style={{
-                background: "#7c3aed",
-                borderColor: "#7c3aed",
-                color: "#fff",
-              }}
-            >
-              Generate
-            </Button>
+            <div className="payroll-generate-action">
+              <Tooltip title={generateBlockedReason ?? ""}>
+                <Button
+                  icon={<ThunderboltOutlined />}
+                  onClick={generate}
+                  loading={generating}
+                  disabled={Boolean(generateBlockedReason)}
+                  style={
+                    generateBlockedReason
+                      ? undefined
+                      : {
+                          background: "#7c3aed",
+                          borderColor: "#7c3aed",
+                          color: "#fff",
+                        }
+                  }
+                >
+                  {generatedOn && pendingCount > 0
+                    ? `Generate (${pendingCount} pending)`
+                    : "Generate"}
+                </Button>
+              </Tooltip>
+              {generatedOn ? (
+                <span className="payroll-generate-action__note">
+                  Generated on {generatedOn.format("D MMM YYYY")}
+                </span>
+              ) : null}
+            </div>
             <Button
               icon={<CheckOutlined />}
               onClick={bulkApprove}

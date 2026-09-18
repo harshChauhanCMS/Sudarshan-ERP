@@ -331,15 +331,6 @@ function EmployeeDetailsContent({
     }
   };
 
-  const handleAnnualCtcChange = (value: number | null) => {
-    if (value) {
-      form.setFieldsValue({
-        monthlyGross: Math.round(value / 12),
-        basicSalary: Math.round((value / 12) * 0.5),
-      });
-    }
-  };
-
   const handleCurrentAddressCopy = (checked: boolean) => {
     if (checked) {
       const currentAddress = form.getFieldValue("currentAddress");
@@ -1058,12 +1049,15 @@ function EmployeeDetailsContent({
                       </div>
                     </div>
                     <div className="emp-form-grid">
-                      <Form.Item name="annualCtc" label="Annual CTC (₹)">
+                      <Form.Item
+                        name="annualCtc"
+                        label="Annual CTC (₹)"
+                        tooltip="Entered manually — it does not fill in Monthly Gross or Basic Salary."
+                      >
                         <InputNumber
                           style={{ width: "100%" }}
                           formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                           parser={v => parseFloat(v?.replace(/\₹\s?|(,*)/g, "") || "0") || 0}
-                          onChange={handleAnnualCtcChange}
                           disabled={!isEditing}
                         />
                       </Form.Item>

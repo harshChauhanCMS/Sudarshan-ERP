@@ -30,7 +30,8 @@ export type SalarySlipData = {
   leaveDeduction: number;
   advance?: number;
   pfEmployee: number;
-  pfEmployer: number;
+  /** Employer share — not printed; only a fallback when annualCtc is absent. */
+  pfEmployer?: number;
   esi: number;
   tds: number;
   overtimeHours: number;

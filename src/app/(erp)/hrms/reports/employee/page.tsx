@@ -5,7 +5,6 @@ import { Button, Space, message } from "antd";
 import dayjs from "dayjs";
 import * as XLSX from "xlsx";
 import {
-  DownloadOutlined,
   EyeOutlined,
   UserOutlined,
   TeamOutlined,
@@ -13,6 +12,7 @@ import {
   BankOutlined,
   IdcardOutlined,
   FileExcelOutlined,
+  FieldTimeOutlined,
 } from "@ant-design/icons";
 
 import RepHeader from "@/components/hrms/RepHeader";
@@ -30,6 +30,7 @@ import {
   type AttendanceSummaryRow,
 } from "@/hooks/use-attendance-report";
 import { downloadDailyAttendanceReportExcel } from "@/lib/daily-attendance-report-excel";
+import { downloadPunchReportExcel } from "@/lib/punch-report-excel";
 
 type ReportType = "monthly" | "absent" | "late" | "short" | "overtime";
 type GroupBy = "employee" | "department" | "shift" | "unit" | "empType";
@@ -111,6 +112,7 @@ type MusterRow = {
   sl: number;
   compOff: number;
   absent: number;
+  holidays: number;
   otHours: string;
   paydays: number;
 };
@@ -121,6 +123,7 @@ export default function EmployeeReportPage() {
   const [groupBy, setGroupBy] = useState<GroupBy>("employee");
   const [musterLoading, setMusterLoading] = useState(false);
   const [exportingDailyExcel, setExportingDailyExcel] = useState(false);
+  const [exportingPunchReport, setExportingPunchReport] = useState(false);
   const filtered = useMemo<AttendanceSummaryRow[]>(() => {
     switch (reportType) {
       case "absent":
@@ -167,6 +170,17 @@ export default function EmployeeReportPage() {
     }
   };
 
+  const handleExportPunchReport = async () => {
+    if (exportingPunchReport || r.daily.length === 0) return;
+    try {
+      setExportingPunchReport(true);
+      const suffix = r.employeeId ? `-${r.employeeId}` : "";
+      await downloadPunchReportExcel(r.daily, `punch-report${suffix}`);
+    } finally {
+      setExportingPunchReport(false);
+    }
+  };
+
   const buildReportHref = (row: AttendanceSummaryRow) => {
     const params = new URLSearchParams({
       from: r.range[0].format("YYYY-MM-DD"),
@@ -202,6 +216,7 @@ export default function EmployeeReportPage() {
         "SL",
         "Comp Off",
         "Absent",
+        "National Holidays",
         "OT Hours",
         "Paydays",
       ];
@@ -221,6 +236,7 @@ export default function EmployeeReportPage() {
         row.sl,
         row.compOff,
         row.absent,
+        row.holidays,
         row.otHours,
         row.paydays,
       ]);
@@ -442,15 +458,12 @@ export default function EmployeeReportPage() {
               Muster Export
             </Button>
             <Button
-              icon={<DownloadOutlined />}
-              onClick={() =>
-                window.open(
-                  `/api/hrms/attendance/report.csv?${r.buildCsvUrl()}`,
-                  "_blank",
-                )
-              }
+              icon={<FieldTimeOutlined />}
+              onClick={() => void handleExportPunchReport()}
+              loading={exportingPunchReport}
+              disabled={r.daily.length === 0}
             >
-              Export
+              Punch In/Out Report
             </Button>
           </Space>
         }
@@ -474,6 +487,9 @@ export default function EmployeeReportPage() {
         onClear={r.handleClearFilters}
         search={r.search}
         setSearch={r.setSearch}
+        showEmployee
+        employeeId={r.employeeId}
+        setEmployeeId={r.setEmployeeId}
       />
 
       <ReportSection title="Report type & grouping">

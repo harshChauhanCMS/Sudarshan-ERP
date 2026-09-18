@@ -182,6 +182,7 @@ export async function GET(request: Request) {
       const isOtApplicable = emp.overtimeApplicable === true;
 
       let present = 0, halfDay = 0, weekoff = 0, pl = 0, cl = 0, sl = 0, compOff = 0, absent = 0;
+      let holidays = 0;
       let otHours = 0;
       const cells: string[] = [];
 
@@ -189,6 +190,12 @@ export async function GET(request: Request) {
         const key = dayKey(day);
         const punch = punchByDay.get(`${eid}|${key}`);
         const isPresent = !!punch?.inAt;
+
+        // Tallied separately from the WO bucket below — this counts every
+        // calendar holiday in range (from the Leave Admin holiday calendar),
+        // regardless of whether the employee worked, was on leave, or was
+        // already off that day.
+        if (holidayMap.has(key)) holidays += 1;
 
         if (isPresent) {
           let workedHours = 0;
@@ -254,6 +261,7 @@ export async function GET(request: Request) {
         sl,
         compOff,
         absent,
+        holidays,
         otHours: formatHoursMinutes(otHours),
         paydays,
       };
