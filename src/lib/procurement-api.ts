@@ -75,6 +75,67 @@ export function verifyInvoice(id: string, note = "") {
   );
 }
 
+export type ManualVerificationPayload = {
+  status: string;
+  invoiceVendorName?: string;
+  materialName?: string;
+  rate?: number | string;
+  vendorInvoiceNo?: string;
+  invDate?: string;
+  invAmt?: number | string;
+  subtotal?: number | string;
+  taxAmount?: number | string;
+  quantityReceived?: number | string;
+  unit?: string;
+  receivedDate?: string;
+  challanNo?: string;
+  note?: string;
+};
+
+/** The manual check — details typed in by hand, outcome picked by the verifier. */
+export function manualVerifyInvoice(id: string, payload: ManualVerificationPayload) {
+  return send<{
+    invoice: Invoice;
+    receipt: {
+      kind: string;
+      code: string;
+      name: string;
+      qty: number;
+      previousStock: number;
+      newStock: number;
+      unit: string;
+    } | null;
+  }>(`/api/procurement/invoices/${enc(id)}/manual-verify`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Verifies a PO's invoice and creates the invoice record in one step — used
+ * for the first check, when no invoice exists yet.
+ */
+export function verifyPoInvoice(
+  poId: string,
+  payload: ManualVerificationPayload,
+) {
+  return send<{
+    invoice: Invoice;
+    receipt: {
+      kind: string;
+      code: string;
+      name: string;
+      qty: number;
+      previousStock: number;
+      newStock: number;
+      unit: string;
+    } | null;
+  }>("/api/procurement/invoices/verify", {
+    method: "POST",
+    body: JSON.stringify({ ...payload, poId }),
+  });
+}
+
 export function markInvoiceMismatch(id: string, note: string) {
   return send<{ invoice: Invoice }>(
     `/api/procurement/invoices/${enc(id)}/mismatch`,

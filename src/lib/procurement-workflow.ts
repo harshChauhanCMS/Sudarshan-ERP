@@ -91,6 +91,25 @@ export function poTransitionError(status: string | undefined, action: PoAction):
   return `Cannot ${action.replace("_", " ")} a purchase order that is "${from}" — allowed from: ${allowed}.`;
 }
 
+/**
+ * A purchase order that can carry an invoice. Verification starts from the PO
+ * itself, so every issued order qualifies — the invoice arrives whenever the
+ * vendor sends it, which is not always after a formal acceptance was recorded
+ * in the system. Only orders that were never issued, or were turned down, are
+ * excluded.
+ */
+const NOT_INVOICEABLE: readonly PoStatus[] = ["draft", "rejected", "vendor_rejected"];
+
+export function canPoBeInvoiced(status: string | undefined): boolean {
+  return !NOT_INVOICEABLE.includes(normalizePoStatus(status));
+}
+
+export function poInvoiceableError(status: string | undefined): string {
+  return `A purchase order that is "${
+    PO_STATUS_LABELS[normalizePoStatus(status)]
+  }" cannot be invoiced.`;
+}
+
 // ---------------------------------------------------------------------------
 // Invoices
 // ---------------------------------------------------------------------------
@@ -98,25 +117,50 @@ export function poTransitionError(status: string | undefined, action: PoAction):
 export const INVOICE_STATUSES = [
   "pending_verification",
   "verified",
-  "mismatch",
+  "failed",
+  "resent_to_vendor",
   "cancelled",
 ] as const;
 
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
-  pending_verification: "Pending verification",
-  verified: "Verified — ready for payment",
-  mismatch: "Mismatch",
+  pending_verification: "Pending",
+  verified: "Verified",
+  failed: "Failed",
+  resent_to_vendor: "Resent to vendor",
   cancelled: "Cancelled",
 };
 
+/** The statuses a verifier may pick by hand, in the order the dropdown shows. */
+export const MANUAL_INVOICE_STATUSES = [
+  "verified",
+  "failed",
+  "resent_to_vendor",
+  "pending_verification",
+] as const satisfies readonly InvoiceStatus[];
+
 const INVOICE_TRANSITIONS: Record<string, readonly InvoiceStatus[]> = {
-  verify: ["pending_verification"],
-  mismatch: ["pending_verification"],
-  // A rejected invoice goes back to the vendor, who corrects and resubmits.
-  resubmit: ["mismatch"],
-  cancel: ["pending_verification", "mismatch"],
+  // Verification is done by hand against the PO, so it may also clear an
+  // invoice that previously failed or went back to the vendor. It is never
+  // undone: verifying receives the goods into inventory.
+  verify: ["pending_verification", "failed", "resent_to_vendor"],
+  // "mismatch" is the historical name of this action; the status is "failed".
+  mismatch: ["pending_verification", "resent_to_vendor"],
+  resend: ["pending_verification", "failed"],
+  /** Park it back on the queue — used when the verifier picks "Pending". */
+  hold: ["failed", "resent_to_vendor"],
+  // A vendor who corrected their invoice puts it back in the queue.
+  resubmit: ["failed", "resent_to_vendor"],
+  cancel: ["pending_verification", "failed", "resent_to_vendor"],
+};
+
+/** Which action moves an invoice into the status a verifier picked. */
+export const INVOICE_STATUS_ACTION: Record<string, InvoiceAction> = {
+  verified: "verify",
+  failed: "mismatch",
+  resent_to_vendor: "resend",
+  pending_verification: "hold",
 };
 
 export type InvoiceAction = keyof typeof INVOICE_TRANSITIONS;
@@ -127,7 +171,10 @@ const LEGACY_INVOICE_STATUS: Record<string, InvoiceStatus> = {
   approved: "verified",
   awaiting: "pending_verification",
   pending: "pending_verification",
-  rejected: "mismatch",
+  // "mismatch" was this status's old name — rows written before the rename
+  // still carry it.
+  mismatch: "failed",
+  rejected: "failed",
 };
 
 export function normalizeInvoiceStatus(status: string | undefined): InvoiceStatus {
@@ -189,7 +236,8 @@ export function compareInvoiceToPo(invAmt: number, poAmt: number): InvoiceMatch 
 /** Mirrors the invoice state onto `PurchaseOrder.invoice` for list columns. */
 export function poInvoiceColumn(status: InvoiceStatus): string {
   if (status === "verified") return "verified";
-  if (status === "mismatch") return "mismatch";
+  if (status === "failed") return "failed";
+  if (status === "resent_to_vendor") return "resent";
   if (status === "cancelled") return "awaiting";
   return "pending";
 }

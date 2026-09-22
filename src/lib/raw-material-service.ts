@@ -19,6 +19,10 @@ type RawMaterialDoc = {
   minStock?: number;
   preferredVendor?: string;
   notes?: string;
+  lastReceivedAt?: Date | string;
+  lastReceivedQty?: number;
+  lastReceivedPo?: string;
+  lastReceivedInvoiceNo?: string;
 };
 
 function toDTO(doc: RawMaterialDoc): RawMaterial {
@@ -37,6 +41,12 @@ function toDTO(doc: RawMaterialDoc): RawMaterial {
     minStock: doc.minStock,
     preferredVendor: doc.preferredVendor,
     notes: doc.notes,
+    lastReceivedAt: doc.lastReceivedAt
+      ? new Date(doc.lastReceivedAt).toISOString()
+      : undefined,
+    lastReceivedQty: doc.lastReceivedQty,
+    lastReceivedPo: doc.lastReceivedPo || undefined,
+    lastReceivedInvoiceNo: doc.lastReceivedInvoiceNo || undefined,
   };
 }
 

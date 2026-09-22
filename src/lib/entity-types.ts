@@ -83,6 +83,36 @@ export type Invoice = {
   /** Counts how many times the vendor has corrected and resent this invoice. */
   revision?: number;
   history?: InvoiceEvent[];
+
+  // ── Manual verification (entered by hand against the paper invoice) ──────
+  /** Taxable value before GST, as printed on the invoice. */
+  subtotal?: number;
+  /** GST / other tax charged on the invoice. */
+  taxAmount?: number;
+  /** Quantity actually received — what is added to stock on verification. */
+  quantityReceived?: number;
+  unit?: string;
+  materialCode?: string;
+  materialName?: string;
+  /** Vendor name exactly as printed on the invoice, for the match check. */
+  invoiceVendorName?: string;
+  /** Rate as printed on the invoice, compared against the PO rate. */
+  rate?: number;
+  /** Date the goods were received, when it differs from the invoice date. */
+  receivedDate?: string;
+  /** Vendor's delivery-challan / GRN reference. */
+  challanNo?: string;
+  verifiedByName?: string;
+  /** Free-text note the verifier left with the status they picked. */
+  verificationNote?: string;
+  /** Set once a verified invoice has been received into inventory. */
+  inventoryUpdated?: boolean;
+  inventoryUpdatedAt?: string;
+  inventoryQty?: number;
+  inventoryCode?: string;
+  inventoryKind?: string;
+  /** When the invoice was last sent back to the vendor for correction. */
+  resentAt?: string;
 };
 
 export type Vendor = {
@@ -107,6 +137,10 @@ export type Vendor = {
 export type PurchaseOrder = {
   id: string;
   vendor: string;
+  /** Address the PO PDF was emailed to on creation; blank when not sent. */
+  vendorEmail?: string;
+  /** ISO timestamp of that email, set only when it actually went out. */
+  pdfEmailedAt?: string;
   items: number;
   total: number;
   date: string;
@@ -140,6 +174,11 @@ export type PurchaseOrder = {
 
 export type RawMaterial = {
   code: string;
+  /** Last goods receipt, stamped when a vendor invoice is verified. */
+  lastReceivedAt?: string;
+  lastReceivedQty?: number;
+  lastReceivedPo?: string;
+  lastReceivedInvoiceNo?: string;
   name: string;
   grade: string;
   stock: number;

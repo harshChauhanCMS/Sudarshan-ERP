@@ -91,6 +91,15 @@ const RawMaterialSchema = new Schema(
       type: Number,
       default: 0,
     },
+    /**
+     * Last goods receipt — written when a vendor invoice is verified, so the
+     * inventory screen can show what arrived and when without joining back
+     * through invoices and purchase orders.
+     */
+    lastReceivedAt: { type: Date },
+    lastReceivedQty: { type: Number },
+    lastReceivedPo: { type: String, trim: true, default: "" },
+    lastReceivedInvoiceNo: { type: String, trim: true, default: "" },
   },
   { timestamps: true },
 );
@@ -106,7 +115,11 @@ RawMaterialSchema.pre("validate", function computeStatus() {
 });
 
 // Next.js HMR can cache a stale schema across reloads in dev — re-register when fields are missing.
-if (mongoose.models.RawMaterial && !mongoose.models.RawMaterial.schema.path("category")) {
+if (
+  mongoose.models.RawMaterial &&
+  (!mongoose.models.RawMaterial.schema.path("category") ||
+    !mongoose.models.RawMaterial.schema.path("lastReceivedAt"))
+) {
   mongoose.deleteModel("RawMaterial");
 }
 

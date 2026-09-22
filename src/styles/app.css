@@ -929,6 +929,55 @@ button.sb-section-label {
   gap: 8px;
 }
 
+/* Purchase-order summary beside the invoice verification form. */
+.invoice-verify-page__picker-body {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+}
+
+.invoice-verify-page__picker-body > div {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.invoice-verify-page__picker-hint {
+  margin: 0;
+  flex: 1 1 260px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.invoice-verify-page__po-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+}
+
+.invoice-verify-page__po-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.invoice-verify-page__po-grid span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+}
+
+.invoice-verify-page__po-grid strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+
 .page-filter-drawer__body {
   display: flex;
   flex-direction: column;
@@ -9450,6 +9499,471 @@ button.owner-vendor-chart__row:focus-visible {
   .po-create-row-2 {
     grid-template-columns: 1fr;
   }
+}
+
+/* Purchase-order detail page. */
+.po-detail__section {
+  margin-bottom: 16px;
+}
+
+.po-detail__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.po-detail__summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated, #fff);
+}
+
+.po-detail__summary span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+}
+
+.po-detail__summary strong {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.po-detail__summary strong em {
+  font-size: 11px;
+  font-weight: 500;
+  font-style: normal;
+  color: var(--fg-muted);
+}
+
+.po-detail__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.po-detail__fields {
+  display: grid;
+  gap: 11px;
+  font-size: 13px;
+}
+
+.po-detail__fields > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.po-detail__fields .subtle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex: 0 0 auto;
+}
+
+.po-detail__fields > div > span:last-child {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* Invoices raised against the order. */
+.po-invoices {
+  display: grid;
+  gap: 14px;
+}
+
+.po-invoices__empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.po-invoice {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--bg-sunken);
+}
+
+.po-invoice__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+.po-invoice__head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.po-invoice__no {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.po-invoice__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  font-size: 13px;
+}
+
+.po-invoice__grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.po-invoice__grid .subtle {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.po-invoice__note {
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: var(--bg-elevated, #fff);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--fg);
+}
+
+.po-invoice__stock {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: #0f6b3f;
+}
+
+.po-invoice__timeline {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px dashed var(--border);
+  display: grid;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.po-invoice__timeline li {
+  display: flex;
+  gap: 12px;
+}
+
+.po-invoice__timeline-when {
+  flex: 0 0 150px;
+  color: var(--fg-muted);
+  font-size: 11.5px;
+}
+
+.po-invoice__timeline-what {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.po-invoice__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+@media (max-width: 640px) {
+  .po-invoice__timeline li {
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+
+/* Inline purchase-order PDF preview. */
+.po-pdf-preview {
+  height: min(72vh, 780px);
+}
+
+.po-pdf-preview__frame {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-sunken);
+}
+
+.po-pdf-preview__loading {
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+/* Raw-material detail page: master card beside the receipt history. */
+.rm-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .rm-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.rm-detail__stock {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rm-detail__stock > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rm-detail__stock span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rm-detail__stock strong {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.rm-detail__stock strong .subtle {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.rm-detail__fields {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.rm-detail__fields > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rm-detail__fields span:last-child {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* Goods-receipt history, on the detail page. */
+.inv-history__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.inv-history__table th {
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+  font-weight: 600;
+  padding: 6px 8px;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--border);
+}
+
+.inv-history__table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.inv-history__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.inv-history__po {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.inv-history__po:disabled {
+  color: var(--fg-muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.inv-history__pdf {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated, #fff);
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.inv-history__pdf:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.inv-history__pdf:disabled {
+  color: var(--fg-muted);
+  cursor: not-allowed;
+}
+
+/* Consequence of the chosen verification outcome, called out under the field. */
+.status-effect {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 0 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 12.5px;
+  line-height: 1.45;
+  font-weight: 500;
+}
+
+.status-effect__icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 1px;
+}
+
+.status-effect--failed,
+.status-effect--resent_to_vendor {
+  background: rgba(196, 30, 58, 0.08);
+  border-color: rgba(196, 30, 58, 0.28);
+  color: #9f1239;
+}
+
+.status-effect--failed .status-effect__icon,
+.status-effect--resent_to_vendor .status-effect__icon {
+  background: #c41e3a;
+}
+
+.status-effect--resent_to_vendor {
+  background: rgba(184, 106, 0, 0.1);
+  border-color: rgba(184, 106, 0, 0.3);
+  color: #8a5000;
+}
+
+.status-effect--resent_to_vendor .status-effect__icon {
+  background: #b86a00;
+}
+
+.status-effect--verified {
+  background: rgba(22, 138, 82, 0.1);
+  border-color: rgba(22, 138, 82, 0.28);
+  color: #0f6b3f;
+}
+
+.status-effect--verified .status-effect__icon {
+  background: #168a52;
+}
+
+.status-effect--pending_verification {
+  background: var(--bg-sunken);
+  border-color: var(--border);
+  color: var(--fg-muted);
+}
+
+.status-effect--pending_verification .status-effect__icon {
+  background: var(--fg-muted);
+}
+
+.po-create-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 860px) {
+  .po-create-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Purchase-order picker above the invoice verification form. */
+.po-create-picker {
+  margin-bottom: 1rem;
+}
+
+/* Differences listed before a mismatched invoice is verified. */
+.invoice-mismatch-confirm table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.invoice-mismatch-confirm th {
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+  font-weight: 600;
+  padding: 6px 10px;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--border);
+}
+
+.invoice-mismatch-confirm td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.invoice-mismatch-confirm td.is-diff {
+  color: #c41e3a;
+  font-weight: 600;
+}
+
+.invoice-mismatch-confirm p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--fg-muted);
 }
 
 .po-create-readonly {

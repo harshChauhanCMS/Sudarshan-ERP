@@ -6,7 +6,7 @@
 import { useEffect } from "react";
 import { MasterDashboard, AdminDashboard, OwnerDashboard, ProductionDashboard, DispatchDashboard } from "./dashboards";
 import { RawMaterialInventory, Vendors, DispatchTracking } from "./modules";
-import { Customers, CustomerOrders, FieldVisitsBeatTracking, FieldVisitHistory, FieldBeatTerritory, InvoiceVerify } from "./modules2";
+import { Customers, CustomerOrders, FieldVisitsBeatTracking, FieldVisitHistory, FieldBeatTerritory } from "./modules2";
 import { FieldActivityDashboardPage } from "@/components/field-sales/field-activity-dashboard-page";
 import { FieldVisitLogPage } from "@/components/field-sales/field-visit-log-page";
 import { Employees, Attendance, Payroll, Reports, PackagingInventory } from "./modules3";
@@ -44,8 +44,6 @@ export function renderErpRoute(route: string, navigate: Navigate) {
       return <Vendors />;
     case "/procurement/po":
       return <Vendors defaultTab="po" />;
-    case "/procurement/invoices":
-      return <InvoiceVerify />;
     case "/customers":
       return <Customers />;
     case "/orders":

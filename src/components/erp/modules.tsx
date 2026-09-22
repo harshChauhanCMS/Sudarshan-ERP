@@ -4,7 +4,7 @@
 
 import React, { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DownloadOutlined, AlertOutlined, AppstoreOutlined, CarOutlined, CheckCircleOutlined, CheckOutlined, CloseOutlined, ClockCircleOutlined, DollarOutlined, FileExclamationOutlined, FileTextOutlined, SendOutlined, ShoppingCartOutlined, TeamOutlined, ThunderboltOutlined, WarningOutlined } from "@ant-design/icons";
+import { DownloadOutlined, AlertOutlined, AppstoreOutlined, CarOutlined, CheckCircleOutlined, CheckOutlined, CloseOutlined, ClockCircleOutlined, DollarOutlined, FileExclamationOutlined, FileTextOutlined, ShoppingCartOutlined, TeamOutlined, ThunderboltOutlined, WarningOutlined } from "@ant-design/icons";
 import CommonTable from "@/components/common/CommonTable";
 import { ERP_TABLE_PROPS, erpStatusBadge, inventoryStatusBadge } from "@/components/common/erpStatusBadges";
 import { ErpViewAction, TableActionIcon, ViewEditActions } from "@/components/common/TableActionIcons";
@@ -13,7 +13,8 @@ import { Icon } from "./icons";
 import { useDATA, useErpData } from "./data";
 import { Btn, Badge, StatusBadge, Avatar, Bar, Sparkline, Kpi, Modal, fmtINR, fmtINRFull, fmtNum, AreaChart, BarChart, Donut } from "./ui";
 import PageFilterPanel from "@/components/common/PageFilterPanel";
-import { Select, message, Dropdown } from "antd";
+import { Select, message, Dropdown, Tooltip } from "antd";
+import dayjs from "dayjs";
 import type { MenuProps } from "antd";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
@@ -23,7 +24,6 @@ import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { useSessionUser } from "@/hooks/use-session-user";
 import { isAdminOrOwner } from "@/lib/role-utils";
 import { nextDispatchId, formatDisplayDate } from "@/lib/id-generators";
-import { buildInventoryItemDetailView } from "@/lib/inventory-mobile";
 import { downloadCsv } from "@/lib/download-csv";
 import { DashHead, SectionH } from "./dashboards";
 import { useRawMaterials } from "@/hooks/use-raw-materials";
@@ -39,51 +39,8 @@ import {
 import {
   raiseInvoice,
   recordVendorResponse,
-  sendPoToVendor,
 } from "@/lib/procurement-api";
-
-function detailGrid(fields) {
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "minmax(120px, 38%) 1fr",
-        gap: "10px 16px",
-        fontSize: 13,
-      }}
-    >
-      {fields.map((field) => (
-        <React.Fragment key={field.label}>
-          <span className="muted">{field.label}</span>
-          <span>{field.value}</span>
-        </React.Fragment>
-      ))}
-    </div>
-  );
-}
-
-function poDetailFields(po) {
-  return [
-    { label: "PO #", value: po.id },
-    { label: "Vendor", value: po.vendor },
-    { label: "Date", value: po.date },
-    { label: "Items", value: String(po.items) },
-    { label: "Total", value: fmtINRFull(po.total) },
-    { label: "Status", value: po.status },
-    { label: "Invoice", value: po.invoice },
-    { label: "Material", value: po.materialName || "—" },
-    { label: "Material code", value: po.materialCode || "—" },
-    { label: "Grade", value: po.grade || "—" },
-    {
-      label: "Quantity",
-      value: po.quantity != null ? `${po.quantity} ${po.unit ?? ""}`.trim() : "—",
-    },
-    { label: "Rate", value: po.rate != null ? fmtINRFull(po.rate) : "—" },
-    { label: "Expected delivery", value: po.expectedDelivery || "—" },
-    { label: "Delivery location", value: po.deliveryLocation || "—" },
-    { label: "Notes", value: po.notes || "—" },
-  ];
-}
+import { buildPoPdf, loadPoLogo, poPdfFileName } from "@/lib/po-pdf";
 
 function downloadVendorCsv(v) {
   downloadCsv(
@@ -110,31 +67,6 @@ function downloadVendorCsv(v) {
   );
 }
 
-function downloadPoCsv(po) {
-  downloadCsv(
-    `purchase-order-${po.id}.csv`,
-    ["PO", "Vendor", "Date", "Items", "Total", "Status", "Invoice", "Material", "Code", "Grade", "Quantity", "Unit", "Rate", "Expected Delivery", "Location", "Notes"],
-    [{
-      PO: po.id,
-      Vendor: po.vendor,
-      Date: po.date,
-      Items: po.items,
-      Total: po.total,
-      Status: po.status,
-      Invoice: po.invoice,
-      Material: po.materialName ?? "",
-      Code: po.materialCode ?? "",
-      Grade: po.grade ?? "",
-      Quantity: po.quantity ?? "",
-      Unit: po.unit ?? "",
-      Rate: po.rate ?? "",
-      "Expected Delivery": po.expectedDelivery ?? "",
-      Location: po.deliveryLocation ?? "",
-      Notes: po.notes ?? "",
-    }],
-  );
-}
-
 /* ============================================================
    MODULE SCREENS — Inventory, Procurement, Dispatch, Users, DS
    ============================================================ */
@@ -145,10 +77,8 @@ function downloadPoCsv(po) {
    ============================================================ */
 const RawMaterialInventory = () => {
   const router = useRouter();
-  const DATA = useDATA();
   const { refresh } = useErpData();
   const { items: rawMaterials, reload: reloadRawMaterials } = useRawMaterials();
-  const [viewItem, setViewItem] = useState(null);
   const [deletingCode, setDeletingCode] = useState(null);
 
   const deleteMaterial = async (code) => {
@@ -169,17 +99,12 @@ const RawMaterialInventory = () => {
     }
   };
 
-  const viewDetail = useMemo(() => {
-    if (!viewItem) return null;
-    return buildInventoryItemDetailView("raw-material", viewItem.code, DATA);
-  }, [viewItem, DATA]);
-
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
   const filteredMaterials = useMemo(() => {
-    return rawMaterials.filter((r) => {
+    const matched = rawMaterials.filter((r) => {
       if (categoryFilter !== "all" && r.category !== categoryFilter) return false;
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (search) {
@@ -189,6 +114,14 @@ const RawMaterialInventory = () => {
         }
       }
       return true;
+    });
+
+    // Stock that just came in from a verified invoice sits at the top, newest
+    // receipt first; everything else keeps its existing order below.
+    return [...matched].sort((a, b) => {
+      const at = a.lastReceivedAt ? new Date(a.lastReceivedAt).getTime() : 0;
+      const bt = b.lastReceivedAt ? new Date(b.lastReceivedAt).getTime() : 0;
+      return bt - at;
     });
   }, [rawMaterials, search, categoryFilter, statusFilter]);
 
@@ -222,6 +155,32 @@ const RawMaterialInventory = () => {
             <span className="subtle" style={{ fontSize: 11 }}>{r.unit}</span>
           </>
         ),
+      },
+      {
+        title: "Last stock added",
+        key: "lastReceived",
+        width: 150,
+        render: (_, r) =>
+          r.lastReceivedAt ? (
+            <Tooltip
+              title={`${r.lastReceivedQty ?? ""} ${r.unit} received${
+                r.lastReceivedPo ? ` against ${r.lastReceivedPo}` : ""
+              }${r.lastReceivedInvoiceNo ? ` · invoice ${r.lastReceivedInvoiceNo}` : ""}`}
+            >
+              <span>
+                <span className="mono strong">
+                  {dayjs(r.lastReceivedAt).format("DD MMM YYYY")}
+                </span>
+                {r.lastReceivedQty !== undefined ? (
+                  <div className="subtle" style={{ fontSize: 11 }}>
+                    +{r.lastReceivedQty} {r.unit}
+                  </div>
+                ) : null}
+              </span>
+            </Tooltip>
+          ) : (
+            <span className="subtle">—</span>
+          ),
       },
       {
         title: "Reorder at",
@@ -258,7 +217,7 @@ const RawMaterialInventory = () => {
         align: "center",
         render: (_, r) => (
           <ViewEditActions
-            onView={() => setViewItem(r)}
+            viewHref={`/inventory/raw-material/${encodeURIComponent(r.code)}`}
             editHref={`/inventory/raw-material/add?code=${encodeURIComponent(r.code)}`}
             showDelete
             onDelete={() => deleteMaterial(r.code)}
@@ -316,7 +275,15 @@ const RawMaterialInventory = () => {
         <Dropdown menu={{ items: exportMenuItems }} placement="bottomRight">
           <Btn icon="download" size="sm">Export</Btn>
         </Dropdown>
-        <Btn variant="primary" size="sm" icon="plus" onClick={() => router.push("/inventory/raw-material/add")}>Add stock</Btn>
+        {/* Stock only arrives through procurement, so this starts a PO. */}
+        <Btn
+          variant="primary"
+          size="sm"
+          icon="plus"
+          onClick={() => router.push("/procurement/po/add")}
+        >
+          Add stock
+        </Btn>
       </DashHead>
 
       <ErpStatGrid cols={4}>
@@ -401,58 +368,6 @@ const RawMaterialInventory = () => {
         </div>
       </div>
 
-      <Modal
-        open={!!viewItem}
-        onClose={() => setViewItem(null)}
-        title={viewDetail?.name ?? viewItem?.name ?? "Raw material"}
-        sub={viewDetail ? `${viewDetail.code} · ${viewDetail.statusLabel}` : viewItem?.code}
-        footer={
-          <>
-            <Btn variant="ghost" onClick={() => setViewItem(null)}>
-              Close
-            </Btn>
-            {viewItem ? (
-              <Btn
-                variant="primary"
-                size="sm"
-                icon="edit"
-                onClick={() => {
-                  router.push(
-                    `/inventory/raw-material/add?code=${encodeURIComponent(viewItem.code)}`
-                  );
-                  setViewItem(null);
-                }}
-              >
-                Edit
-              </Btn>
-            ) : null}
-          </>
-        }
-      >
-        {viewDetail ? (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(120px, 38%) 1fr",
-              gap: "10px 16px",
-              fontSize: 13,
-            }}
-          >
-            {viewDetail.fields.map((field) => (
-              <React.Fragment key={field.label}>
-                <span className="muted">{field.label}</span>
-                <span className={field.tone === "danger" ? "danger" : field.tone === "warn" ? "warning" : ""}>
-                  {field.value}
-                </span>
-              </React.Fragment>
-            ))}
-          </div>
-        ) : (
-          <p className="muted" style={{ margin: 0 }}>
-            Material details unavailable.
-          </p>
-        )}
-      </Modal>
     </>
   );
 };
@@ -472,7 +387,6 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
   const { user } = useSessionUser();
   const canApprovePo = isAdminOrOwner(user?.role);
   const [tab, setTab] = useState(defaultTab);
-  const [viewPo, setViewPo] = useState(null);
   const [poActionId, setPoActionId] = useState(null);
   // { po, accepted } — vendor's answer is recorded by procurement on their behalf.
   const [vendorResp, setVendorResp] = useState(null);
@@ -530,6 +444,23 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
       }
     },
     [refresh]
+  );
+
+  const downloadPoPdfFile = useCallback(
+    async (po) => {
+      try {
+        const vendorRecord = vendors.find((v) => v.name === po.vendor) ?? null;
+        const doc = buildPoPdf({
+          po,
+          vendor: vendorRecord,
+          logoDataUrl: await loadPoLogo(),
+        });
+        doc.save(poPdfFileName(po));
+      } catch {
+        message.error("Could not generate the purchase order PDF.");
+      }
+    },
+    [vendors]
   );
 
   const submitVendorResponse = async () => {
@@ -741,11 +672,14 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
           const busy = poActionId === row.id;
           return (
             <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
-              <ErpViewAction label="View purchase order" onClick={() => setViewPo(row)} />
+              <ErpViewAction
+                label="View purchase order"
+                href={`/procurement/po/${encodeURIComponent(row.id)}`}
+              />
               <TableActionIcon
                 icon={<DownloadOutlined />}
-                label="Download purchase order"
-                onClick={() => downloadPoCsv(row)}
+                label="Download purchase order PDF"
+                onClick={() => downloadPoPdfFile(row)}
               />
               {canApprovePo && canPoTransition(row.status, "approve") ? (
                 <>
@@ -762,16 +696,6 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
                     disabled={busy}
                   />
                 </>
-              ) : null}
-              {canPoTransition(row.status, "send") ? (
-                <TableActionIcon
-                  icon={<SendOutlined />}
-                  label="Send purchase order to vendor"
-                  onClick={() =>
-                    runPoStep(row.id, () => sendPoToVendor(row.id), "Purchase order sent to vendor.")
-                  }
-                  disabled={busy}
-                />
               ) : null}
               {canPoTransition(row.status, "vendor_accept") ? (
                 <>
@@ -810,7 +734,7 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
         },
       },
     ],
-    [canApprovePo, decidePo, poActionId, runPoStep]
+    [canApprovePo, decidePo, poActionId, runPoStep, downloadPoPdfFile]
   );
 
   const handleExport = (type: 'xls' | 'pdf') => {
@@ -1008,27 +932,6 @@ const Vendors = ({ defaultTab = "vendors" }: { defaultTab?: "vendors" | "po" }) 
           </>
         )}
       </div>
-
-      <Modal
-        open={!!viewPo}
-        onClose={() => setViewPo(null)}
-        title={viewPo ? `Purchase order ${viewPo.id}` : "Purchase order"}
-        sub={viewPo ? `${viewPo.vendor} · ${viewPo.date}` : ""}
-        footer={
-          <>
-            <Btn variant="ghost" onClick={() => setViewPo(null)}>
-              Close
-            </Btn>
-            {viewPo ? (
-              <Btn variant="primary" size="sm" icon="download" onClick={() => downloadPoCsv(viewPo)}>
-                Download CSV
-              </Btn>
-            ) : null}
-          </>
-        }
-      >
-        {viewPo ? detailGrid(poDetailFields(viewPo)) : null}
-      </Modal>
 
       <Modal
         open={!!vendorResp}

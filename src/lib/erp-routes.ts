@@ -79,7 +79,8 @@ export function isLegacyRenderRoute(route: string): boolean {
     "/inventory/spare-parts",
     "/procurement/vendors",
     "/procurement/po",
-    "/procurement/invoices",
+    // "/procurement/invoices" is a real page now — see
+    // src/app/(erp)/procurement/invoices/page.tsx.
     "/customers",
     "/orders",
     "/field-sales",

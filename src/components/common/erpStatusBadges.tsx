@@ -17,7 +17,10 @@ const ERP_STATUS_MAP: Record<string, { status: AntStatus; text: string }> = {
   received: { status: "success", text: "Received" },
   verified: { status: "success", text: "Verified" },
   matched: { status: "success", text: "Verified" },
-  mismatch: { status: "error", text: "Mismatch" },
+  mismatch: { status: "error", text: "Failed" },
+  failed: { status: "error", text: "Failed" },
+  resent_to_vendor: { status: "processing", text: "Resent to vendor" },
+  resent: { status: "processing", text: "Resent to vendor" },
   awaiting: { status: "warning", text: "Awaiting" },
   "in-production": { status: "processing", text: "In production" },
   scheduled: { status: "default", text: "Scheduled" },
@@ -48,7 +51,9 @@ export function inventoryStatusBadge(status: string) {
 
 export function invoiceStatusBadge(status: string) {
   if (status === "matched") return erpStatusBadge("matched");
-  if (status === "mismatch") return erpStatusBadge("mismatch");
+  // "mismatch" is the old name of the failed status — see procurement-workflow.
+  if (status === "mismatch") return erpStatusBadge("failed");
+  if (status === "pending_verification") return <AntBadge status="warning" text="Pending" />;
   return erpStatusBadge(status);
 }
 

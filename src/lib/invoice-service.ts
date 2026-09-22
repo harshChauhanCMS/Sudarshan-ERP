@@ -6,15 +6,22 @@ import {
 import type { Invoice, InvoiceEvent, PurchaseOrder } from "@/lib/entity-types";
 import {
   canInvoiceTransition,
+  canPoBeInvoiced,
   canPoTransition,
+  poInvoiceableError,
   compareInvoiceToPo,
   invoiceTransitionError,
   normalizeInvoiceStatus,
   normalizePoStatus,
   poInvoiceColumn,
   poTransitionError,
+  INVOICE_STATUS_ACTION,
+  INVOICE_STATUS_LABELS,
+  MANUAL_INVOICE_STATUSES,
   type InvoiceAction,
+  type InvoiceStatus,
 } from "@/lib/procurement-workflow";
+import { receiveStock, type StockReceipt } from "@/lib/inventory-receipt";
 
 export type Actor = { email: string; name?: string };
 
@@ -241,7 +248,7 @@ export async function flagInvoiceMismatch(
     id,
     "mismatch",
     {
-      status: "mismatch",
+      status: "failed",
       reason,
       mismatchNote: reason,
       verifiedAt: new Date().toISOString(),
@@ -252,7 +259,7 @@ export async function flagInvoiceMismatch(
   );
 
   await updateEntityItem("purchaseOrders", existing.po, {
-    invoice: poInvoiceColumn("mismatch"),
+    invoice: poInvoiceColumn("failed"),
   });
 
   return { invoice };
@@ -303,6 +310,288 @@ export async function resubmitInvoice(
   });
 
   return { invoice };
+}
+
+/** Everything the manual verification screen collects, all optional but status. */
+export type ManualVerificationInput = {
+  status: unknown;
+  /** Vendor name and material as printed on the invoice — the match check. */
+  invoiceVendorName?: unknown;
+  materialName?: unknown;
+  rate?: unknown;
+  vendorInvoiceNo?: unknown;
+  invDate?: unknown;
+  invAmt?: unknown;
+  subtotal?: unknown;
+  taxAmount?: unknown;
+  quantityReceived?: unknown;
+  unit?: unknown;
+  receivedDate?: unknown;
+  challanNo?: unknown;
+  note?: unknown;
+};
+
+function optionalNumber(value: unknown, label: string): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = toNumber(value);
+  if (Number.isNaN(parsed) || parsed < 0) {
+    throw new WorkflowError(`${label} must be a number ≥ 0`, 400);
+  }
+  return parsed;
+}
+
+/** Outcomes that reach the vendor, so the reason has to be recorded. */
+const NOTE_REQUIRED: readonly string[] = ["failed", "resent_to_vendor"];
+
+function requireManualStatus(value: unknown): InvoiceStatus {
+  const status = String(value ?? "").trim() as InvoiceStatus;
+  if (!(MANUAL_INVOICE_STATUSES as readonly string[]).includes(status)) {
+    throw new WorkflowError(
+      `status must be one of: ${MANUAL_INVOICE_STATUSES.join(", ")}`,
+      400
+    );
+  }
+  return status;
+}
+
+/**
+ * First verification of a purchase order's invoice.
+ *
+ * There is no invoice record until this runs: the verifier reads the vendor's
+ * paper invoice, types it in against the PO and picks the outcome, and only
+ * then is the invoice raised — carrying its generated `INV-<po>-<n>` number
+ * and the chosen status in one step. Verifying receives the goods into
+ * inventory.
+ */
+export async function verifyPoInvoice(
+  poId: string,
+  input: ManualVerificationInput,
+  actor: Actor
+): Promise<{ invoice: Invoice; receipt: StockReceipt | null }> {
+  const id = String(poId ?? "").trim();
+  if (!id) throw new WorkflowError("poId is required", 400);
+
+  const status = requireManualStatus(input.status);
+  const po = await findPo(id);
+  if (!canPoBeInvoiced(po.status)) {
+    throw new WorkflowError(poInvoiceableError(po.status), 409);
+  }
+
+  const existingForPo = (await listInvoices()).find((i) => i.po === id);
+  if (existingForPo) {
+    throw new WorkflowError(
+      `Purchase order ${id} already has invoice ${existingForPo.id}. Open that invoice to re-check it.`,
+      409
+    );
+  }
+
+  const note = trimNote(input.note);
+  if (NOTE_REQUIRED.includes(status) && !note) {
+    throw new WorkflowError(
+      "A note is required so the vendor knows what to correct.",
+      400
+    );
+  }
+
+  const invAmt = optionalNumber(input.invAmt, "Invoice amount");
+  if (invAmt === undefined) {
+    throw new WorkflowError("Invoice amount is required", 400);
+  }
+  const quantityReceived = optionalNumber(input.quantityReceived, "Quantity received");
+  const poAmt = Number(po.total) || 0;
+  const match = compareInvoiceToPo(invAmt, poAmt);
+  const now = new Date().toISOString();
+
+  // Stock first: if the receipt fails, no invoice is written and the PO is
+  // left untouched, rather than recording goods that never landed.
+  let receipt: StockReceipt | null = null;
+  if (status === "verified") {
+    const qty =
+      quantityReceived !== undefined && quantityReceived > 0
+        ? quantityReceived
+        : Number(po.quantity) || 0;
+    receipt = await receiveStock(String(po.materialCode ?? ""), qty, {
+      poId: po.id,
+      invoiceNo: trimNote(input.vendorInvoiceNo),
+      at: new Date(now),
+    });
+  }
+
+  const invoices = await listInvoices();
+  const action = INVOICE_STATUS_ACTION[status];
+
+  const invoice: Invoice = {
+    id: nextInvoiceIdForPo(id, invoices),
+    po: id,
+    vendor: po.vendor,
+    invDate: trimNote(input.invDate) || now.slice(0, 10),
+    invAmt,
+    poAmt,
+    status,
+    reason: note || match.summary,
+    vendorInvoiceNo: trimNote(input.vendorInvoiceNo),
+    invoiceVendorName: trimNote(input.invoiceVendorName),
+    materialName: trimNote(input.materialName) || po.materialName || "",
+    materialCode: po.materialCode ?? "",
+    rate: optionalNumber(input.rate, "Rate"),
+    subtotal: optionalNumber(input.subtotal, "Taxable value"),
+    taxAmount: optionalNumber(input.taxAmount, "Tax amount"),
+    quantityReceived: receipt ? receipt.qty : quantityReceived,
+    unit: trimNote(input.unit) || receipt?.unit || po.unit || "",
+    receivedDate: trimNote(input.receivedDate),
+    challanNo: trimNote(input.challanNo),
+    verificationNote: note,
+    mismatchNote: status === "verified" ? "" : note,
+    raisedAt: now,
+    raisedByEmail: actor.email,
+    verifiedAt: now,
+    verifiedByEmail: actor.email,
+    verifiedByName: actor.name ?? "",
+    revision: 1,
+    history: [
+      event("raised", actor, { to: status }),
+      event(action, actor, { from: "pending_verification", to: status }),
+    ],
+    ...(receipt
+      ? {
+          inventoryUpdated: true,
+          inventoryUpdatedAt: now,
+          inventoryQty: receipt.qty,
+          inventoryCode: receipt.code,
+          inventoryKind: receipt.kind,
+        }
+      : {}),
+    ...(status === "resent_to_vendor" ? { resentAt: now } : {}),
+  };
+
+  const created = (await appendEntityItem(
+    "invoices",
+    invoice as unknown as Record<string, unknown>
+  )) as unknown as Invoice;
+
+  // The PO goes straight to its post-invoice state: "invoiced" normally, and
+  // "closed" when the invoice cleared, which is where raise-then-verify would
+  // have left it.
+  await updateEntityItem("purchaseOrders", id, {
+    status: status === "verified" ? "closed" : "invoiced",
+    invoice: poInvoiceColumn(status),
+    invoiceId: created.id,
+  });
+
+  return { invoice: created, receipt };
+}
+
+/**
+ * Re-checking an invoice that already exists — one that previously failed or
+ * went back to the vendor. Same manual entry, same outcomes; verifying is what
+ * receives the goods, and only once.
+ */
+export async function recordManualVerification(
+  id: string,
+  input: ManualVerificationInput,
+  actor: Actor
+): Promise<{ invoice: Invoice; receipt: StockReceipt | null }> {
+  const status = requireManualStatus(input.status);
+  const existing = await findInvoice(id);
+  const action = INVOICE_STATUS_ACTION[status];
+  if (normalizeInvoiceStatus(existing.status) === status) {
+    throw new WorkflowError(
+      `This invoice is already ${INVOICE_STATUS_LABELS[status]}.`,
+      409
+    );
+  }
+  if (!canInvoiceTransition(existing.status, action)) {
+    throw new WorkflowError(invoiceTransitionError(existing.status, action), 409);
+  }
+
+  const note = trimNote(input.note);
+  if (NOTE_REQUIRED.includes(status) && !note) {
+    throw new WorkflowError(
+      "A note is required so the vendor knows what to correct.",
+      400
+    );
+  }
+
+  const invAmt =
+    optionalNumber(input.invAmt, "Invoice amount") ?? (Number(existing.invAmt) || 0);
+  const poAmt = Number(existing.poAmt) || 0;
+  const match = compareInvoiceToPo(invAmt, poAmt);
+  const now = new Date().toISOString();
+
+  const quantityReceived =
+    optionalNumber(input.quantityReceived, "Quantity received") ??
+    (typeof existing.quantityReceived === "number" ? existing.quantityReceived : undefined);
+
+  const patch: Record<string, unknown> = {
+    status,
+    invAmt,
+    reason: note || match.summary,
+    verificationNote: note,
+    verifiedAt: now,
+    verifiedByEmail: actor.email,
+    verifiedByName: actor.name ?? "",
+    vendorInvoiceNo: trimNote(input.vendorInvoiceNo) || existing.vendorInvoiceNo || "",
+    invoiceVendorName:
+      trimNote(input.invoiceVendorName) || existing.invoiceVendorName || "",
+    materialName: trimNote(input.materialName) || existing.materialName || "",
+    rate: optionalNumber(input.rate, "Rate") ?? existing.rate,
+    invDate: trimNote(input.invDate) || existing.invDate,
+    subtotal: optionalNumber(input.subtotal, "Taxable value") ?? existing.subtotal,
+    taxAmount: optionalNumber(input.taxAmount, "Tax amount") ?? existing.taxAmount,
+    quantityReceived,
+    unit: trimNote(input.unit) || existing.unit || "",
+    receivedDate: trimNote(input.receivedDate) || existing.receivedDate || "",
+    challanNo: trimNote(input.challanNo) || existing.challanNo || "",
+    mismatchNote: status === "verified" ? "" : note,
+    ...(status === "resent_to_vendor" ? { resentAt: now } : {}),
+  };
+
+  // Stock moves before the status is written: if the receipt throws, the
+  // invoice stays unverified rather than claiming goods that never landed.
+  let receipt: StockReceipt | null = null;
+  if (status === "verified" && !existing.inventoryUpdated) {
+    const po = await findPo(existing.po);
+    const qty =
+      quantityReceived !== undefined && quantityReceived > 0
+        ? quantityReceived
+        : Number(po.quantity) || 0;
+    const code = String(po.materialCode ?? "").trim();
+    receipt = await receiveStock(code, qty, {
+      poId: po.id,
+      invoiceNo: (patch.vendorInvoiceNo as string) || existing.vendorInvoiceNo || "",
+      at: new Date(now),
+    });
+    if (receipt) {
+      patch.inventoryUpdated = true;
+      patch.inventoryUpdatedAt = now;
+      patch.inventoryQty = receipt.qty;
+      patch.inventoryCode = receipt.code;
+      patch.inventoryKind = receipt.kind;
+      patch.materialCode = code;
+      patch.materialName =
+        (patch.materialName as string) || po.materialName || receipt.name;
+      patch.quantityReceived = receipt.qty;
+      patch.unit = patch.unit || receipt.unit;
+    }
+  }
+
+  const invoice = await transition(id, action, patch, actor, { note });
+
+  // Mirror the outcome onto the PO: a verified invoice closes it, anything
+  // else just updates the invoice column.
+  const po = await findPo(existing.po);
+  if (status === "verified" && canPoTransition(po.status, "close")) {
+    await updateEntityItem("purchaseOrders", existing.po, {
+      status: "closed",
+      invoice: poInvoiceColumn(status),
+    });
+  } else {
+    await updateEntityItem("purchaseOrders", existing.po, {
+      invoice: poInvoiceColumn(status),
+    });
+  }
+
+  return { invoice, receipt };
 }
 
 /** Read model for the verification screen: invoice plus its PO side-by-side. */

@@ -15,6 +15,12 @@ import { useEntityMutation } from "@/hooks/use-entity-mutation";
 import { useFormState } from "@/components/forms";
 import { nextPoId, formatDisplayDate } from "@/lib/id-generators";
 import type { PurchaseOrder } from "@/lib/entity-types";
+import {
+  buildPoPdf,
+  loadPoLogo,
+  poPdfFileName,
+  type PoPdfCompany,
+} from "@/lib/po-pdf";
 
 type MaterialOption = {
   code: string;
@@ -74,6 +80,7 @@ function buildInitial(poNumber: string) {
     rate: "20020",
     expectedDelivery: addDaysIso(9),
     deliveryLocation: "WH-A",
+    vendorEmail: "",
     notes: "",
   };
 }
@@ -212,7 +219,86 @@ export default function CreatePurchaseOrderPage() {
       return "Notes must be at most 500 characters.";
     }
 
+    // The email is optional — the PDF downloads either way. It is only
+    // checked when something was actually typed, so a typo is caught rather
+    // than quietly dropping the vendor's copy.
+    const email = form.values.vendorEmail.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return "Enter a valid email address, or leave it blank to only download the PDF.";
+    }
+
     return null;
+  };
+
+  /**
+   * Every purchase order produces its PDF the moment it is created: it always
+   * downloads, and it is additionally emailed when an address was entered.
+   * A failed email never fails the PO — it is already saved by this point.
+   */
+  const issuePoDocument = async (po: PurchaseOrder) => {
+    const vendorRecord = vendors.find((v) => v.id === form.values.vendor) ?? null;
+    const activeCompany = DATA.COMPANIES?.[0];
+    const company: PoPdfCompany | null = activeCompany
+      ? {
+          name: activeCompany.name,
+          addressLines: [activeCompany.plant, activeCompany.desc].filter(Boolean),
+        }
+      : null;
+
+    const input = {
+      po,
+      vendor: vendorRecord,
+      company,
+      logoDataUrl: await loadPoLogo(),
+      shipTo: [
+        activeCompany?.name ?? "Sudarshan Group",
+        DELIVERY_LOCATIONS[po.deliveryLocation ?? ""] ?? po.deliveryLocation ?? "",
+        activeCompany?.plant ?? "",
+      ].filter(Boolean),
+      raisedAt: new Date(),
+    };
+
+    let pdf;
+    try {
+      pdf = buildPoPdf(input);
+      pdf.save(poPdfFileName(po));
+    } catch {
+      message.error("Purchase order saved, but the PDF could not be generated.");
+      return;
+    }
+
+    const email = form.values.vendorEmail.trim();
+    if (!email) return;
+
+    try {
+      const res = await fetch(
+        `/api/procurement/po/${encodeURIComponent(po.id)}/send-pdf`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            email,
+            fileName: poPdfFileName(po),
+            pdfBase64: pdf.output("datauristring").split(",")[1] ?? "",
+          }),
+        },
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Email failed");
+      if (json?.data?.sent) {
+        message.success(`Purchase order PDF emailed to ${email}.`);
+      } else {
+        message.warning(
+          json?.data?.reason || "Email is not configured — the PDF was downloaded instead.",
+        );
+      }
+    } catch (e) {
+      message.warning(
+        `Purchase order saved and downloaded, but the email failed: ${
+          e instanceof Error ? e.message : "unknown error"
+        }`,
+      );
+    }
   };
 
   const savePO = async (draft: boolean) => {
@@ -248,16 +334,24 @@ export default function CreatePurchaseOrderPage() {
       rate,
       expectedDelivery: form.values.expectedDelivery,
       deliveryLocation: form.values.deliveryLocation,
+      vendorEmail: form.values.vendorEmail.trim(),
       notes: form.values.notes.trim(),
     } satisfies PurchaseOrder);
 
-    const finalStatus = (result as { item?: { status?: string } })?.item?.status;
+    const created = (result as { item?: PurchaseOrder })?.item;
+    const finalStatus = created?.status;
     if (draft) {
       message.success("Purchase order saved as draft.");
     } else if (finalStatus === "pending_verification") {
       message.success("Purchase order submitted for verification.");
     } else {
       message.success("Purchase order issued.");
+    }
+
+    // The document is produced from the saved PO, so it carries the id and
+    // status the server settled on — not what the form guessed.
+    if (created) {
+      await issuePoDocument(created);
     }
 
     router.push("/procurement/po");
@@ -472,6 +566,23 @@ export default function CreatePurchaseOrderPage() {
                       ))}
                     </select>
                   </div>
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor="vendorEmail">
+                    Vendor email (optional)
+                  </label>
+                  <input
+                    id="vendorEmail"
+                    className="input"
+                    type="email"
+                    value={form.values.vendorEmail}
+                    onChange={(e) => form.setField("vendorEmail", e.target.value)}
+                    placeholder="purchase@vendor.com — leave blank to only download the PDF"
+                  />
+                  <span className="field-hint">
+                    The PO PDF downloads on creation. Enter an address and it is
+                    emailed there as well.
+                  </span>
                 </div>
                 <div className="field">
                   <label className="field-label" htmlFor="notes">
