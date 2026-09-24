@@ -23,6 +23,7 @@ type RawMaterialDoc = {
   lastReceivedQty?: number;
   lastReceivedPo?: string;
   lastReceivedInvoiceNo?: string;
+  lastReceivedGrn?: string;
 };
 
 function toDTO(doc: RawMaterialDoc): RawMaterial {
@@ -47,6 +48,7 @@ function toDTO(doc: RawMaterialDoc): RawMaterial {
     lastReceivedQty: doc.lastReceivedQty,
     lastReceivedPo: doc.lastReceivedPo || undefined,
     lastReceivedInvoiceNo: doc.lastReceivedInvoiceNo || undefined,
+    lastReceivedGrn: doc.lastReceivedGrn || undefined,
   };
 }
 

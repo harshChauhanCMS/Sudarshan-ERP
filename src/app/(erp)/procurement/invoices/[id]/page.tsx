@@ -88,12 +88,18 @@ export default function VerifyInvoicePage({
   const submit = async (payload: ManualVerificationPayload) => {
     setSaving(true);
     try {
-      const { invoice: saved, receipt } = await manualVerifyInvoice(id, payload);
+      const { invoice: saved, receipt, grn } = await manualVerifyInvoice(id, payload);
       message.success(
         `Invoice ${saved.vendorInvoiceNo || saved.id} marked ${
           INVOICE_STATUS_LABELS[saved.status as InvoiceStatus] ?? saved.status
         }.`,
       );
+      if (grn) {
+        message.success(
+          `Goods receipt ${grn.grnNo} raised for ${grn.receivedQty} ${grn.unit} against ${grn.poId}.`,
+          7,
+        );
+      }
       if (receipt) {
         message.success(
           `${receipt.qty} ${receipt.unit} of ${receipt.name} received — stock ${receipt.previousStock} → ${receipt.newStock}.`,

@@ -7,21 +7,28 @@ import type { Invoice, InvoiceEvent, PurchaseOrder } from "@/lib/entity-types";
 import {
   canInvoiceTransition,
   canPoBeInvoiced,
-  canPoTransition,
   poInvoiceableError,
   compareInvoiceToPo,
   invoiceTransitionError,
   normalizeInvoiceStatus,
   normalizePoStatus,
   poInvoiceColumn,
-  poTransitionError,
+  poReceiptState,
   INVOICE_STATUS_ACTION,
   INVOICE_STATUS_LABELS,
   MANUAL_INVOICE_STATUSES,
   type InvoiceAction,
   type InvoiceStatus,
 } from "@/lib/procurement-workflow";
-import { receiveStock, type StockReceipt } from "@/lib/inventory-receipt";
+import { type StockReceipt } from "@/lib/inventory-receipt";
+import {
+  applyGrnToStock,
+  createGrnForVerifiedInvoice,
+  getGrnForInvoice,
+  listGrnsForPo,
+  receivedQtyForPo,
+  type GrnRecord,
+} from "@/lib/grn-service";
 
 export type Actor = { email: string; name?: string };
 
@@ -116,8 +123,18 @@ export async function raiseInvoiceForPo(
   if (!poId) throw new WorkflowError("poId is required", 400);
 
   const po = await findPo(poId);
-  if (!canPoTransition(po.status, "invoice")) {
-    throw new WorkflowError(poTransitionError(po.status, "invoice"), 409);
+  if (!canPoBeInvoiced(po.status)) {
+    throw new WorkflowError(poInvoiceableError(po.status), 409);
+  }
+
+  const open = (await listInvoices()).find(
+    (i) => i.po === poId && normalizeInvoiceStatus(i.status) === "pending_verification",
+  );
+  if (open) {
+    throw new WorkflowError(
+      `Invoice ${open.vendorInvoiceNo || open.id} on ${poId} is still awaiting verification. Settle it before recording another.`,
+      409
+    );
   }
 
   const invAmt = toNumber(input.invAmt);
@@ -193,40 +210,24 @@ export async function verifyInvoice(
   id: string,
   note: unknown,
   actor: Actor
-): Promise<{ invoice: Invoice }> {
+): Promise<{ invoice: Invoice; grn: GrnRecord | null }> {
   const existing = await findInvoice(id);
-  const match = compareInvoiceToPo(
-    Number(existing.invAmt) || 0,
-    Number(existing.poAmt) || 0
-  );
 
-  const invoice = await transition(
+  // Verification is one path, whichever screen asks for it: it raises the GRN,
+  // receives the stock and advances the order. This entry point simply takes
+  // the quantity already recorded on the invoice, or the whole order.
+  const { invoice, grn } = await recordManualVerification(
     id,
-    "verify",
     {
       status: "verified",
-      reason: trimNote(note) || match.summary,
-      verifiedAt: new Date().toISOString(),
-      verifiedByEmail: actor.email,
-      mismatchNote: "",
+      note,
+      quantityReceived: existing.quantityReceived,
+      vendorInvoiceNo: existing.vendorInvoiceNo,
     },
-    actor,
-    { note: trimNote(note) }
+    actor
   );
 
-  // The PO is done once its invoice clears; the invoice column mirrors state.
-  if (canPoTransition((await findPo(existing.po)).status, "close")) {
-    await updateEntityItem("purchaseOrders", existing.po, {
-      status: "closed",
-      invoice: poInvoiceColumn("verified"),
-    });
-  } else {
-    await updateEntityItem("purchaseOrders", existing.po, {
-      invoice: poInvoiceColumn("verified"),
-    });
-  }
-
-  return { invoice };
+  return { invoice, grn };
 }
 
 /**
@@ -312,6 +313,76 @@ export async function resubmitInvoice(
   return { invoice };
 }
 
+/**
+ * The receipt half of a verification: raise the GRN, move the stock, then bring
+ * the purchase order's received/remaining figures up to date.
+ *
+ * Every step is safe to repeat. The GRN is keyed on the invoice, the stock
+ * claim is atomic, and the order's totals are recomputed from the receipts on
+ * record rather than incremented — so a retried or duplicated verification
+ * lands on exactly the same result as the first one.
+ */
+async function receiveAgainstPo(
+  po: PurchaseOrder,
+  invoiceId: string,
+  vendorInvoiceNo: string,
+  receivedQty: number,
+  actor: Actor,
+  at: Date,
+): Promise<{ grn: GrnRecord; stock: StockReceipt | null }> {
+  const { grn } = await createGrnForVerifiedInvoice({
+    invoiceId,
+    invoiceNo: vendorInvoiceNo,
+    poId: po.id,
+    vendor: po.vendor,
+    materialCode: String(po.materialCode ?? ""),
+    materialName: String(po.materialName ?? ""),
+    receivedQty,
+    unit: String(po.unit ?? ""),
+    rate: Number(po.rate) || 0,
+    amount: Math.round((Number(po.rate) || 0) * receivedQty * 100) / 100,
+    receivedAt: at,
+    receivedByEmail: actor.email,
+    receivedByName: actor.name ?? "",
+  });
+
+  // Returns null when this receipt's stock was already applied — by the first
+  // run of an interrupted verification, or by a request that raced this one.
+  const applied = await applyGrnToStock(grn.grnNo);
+  const finalGrn = applied ?? grn;
+
+  const totalReceived = await receivedQtyForPo(po.id);
+  const state = poReceiptState(po.quantity, totalReceived);
+  const grnNos = (await listGrnsForPo(po.id)).map((g) => g.grnNo);
+
+  await updateEntityItem("purchaseOrders", po.id, {
+    status: state.status,
+    receivedQty: state.receivedQty,
+    remainingQty: state.remainingQty,
+    grnNos,
+    lastReceivedAt: at.toISOString(),
+    invoice: poInvoiceColumn("verified"),
+    invoiceId,
+  });
+
+  return {
+    grn: finalGrn,
+    stock:
+      applied && applied.stockCode
+        ? {
+            kind: (applied.stockKind || "rawMaterial") as StockReceipt["kind"],
+            code: applied.stockCode,
+            name: applied.materialName || applied.stockCode,
+            qty: applied.receivedQty,
+            previousStock: applied.stockPrevious ?? 0,
+            newStock: applied.stockNew ?? 0,
+            unit: applied.unit,
+            receivedAt: applied.receivedAt,
+          }
+        : null,
+  };
+}
+
 /** Everything the manual verification screen collects, all optional but status. */
 export type ManualVerificationInput = {
   status: unknown;
@@ -367,7 +438,7 @@ export async function verifyPoInvoice(
   poId: string,
   input: ManualVerificationInput,
   actor: Actor
-): Promise<{ invoice: Invoice; receipt: StockReceipt | null }> {
+): Promise<{ invoice: Invoice; receipt: StockReceipt | null; grn: GrnRecord | null }> {
   const id = String(poId ?? "").trim();
   if (!id) throw new WorkflowError("poId is required", 400);
 
@@ -377,10 +448,16 @@ export async function verifyPoInvoice(
     throw new WorkflowError(poInvoiceableError(po.status), 409);
   }
 
-  const existingForPo = (await listInvoices()).find((i) => i.po === id);
-  if (existingForPo) {
+  // A purchase order can carry several invoices over its life — a resend, a
+  // replacement for a failed one, or a second delivery against the balance.
+  // What it must not carry is two invoices waiting to be checked at once.
+  const poInvoices = (await listInvoices()).filter((i) => i.po === id);
+  const openInvoice = poInvoices.find(
+    (i) => normalizeInvoiceStatus(i.status) === "pending_verification",
+  );
+  if (openInvoice) {
     throw new WorkflowError(
-      `Purchase order ${id} already has invoice ${existingForPo.id}. Open that invoice to re-check it.`,
+      `Invoice ${openInvoice.vendorInvoiceNo || openInvoice.id} on ${id} is still awaiting verification. Settle it before recording another.`,
       409
     );
   }
@@ -402,32 +479,19 @@ export async function verifyPoInvoice(
   const match = compareInvoiceToPo(invAmt, poAmt);
   const now = new Date().toISOString();
 
-  // Stock first: if the receipt fails, no invoice is written and the PO is
-  // left untouched, rather than recording goods that never landed.
-  let receipt: StockReceipt | null = null;
-  if (status === "verified") {
-    const qty =
-      quantityReceived !== undefined && quantityReceived > 0
-        ? quantityReceived
-        : Number(po.quantity) || 0;
-    receipt = await receiveStock(String(po.materialCode ?? ""), qty, {
-      poId: po.id,
-      invoiceNo: trimNote(input.vendorInvoiceNo),
-      at: new Date(now),
-    });
-  }
-
-  const invoices = await listInvoices();
   const action = INVOICE_STATUS_ACTION[status];
 
   const invoice: Invoice = {
-    id: nextInvoiceIdForPo(id, invoices),
+    id: nextInvoiceIdForPo(id, poInvoices),
     po: id,
     vendor: po.vendor,
     invDate: trimNote(input.invDate) || now.slice(0, 10),
     invAmt,
     poAmt,
-    status,
+    // Verified is only written once the receipt behind it exists (below), so a
+    // failure in between leaves an invoice still waiting rather than one that
+    // claims goods nobody received.
+    status: status === "verified" ? "pending_verification" : status,
     reason: note || match.summary,
     vendorInvoiceNo: trimNote(input.vendorInvoiceNo),
     invoiceVendorName: trimNote(input.invoiceVendorName),
@@ -436,8 +500,8 @@ export async function verifyPoInvoice(
     rate: optionalNumber(input.rate, "Rate"),
     subtotal: optionalNumber(input.subtotal, "Taxable value"),
     taxAmount: optionalNumber(input.taxAmount, "Tax amount"),
-    quantityReceived: receipt ? receipt.qty : quantityReceived,
-    unit: trimNote(input.unit) || receipt?.unit || po.unit || "",
+    quantityReceived,
+    unit: trimNote(input.unit) || po.unit || "",
     receivedDate: trimNote(input.receivedDate),
     challanNo: trimNote(input.challanNo),
     verificationNote: note,
@@ -449,18 +513,9 @@ export async function verifyPoInvoice(
     verifiedByName: actor.name ?? "",
     revision: 1,
     history: [
-      event("raised", actor, { to: status }),
+      event("raised", actor, { to: "pending_verification" }),
       event(action, actor, { from: "pending_verification", to: status }),
     ],
-    ...(receipt
-      ? {
-          inventoryUpdated: true,
-          inventoryUpdatedAt: now,
-          inventoryQty: receipt.qty,
-          inventoryCode: receipt.code,
-          inventoryKind: receipt.kind,
-        }
-      : {}),
     ...(status === "resent_to_vendor" ? { resentAt: now } : {}),
   };
 
@@ -469,16 +524,50 @@ export async function verifyPoInvoice(
     invoice as unknown as Record<string, unknown>
   )) as unknown as Invoice;
 
-  // The PO goes straight to its post-invoice state: "invoiced" normally, and
-  // "closed" when the invoice cleared, which is where raise-then-verify would
-  // have left it.
-  await updateEntityItem("purchaseOrders", id, {
-    status: status === "verified" ? "closed" : "invoiced",
-    invoice: poInvoiceColumn(status),
-    invoiceId: created.id,
-  });
+  if (status !== "verified") {
+    await updateEntityItem("purchaseOrders", id, {
+      status: "invoiced",
+      invoice: poInvoiceColumn(status),
+      invoiceId: created.id,
+    });
+    return { invoice: created, receipt: null, grn: null };
+  }
 
-  return { invoice: created, receipt };
+  // Verified: the goods are received through a GRN, which is what moves stock
+  // and what advances the order's received/remaining figures.
+  const qty =
+    quantityReceived !== undefined && quantityReceived > 0
+      ? quantityReceived
+      : Number(po.quantity) || 0;
+  const received = await receiveAgainstPo(
+    po,
+    created.id,
+    trimNote(input.vendorInvoiceNo),
+    qty,
+    actor,
+    new Date(now),
+  );
+
+  const settled = (await updateEntityItem("invoices", created.id, {
+    status: "verified",
+    grnNo: received.grn.grnNo,
+    grnAt: received.grn.receivedAt,
+    quantityReceived: received.grn.receivedQty,
+    materialCode: received.grn.materialCode,
+    materialName: invoice.materialName || received.grn.materialName,
+    unit: invoice.unit || received.grn.unit,
+    ...(received.grn.stockCode
+      ? {
+          inventoryUpdated: true,
+          inventoryUpdatedAt: received.grn.receivedAt,
+          inventoryQty: received.grn.receivedQty,
+          inventoryCode: received.grn.stockCode,
+          inventoryKind: received.grn.stockKind,
+        }
+      : {}),
+  })) as unknown as Invoice;
+
+  return { invoice: settled, receipt: received.stock, grn: received.grn };
 }
 
 /**
@@ -490,11 +579,18 @@ export async function recordManualVerification(
   id: string,
   input: ManualVerificationInput,
   actor: Actor
-): Promise<{ invoice: Invoice; receipt: StockReceipt | null }> {
+): Promise<{ invoice: Invoice; receipt: StockReceipt | null; grn: GrnRecord | null }> {
   const status = requireManualStatus(input.status);
   const existing = await findInvoice(id);
   const action = INVOICE_STATUS_ACTION[status];
   if (normalizeInvoiceStatus(existing.status) === status) {
+    // Verifying an already-verified invoice is the shape a retry takes. It
+    // returns the receipt that exists rather than raising a second one, so the
+    // call is idempotent; any other repeat is a mistake worth reporting.
+    if (status === "verified") {
+      const settled = await getGrnForInvoice(existing.id);
+      if (settled) return { invoice: existing, receipt: null, grn: settled };
+    }
     throw new WorkflowError(
       `This invoice is already ${INVOICE_STATUS_LABELS[status]}.`,
       409
@@ -546,52 +642,54 @@ export async function recordManualVerification(
     ...(status === "resent_to_vendor" ? { resentAt: now } : {}),
   };
 
-  // Stock moves before the status is written: if the receipt throws, the
-  // invoice stays unverified rather than claiming goods that never landed.
+  // Goods are received through a GRN, never straight into stock. The receipt
+  // is raised first and everything after it is repeatable, so an interrupted
+  // verification finishes itself on the next attempt instead of half-applying.
   let receipt: StockReceipt | null = null;
-  if (status === "verified" && !existing.inventoryUpdated) {
+  let grn: GrnRecord | null = null;
+  if (status === "verified") {
     const po = await findPo(existing.po);
     const qty =
       quantityReceived !== undefined && quantityReceived > 0
         ? quantityReceived
         : Number(po.quantity) || 0;
-    const code = String(po.materialCode ?? "").trim();
-    receipt = await receiveStock(code, qty, {
-      poId: po.id,
-      invoiceNo: (patch.vendorInvoiceNo as string) || existing.vendorInvoiceNo || "",
-      at: new Date(now),
-    });
-    if (receipt) {
+    const received = await receiveAgainstPo(
+      po,
+      existing.id,
+      (patch.vendorInvoiceNo as string) || existing.vendorInvoiceNo || "",
+      qty,
+      actor,
+      new Date(now),
+    );
+    grn = received.grn;
+    receipt = received.stock;
+
+    patch.grnNo = grn.grnNo;
+    patch.grnAt = grn.receivedAt;
+    patch.quantityReceived = grn.receivedQty;
+    patch.materialCode = grn.materialCode;
+    patch.materialName = (patch.materialName as string) || grn.materialName;
+    patch.unit = patch.unit || grn.unit;
+    if (grn.stockCode) {
       patch.inventoryUpdated = true;
-      patch.inventoryUpdatedAt = now;
-      patch.inventoryQty = receipt.qty;
-      patch.inventoryCode = receipt.code;
-      patch.inventoryKind = receipt.kind;
-      patch.materialCode = code;
-      patch.materialName =
-        (patch.materialName as string) || po.materialName || receipt.name;
-      patch.quantityReceived = receipt.qty;
-      patch.unit = patch.unit || receipt.unit;
+      patch.inventoryUpdatedAt = grn.receivedAt;
+      patch.inventoryQty = grn.receivedQty;
+      patch.inventoryCode = grn.stockCode;
+      patch.inventoryKind = grn.stockKind;
     }
   }
 
   const invoice = await transition(id, action, patch, actor, { note });
 
-  // Mirror the outcome onto the PO: a verified invoice closes it, anything
-  // else just updates the invoice column.
-  const po = await findPo(existing.po);
-  if (status === "verified" && canPoTransition(po.status, "close")) {
-    await updateEntityItem("purchaseOrders", existing.po, {
-      status: "closed",
-      invoice: poInvoiceColumn(status),
-    });
-  } else {
+  // A verified invoice already had the order updated by the receipt step; any
+  // other outcome only mirrors the invoice state onto the order.
+  if (status !== "verified") {
     await updateEntityItem("purchaseOrders", existing.po, {
       invoice: poInvoiceColumn(status),
     });
   }
 
-  return { invoice, receipt };
+  return { invoice, receipt, grn };
 }
 
 /** Read model for the verification screen: invoice plus its PO side-by-side. */

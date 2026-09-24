@@ -185,6 +185,7 @@ export default function RawMaterialDetailPage({
                 <thead>
                   <tr>
                     <th>Date added</th>
+                    <th>GRN</th>
                     <th>Qty</th>
                     <th>Vendor</th>
                     <th>Purchase order</th>
@@ -204,6 +205,7 @@ export default function RawMaterialDetailPage({
                           </div>
                         ) : null}
                       </td>
+                      <td className="mono">{receipt.grnNo || "—"}</td>
                       <td className="mono">
                         +{receipt.qty} {receipt.unit}
                       </td>

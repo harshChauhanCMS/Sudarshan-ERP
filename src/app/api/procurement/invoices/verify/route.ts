@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   if (!body || typeof body !== "object") return fail("Invalid request body", 400);
 
   try {
-    const { invoice, receipt } = await verifyPoInvoice(String(body.poId ?? ""), body, {
+    const { invoice, receipt, grn } = await verifyPoInvoice(String(body.poId ?? ""), body, {
       email: user.email,
       name: user.name,
     });
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
         user.email,
       );
     }
-    return ok({ created: true, invoice, receipt }, 201);
+    return ok({ created: true, invoice, receipt, grn }, 201);
   } catch (e) {
     if (e instanceof WorkflowError) return fail(e.message, e.status);
     return fail(e instanceof Error ? e.message : "Verification failed", 500);

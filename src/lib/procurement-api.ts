@@ -26,6 +26,14 @@ export function sendPoToVendor(id: string) {
   });
 }
 
+/** Closes a fully received order — a deliberate act, never automatic. */
+export function closePurchaseOrder(id: string) {
+  return send<{ item: PurchaseOrder }>(`/api/procurement/po/${enc(id)}/close`, {
+    method: "PATCH",
+    body: JSON.stringify({}),
+  });
+}
+
 export function recordVendorResponse(id: string, accepted: boolean, note = "") {
   return send<{ item: PurchaseOrder }>(
     `/api/procurement/po/${enc(id)}/vendor-response`,
@@ -75,6 +83,30 @@ export function verifyInvoice(id: string, note = "") {
   );
 }
 
+/** The goods receipt a verification raised, as the routes return it. */
+export type GrnSummary = {
+  grnNo: string;
+  invoiceId: string;
+  poId: string;
+  receivedQty: number;
+  unit: string;
+  receivedAt: string;
+  stockApplied: boolean;
+  stockCode: string;
+  stockPrevious?: number;
+  stockNew?: number;
+};
+
+type StockReceiptSummary = {
+  kind: string;
+  code: string;
+  name: string;
+  qty: number;
+  previousStock: number;
+  newStock: number;
+  unit: string;
+} | null;
+
 export type ManualVerificationPayload = {
   status: string;
   invoiceVendorName?: string;
@@ -96,15 +128,8 @@ export type ManualVerificationPayload = {
 export function manualVerifyInvoice(id: string, payload: ManualVerificationPayload) {
   return send<{
     invoice: Invoice;
-    receipt: {
-      kind: string;
-      code: string;
-      name: string;
-      qty: number;
-      previousStock: number;
-      newStock: number;
-      unit: string;
-    } | null;
+    receipt: StockReceiptSummary;
+    grn: GrnSummary | null;
   }>(`/api/procurement/invoices/${enc(id)}/manual-verify`, {
     method: "PATCH",
     body: JSON.stringify(payload),
@@ -121,15 +146,8 @@ export function verifyPoInvoice(
 ) {
   return send<{
     invoice: Invoice;
-    receipt: {
-      kind: string;
-      code: string;
-      name: string;
-      qty: number;
-      previousStock: number;
-      newStock: number;
-      unit: string;
-    } | null;
+    receipt: StockReceiptSummary;
+    grn: GrnSummary | null;
   }>("/api/procurement/invoices/verify", {
     method: "POST",
     body: JSON.stringify({ ...payload, poId }),

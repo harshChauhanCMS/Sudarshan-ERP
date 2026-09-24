@@ -164,8 +164,10 @@ const RawMaterialInventory = () => {
           r.lastReceivedAt ? (
             <Tooltip
               title={`${r.lastReceivedQty ?? ""} ${r.unit} received${
-                r.lastReceivedPo ? ` against ${r.lastReceivedPo}` : ""
-              }${r.lastReceivedInvoiceNo ? ` · invoice ${r.lastReceivedInvoiceNo}` : ""}`}
+                r.lastReceivedGrn ? ` on ${r.lastReceivedGrn}` : ""
+              }${r.lastReceivedPo ? ` against ${r.lastReceivedPo}` : ""}${
+                r.lastReceivedInvoiceNo ? ` · invoice ${r.lastReceivedInvoiceNo}` : ""
+              }`}
             >
               <span>
                 <span className="mono strong">

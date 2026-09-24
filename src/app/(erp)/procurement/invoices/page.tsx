@@ -8,6 +8,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   FileTextOutlined,
+  PlusOutlined,
   SendOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -24,6 +25,7 @@ import {
   MANUAL_INVOICE_STATUSES,
   canPoBeInvoiced,
   normalizeInvoiceStatus,
+  poReceiptState,
 } from "@/lib/procurement-workflow";
 import type { Invoice, PurchaseOrder } from "@/lib/entity-types";
 
@@ -41,6 +43,13 @@ type Row = {
   status: string;
   /** Sort key — newest activity first. */
   at: number;
+  /**
+   * True when this row is the place to start the next invoice for its order:
+   * the order is still open and nothing on it is waiting to be checked.
+   */
+  canAddInvoice: boolean;
+  /** Still to be received on the order this row belongs to. */
+  remainingQty: number;
 };
 
 const AWAITING = "awaiting";
@@ -70,25 +79,53 @@ export default function InvoiceVerificationPage() {
   const [statusFilter, setStatusFilter] = useState("all");
 
   const rows = useMemo<Row[]>(() => {
-    const byPo = new Map<string, Invoice>();
+    // An order can carry several invoices over its life — a balance delivery,
+    // a replacement for one that failed, a resend. Each gets its own row.
+    const byPo = new Map<string, Invoice[]>();
     for (const inv of invoices) {
-      byPo.set(inv.po, { ...inv, status: normalizeInvoiceStatus(inv.status) });
+      const list = byPo.get(inv.po) ?? [];
+      list.push({ ...inv, status: normalizeInvoiceStatus(inv.status) });
+      byPo.set(inv.po, list);
     }
 
-    const list = DATA.PURCHASE_ORDERS.filter((po) => canPoBeInvoiced(po.status)).map(
-      (po) => {
-        const invoice = byPo.get(po.id) ?? null;
-        return {
-          key: invoice?.id ?? po.id,
+    const list: Row[] = [];
+    for (const po of DATA.PURCHASE_ORDERS) {
+      const open = canPoBeInvoiced(po.status);
+      const poInvoices = (byPo.get(po.id) ?? []).sort(
+        (a, b) =>
+          timeValue(a.verifiedAt, a.raisedAt, a.invDate) -
+          timeValue(b.verifiedAt, b.raisedAt, b.invDate),
+      );
+      const state = poReceiptState(po.quantity, po.receivedQty);
+      const hasPending = poInvoices.some((i) => i.status === "pending_verification");
+
+      if (!poInvoices.length) {
+        if (!open) continue;
+        list.push({
+          key: po.id,
+          po,
+          invoice: null,
+          status: AWAITING,
+          at: timeValue(po.poDate, po.date),
+          canAddInvoice: false,
+          remainingQty: state.remainingQty,
+        });
+        continue;
+      }
+
+      poInvoices.forEach((invoice, i) => {
+        list.push({
+          key: invoice.id,
           po,
           invoice,
-          status: invoice ? invoice.status : AWAITING,
-          at: invoice
-            ? timeValue(invoice.verifiedAt, invoice.raisedAt, invoice.invDate)
-            : timeValue(po.poDate, po.date),
-        };
-      },
-    );
+          status: invoice.status,
+          at: timeValue(invoice.verifiedAt, invoice.raisedAt, invoice.invDate),
+          // Offered once per order, on its newest invoice.
+          canAddInvoice: open && !hasPending && i === poInvoices.length - 1,
+          remainingQty: state.remainingQty,
+        });
+      });
+    }
 
     // Newest first — a just-created PO lands at the top, ready to verify.
     list.sort((a, b) => b.at - a.at);
@@ -175,17 +212,51 @@ export default function InvoiceVerificationPage() {
       render: (_: unknown, row: Row) => row.po.vendor,
     },
     {
+      title: "GRN",
+      key: "grn",
+      width: 140,
+      // Raised only when an invoice is verified — never shown as a placeholder.
+      render: (_: unknown, row: Row) =>
+        row.invoice?.grnNo ? (
+          <Tooltip
+            title={`${row.invoice.quantityReceived ?? ""} ${row.invoice.unit ?? ""} received on ${
+              row.invoice.grnAt ? dayjs(row.invoice.grnAt).format("DD MMM YYYY") : ""
+            }`}
+          >
+            <Tag color="green" style={{ margin: 0, fontWeight: 700 }}>
+              {row.invoice.grnNo}
+            </Tag>
+          </Tooltip>
+        ) : (
+          <span className="muted" style={{ fontSize: 12 }}>
+            —
+          </span>
+        ),
+    },
+    {
       title: "Material",
       key: "material",
       width: 200,
-      render: (_: unknown, row: Row) => (
-        <div>
-          <div>{row.po.materialName ?? "—"}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>
-            {row.po.quantity ?? "—"} {row.po.unit ?? ""}
+      render: (_: unknown, row: Row) => {
+        const state = poReceiptState(row.po.quantity, row.po.receivedQty);
+        return (
+          <div>
+            <div>{row.po.materialName ?? "—"}</div>
+            <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>
+              {row.po.quantity ?? "—"} {row.po.unit ?? ""}
+              {state.receivedQty > 0 ? (
+                <>
+                  {" · "}
+                  <span className={state.complete ? "" : "warning"}>
+                    {state.receivedQty} received
+                    {state.remainingQty > 0 ? `, ${state.remainingQty} due` : ""}
+                  </span>
+                </>
+              ) : null}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: "PO ₹",
@@ -242,7 +313,7 @@ export default function InvoiceVerificationPage() {
             }`}
           >
             <Tag color="green" style={{ margin: 0 }}>
-              Received
+              In stock
             </Tag>
           </Tooltip>
         ) : (
@@ -268,14 +339,35 @@ export default function InvoiceVerificationPage() {
       width: 150,
       fixed: "right" as const,
       render: (_: unknown, row: Row) => (
-        <Button
-          size="small"
-          type={row.status === "verified" ? "default" : "primary"}
-          icon={<AuditOutlined />}
-          onClick={() => openRow(row)}
-        >
-          {row.status === "verified" ? "View" : "Verify"}
-        </Button>
+        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+          <Button
+            size="small"
+            type={row.status === "verified" ? "default" : "primary"}
+            icon={<AuditOutlined />}
+            onClick={() => openRow(row)}
+          >
+            {row.status === AWAITING ? "Verify" : row.status === "verified" ? "View" : "Re-check"}
+          </Button>
+          {row.canAddInvoice ? (
+            <Tooltip
+              title={
+                row.remainingQty > 0
+                  ? `Record another invoice on ${row.po.id} — ${row.remainingQty} ${row.po.unit ?? ""} still to receive`
+                  : `Record another invoice on ${row.po.id}`
+              }
+            >
+              <Button
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={() =>
+                  router.push(
+                    `/procurement/invoices/new?po=${encodeURIComponent(row.po.id)}`,
+                  )
+                }
+              />
+            </Tooltip>
+          ) : null}
+        </div>
       ),
     },
   ];
@@ -285,16 +377,7 @@ export default function InvoiceVerificationPage() {
       <DashHead
         title="Invoice Verification"
         sub="Every purchase order and its invoice, checked by hand against the order"
-      >
-        <Button
-          type="primary"
-          icon={<AuditOutlined />}
-          disabled={awaitingCount === 0}
-          onClick={() => router.push("/procurement/invoices/new")}
-        >
-          Verify invoice{awaitingCount > 0 ? ` (${awaitingCount})` : ""}
-        </Button>
-      </DashHead>
+      />
 
       <ErpStatGrid cols={4}>
         <StatCard

@@ -2,7 +2,7 @@
 
 import { use, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Spin, Tag, message } from "antd";
+import { Modal, Spin, Tag, Tooltip, message } from "antd";
 import dayjs from "dayjs";
 
 import { DashHead } from "@/components/erp/dashboards";
@@ -14,15 +14,19 @@ import {
 import { usePurchaseOrders } from "@/hooks/use-purchase-orders";
 import { useVendors } from "@/hooks/use-vendors";
 import { useInvoices } from "@/hooks/use-invoices";
-import { sendPoToVendor } from "@/lib/procurement-api";
+import { closePurchaseOrder, sendPoToVendor } from "@/lib/procurement-api";
 import { loadPoLogo, type PoPdfInput } from "@/lib/po-pdf";
 import PoPdfPreview from "@/components/procurement/PoPdfPreview";
+import InvoicePdfPreview from "@/components/procurement/InvoicePdfPreview";
+import type { InvoicePdfInput } from "@/lib/invoice-pdf";
 import {
   INVOICE_STATUS_LABELS,
   PO_STATUS_LABELS,
   canPoTransition,
   normalizeInvoiceStatus,
   normalizePoStatus,
+  poCloseBlockedReason,
+  poReceiptState,
 } from "@/lib/procurement-workflow";
 import type { Invoice, InvoiceEvent } from "@/lib/entity-types";
 
@@ -75,6 +79,29 @@ function Section({
   );
 }
 
+/** One headline figure, with a colour strip naming what it is. */
+function SummaryTile({
+  tone,
+  label,
+  value,
+  unit,
+}: {
+  tone: "value" | "ordered" | "received" | "remaining" | "status" | "danger" | "muted";
+  label: string;
+  value: ReactNode;
+  unit?: string;
+}) {
+  return (
+    <div className={`po-detail__tile po-detail__tile--${tone}`}>
+      <span className="po-detail__tile-label">{label}</span>
+      <span className="po-detail__tile-value">
+        {value}
+        {unit ? <em>{unit}</em> : null}
+      </span>
+    </div>
+  );
+}
+
 function Fields({ items }: { items: { label: string; value: ReactNode }[] }) {
   return (
     <div className="po-detail__fields">
@@ -99,8 +126,10 @@ export default function PurchaseOrderDetailPage({
   const { items: vendors } = useVendors();
   const { invoices, loading: invoicesLoading } = useInvoices();
   const [preview, setPreview] = useState<PoPdfInput | null>(null);
+  const [invoicePreview, setInvoicePreview] = useState<InvoicePdfInput | null>(null);
   const [opening, setOpening] = useState(false);
   const [sending, setSending] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   const po = useMemo(
     () => purchaseOrders.find((p) => p.id === id) ?? null,
@@ -110,6 +139,14 @@ export default function PurchaseOrderDetailPage({
     () => (po ? vendors.find((v) => v.name === po.vendor) ?? null : null),
     [vendors, po],
   );
+
+  /** An order takes another invoice while it is open and none is pending. */
+  const canAddInvoice = useMemo(() => {
+    if (!po || normalizePoStatus(po.status) === "closed") return false;
+    return !invoices.some(
+      (inv) => inv.po === id && normalizeInvoiceStatus(inv.status) === "pending_verification",
+    );
+  }, [po, invoices, id]);
 
   /** Every invoice raised against this order, newest first. */
   const poInvoices = useMemo(() => {
@@ -122,6 +159,25 @@ export default function PurchaseOrderDetailPage({
           new Date(a.raisedAt ?? a.invDate ?? 0).getTime(),
       );
   }, [invoices, id]);
+
+  /** Ordered / received / remaining, from the receipts actually recorded. */
+  const receiptState = useMemo(
+    () => poReceiptState(po?.quantity, po?.receivedQty),
+    [po?.quantity, po?.receivedQty],
+  );
+
+  const openInvoiceDoc = async (invoice: Invoice) => {
+    try {
+      setInvoicePreview({
+        invoice,
+        po,
+        vendor,
+        logoDataUrl: await loadPoLogo(),
+      });
+    } catch {
+      message.error("Could not generate the invoice document.");
+    }
+  };
 
   const openPdf = async () => {
     if (!po) return;
@@ -160,6 +216,32 @@ export default function PurchaseOrderDetailPage({
     } catch {
       message.error("Could not generate the PDF.");
     }
+  };
+
+  /** Closing is manual: everything received, and someone signs it off. */
+  const closeBlocked = po ? poCloseBlockedReason(po.status, receiptState) : "Loading…";
+
+  const handleClose = () => {
+    if (!po) return;
+    Modal.confirm({
+      title: `Close purchase order ${po.id}?`,
+      content: `All ${receiptState.receivedQty} ${po.unit ?? ""} ordered have been received. Closing it stops any further invoice being recorded against this order.`,
+      okText: "Close purchase order",
+      cancelText: "Keep open",
+      onOk: async () => {
+        setClosing(true);
+        try {
+          await closePurchaseOrder(po.id);
+          message.success(`${po.id} closed.`);
+          await reload();
+        } catch (e) {
+          message.error(e instanceof Error ? e.message : "Could not close the purchase order");
+          throw e;
+        } finally {
+          setClosing(false);
+        }
+      },
+    });
   };
 
   const handleSend = async () => {
@@ -214,36 +296,89 @@ export default function PurchaseOrderDetailPage({
           {opening ? "Opening…" : "View PDF"}
         </Btn>
         {canPoTransition(po.status, "send") ? (
-          <Btn variant="primary" size="sm" icon="send" onClick={() => void handleSend()} disabled={sending}>
+          <Btn size="sm" icon="send" onClick={() => void handleSend()} disabled={sending}>
             {sending ? "Sending…" : "Send to vendor"}
           </Btn>
+        ) : null}
+        {canAddInvoice ? (
+          <Btn
+            size="sm"
+            icon="plus"
+            onClick={() =>
+              router.push(`/procurement/invoices/new?po=${encodeURIComponent(po.id)}`)
+            }
+          >
+            New invoice
+          </Btn>
+        ) : null}
+        {normalizePoStatus(po.status) !== "closed" ? (
+          <Tooltip title={closeBlocked ?? "Close this purchase order"}>
+            <span>
+              <Btn
+                variant="primary"
+                size="sm"
+                icon="check"
+                onClick={handleClose}
+                disabled={Boolean(closeBlocked) || closing}
+              >
+                {closing ? "Closing…" : "Close PO"}
+              </Btn>
+            </span>
+          </Tooltip>
         ) : null}
       </DashHead>
 
       {/* Headline figures, so the order reads at a glance. */}
+      {/* Each tile carries a colour strip for what it says: money, quantities
+          ordered and received, what is still outstanding, and where the order
+          and its invoice stand. */}
       <div className="po-detail__summary">
-        <div>
-          <span>Order value</span>
-          <strong>{fmtINRFull(po.total)}</strong>
-        </div>
-        <div>
-          <span>Quantity</span>
-          <strong>
-            {qty ? `${qty}` : "—"} <em>{po.unit ?? ""}</em>
-          </strong>
-        </div>
-        <div>
-          <span>PO status</span>
-          <strong>{erpStatusBadge(status)}</strong>
-        </div>
-        <div>
-          <span>Invoice</span>
-          <strong>{erpStatusBadge(po.invoice)}</strong>
-        </div>
-        <div>
-          <span>Expected delivery</span>
-          <strong>{fmtDate(po.expectedDelivery)}</strong>
-        </div>
+        <SummaryTile tone="value" label="Order value" value={fmtINRFull(po.total)} />
+        <SummaryTile
+          tone="ordered"
+          label="Ordered"
+          value={qty ? String(qty) : "—"}
+          unit={po.unit}
+        />
+        <SummaryTile
+          tone={receiptState.receivedQty > 0 ? "received" : "muted"}
+          label="Received"
+          value={String(receiptState.receivedQty)}
+          unit={po.unit}
+        />
+        <SummaryTile
+          tone={receiptState.remainingQty > 0 ? "remaining" : "received"}
+          label="Remaining"
+          value={String(receiptState.remainingQty)}
+          unit={po.unit}
+        />
+        <SummaryTile
+          tone={
+            status === "closed"
+              ? "received"
+              : status === "partially_received"
+                ? "remaining"
+                : "status"
+          }
+          label="PO status"
+          value={erpStatusBadge(status)}
+        />
+        <SummaryTile
+          tone={
+            po.invoice === "verified"
+              ? "received"
+              : po.invoice === "failed"
+                ? "danger"
+                : "status"
+          }
+          label="Invoice"
+          value={erpStatusBadge(po.invoice)}
+        />
+        <SummaryTile
+          tone="muted"
+          label="Expected delivery"
+          value={fmtDate(po.expectedDelivery)}
+        />
       </div>
 
       <div className="po-detail__grid">
@@ -283,12 +418,28 @@ export default function PurchaseOrderDetailPage({
       <Section
         title="Invoice history"
         meta={
-          <span className="muted" style={{ fontSize: 11 }}>
-            {invoicesLoading
-              ? "Loading…"
-              : poInvoices.length
-                ? `${poInvoices.length} invoice${poInvoices.length === 1 ? "" : "s"} against this order`
-                : "No invoice raised yet"}
+          <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span className="muted" style={{ fontSize: 11 }}>
+              {invoicesLoading
+                ? "Loading…"
+                : poInvoices.length
+                  ? `${poInvoices.length} invoice${poInvoices.length === 1 ? "" : "s"} against this order`
+                  : "No invoice raised yet"}
+            </span>
+            {canAddInvoice && poInvoices.length ? (
+              <Btn
+                size="sm"
+                variant="secondary"
+                icon="plus"
+                onClick={() =>
+                  router.push(`/procurement/invoices/new?po=${encodeURIComponent(po.id)}`)
+                }
+              >
+                {receiptState.remainingQty > 0
+                  ? `Invoice the balance (${receiptState.remainingQty} ${po.unit ?? ""})`
+                  : "New invoice"}
+              </Btn>
+            ) : null}
           </span>
         }
       >
@@ -300,6 +451,7 @@ export default function PurchaseOrderDetailPage({
                 invoice={inv}
                 poTotal={Number(po.total) || 0}
                 onViewPdf={() => void openInvoicePdf(inv)}
+                onViewInvoiceDoc={() => void openInvoiceDoc(inv)}
               />
             ))}
           </div>
@@ -327,6 +479,11 @@ export default function PurchaseOrderDetailPage({
         open={Boolean(preview)}
         onClose={() => setPreview(null)}
       />
+      <InvoicePdfPreview
+        input={invoicePreview}
+        open={Boolean(invoicePreview)}
+        onClose={() => setInvoicePreview(null)}
+      />
     </>
   );
 }
@@ -336,10 +493,12 @@ function InvoiceCard({
   invoice,
   poTotal,
   onViewPdf,
+  onViewInvoiceDoc,
 }: {
   invoice: Invoice;
   poTotal: number;
   onViewPdf: () => void;
+  onViewInvoiceDoc: () => void;
 }) {
   const router = useRouter();
   const diff = (Number(invoice.invAmt) || 0) - poTotal;
@@ -360,9 +519,10 @@ function InvoiceCard({
           </div>
         </div>
         <div className="po-invoice__head-right">
-          {invoice.inventoryUpdated ? (
-            <Tag color="green" style={{ margin: 0 }}>
-              Stock received
+          {/* A GRN exists only for a verified invoice, so it is shown only then. */}
+          {invoice.grnNo ? (
+            <Tag color="green" style={{ margin: 0, fontWeight: 700 }}>
+              {invoice.grnNo}
             </Tag>
           ) : null}
           {invoiceStatusBadge(invoice.status)}
@@ -384,6 +544,12 @@ function InvoiceCard({
             {Math.abs(diff) < 1
               ? "—"
               : `${diff > 0 ? "+" : "−"}₹${Math.abs(diff).toLocaleString("en-IN")}`}
+          </span>
+        </div>
+        <div>
+          <span className="subtle">GRN number</span>
+          <span className={invoice.grnNo ? "mono strong" : "muted"}>
+            {invoice.grnNo || "Not generated"}
           </span>
         </div>
         <div>
@@ -451,6 +617,9 @@ function InvoiceCard({
       ) : null}
 
       <footer className="po-invoice__actions">
+        <Btn size="sm" variant="secondary" icon="invoice" onClick={onViewInvoiceDoc}>
+          {invoice.grnNo ? "Invoice + GRN" : "Invoice document"}
+        </Btn>
         <Btn size="sm" variant="secondary" icon="download" onClick={onViewPdf}>
           {invoice.status === "failed" ? "View failed PDF" : "View PDF"}
         </Btn>

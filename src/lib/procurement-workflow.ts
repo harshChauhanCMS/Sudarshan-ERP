@@ -30,6 +30,10 @@ export const PO_STATUSES = [
   "vendor_accepted",
   "vendor_rejected",
   "invoiced",
+  /** Some of the ordered quantity has been received; the rest is outstanding. */
+  "partially_received",
+  /** Everything ordered has arrived, but the order has not been closed yet. */
+  "fully_received",
   "closed",
 ] as const;
 
@@ -44,18 +48,25 @@ export const PO_STATUS_LABELS: Record<PoStatus, string> = {
   vendor_accepted: "Vendor accepted",
   vendor_rejected: "Vendor rejected",
   invoiced: "Invoiced",
-  closed: "Closed",
+  partially_received: "Partially received",
+  fully_received: "Fully received",
+  // Closed by hand once everything has been received — the order is finished.
+  closed: "Completed",
 };
 
 /** Which status each PO action may move *from*. */
 const PO_TRANSITIONS: Record<string, readonly PoStatus[]> = {
   approve: ["pending_verification"],
   reject: ["pending_verification"],
-  send: ["approved"],
+  // A partially received order can be re-sent for the balance, which is what
+  // the resend flow does — the order keeps its number and its receipts.
+  send: ["approved", "partially_received"],
+  // Closing is a deliberate act by a person, never a side effect of receiving:
+  // an order stays open while anything is still outstanding.
+  close: ["invoiced", "fully_received"],
   vendor_accept: ["sent_to_vendor"],
   vendor_reject: ["sent_to_vendor"],
   invoice: ["vendor_accepted"],
-  close: ["invoiced"],
 };
 
 export type PoAction = keyof typeof PO_TRANSITIONS;
@@ -70,6 +81,7 @@ const LEGACY_PO_STATUS: Record<string, PoStatus> = {
   submitted: "pending_verification",
   received: "invoiced",
   completed: "closed",
+  partial: "partially_received",
 };
 
 export function normalizePoStatus(status: string | undefined): PoStatus {
@@ -98,7 +110,13 @@ export function poTransitionError(status: string | undefined, action: PoAction):
  * in the system. Only orders that were never issued, or were turned down, are
  * excluded.
  */
-const NOT_INVOICEABLE: readonly PoStatus[] = ["draft", "rejected", "vendor_rejected"];
+const NOT_INVOICEABLE: readonly PoStatus[] = [
+  "draft",
+  "rejected",
+  "vendor_rejected",
+  // Everything ordered has been received — a further invoice needs a new order.
+  "closed",
+];
 
 export function canPoBeInvoiced(status: string | undefined): boolean {
   return !NOT_INVOICEABLE.includes(normalizePoStatus(status));
@@ -108,6 +126,38 @@ export function poInvoiceableError(status: string | undefined): string {
   return `A purchase order that is "${
     PO_STATUS_LABELS[normalizePoStatus(status)]
   }" cannot be invoiced.`;
+}
+
+/**
+ * Where an order stands against what was ordered. Receipts are cumulative, so
+ * this is derived from the total received rather than stored as an opinion.
+ */
+export type PoReceiptState = {
+  orderedQty: number;
+  receivedQty: number;
+  remainingQty: number;
+  /**
+   * Where receiving has got to. Never "closed": receiving goods does not end
+   * an order — a person closes it, once everything has arrived.
+   */
+  status: Extract<PoStatus, "partially_received" | "fully_received">;
+  complete: boolean;
+};
+
+export function poReceiptState(orderedQty: unknown, receivedQty: unknown): PoReceiptState {
+  const ordered = Math.max(0, Number(orderedQty) || 0);
+  const received = Math.max(0, Number(receivedQty) || 0);
+  const remaining = Math.round(Math.max(0, ordered - received) * 100) / 100;
+  // An order with no quantity on it (services, legacy rows) is finished as
+  // soon as anything is received against it.
+  const complete = ordered <= 0 ? received > 0 : received + 0.001 >= ordered;
+  return {
+    orderedQty: ordered,
+    receivedQty: Math.round(received * 100) / 100,
+    remainingQty: remaining,
+    status: complete ? "fully_received" : "partially_received",
+    complete,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -234,6 +284,23 @@ export function compareInvoiceToPo(invAmt: number, poAmt: number): InvoiceMatch 
 }
 
 /** Mirrors the invoice state onto `PurchaseOrder.invoice` for list columns. */
+/** `partially_received` is a receiving state, so it still accepts invoices. */
+/** Can this order be closed by hand right now, and if not, why not. */
+export function poCloseBlockedReason(
+  status: string | undefined,
+  receipt: PoReceiptState,
+): string | null {
+  const current = normalizePoStatus(status);
+  if (current === "closed") return "This purchase order is already closed.";
+  if (!receipt.complete) {
+    return `${receipt.remainingQty} ${"of the ordered quantity"} is still outstanding — an order is closed once everything has been received.`;
+  }
+  if (!canPoTransition(status, "close")) {
+    return poTransitionError(status, "close");
+  }
+  return null;
+}
+
 export function poInvoiceColumn(status: InvoiceStatus): string {
   if (status === "verified") return "verified";
   if (status === "failed") return "failed";

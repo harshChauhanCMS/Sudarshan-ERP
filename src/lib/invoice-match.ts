@@ -91,6 +91,14 @@ export function buildInvoiceChecks(
   if (!po) return [];
   const qtyUnit = (n: number) => `${n.toLocaleString("en-IN")} ${po.unit ?? ""}`.trim();
 
+  // Once part of an order has been received, the quantity to check against is
+  // what is still outstanding — a second invoice covering the balance matches,
+  // rather than reading as short against the original order.
+  const ordered = Number(po.quantity) || 0;
+  const alreadyReceived = Number(po.receivedQty) || 0;
+  const outstanding =
+    alreadyReceived > 0 ? Math.round(Math.max(0, ordered - alreadyReceived) * 100) / 100 : ordered;
+
   return [
     textCheck("vendor", "Vendor name", po.vendor ?? "", invoice.vendorName ?? ""),
     textCheck(
@@ -101,9 +109,9 @@ export function buildInvoiceChecks(
     ),
     numberCheck(
       "quantity",
-      "Quantity",
+      alreadyReceived > 0 ? "Quantity outstanding" : "Quantity",
       "quantity",
-      Number(po.quantity) || 0,
+      outstanding,
       invoice.quantity,
       QTY_TOLERANCE,
       qtyUnit,
@@ -120,9 +128,11 @@ export function buildInvoiceChecks(
     ),
     numberCheck(
       "amount",
-      "Total amount",
+      alreadyReceived > 0 ? "Amount outstanding" : "Total amount",
       "money",
-      Number(po.total) || 0,
+      outstanding === ordered || ordered <= 0
+        ? Number(po.total) || 0
+        : Math.round((Number(po.rate) || 0) * outstanding * 100) / 100,
       invoice.amount,
       INVOICE_MATCH_TOLERANCE,
       money,

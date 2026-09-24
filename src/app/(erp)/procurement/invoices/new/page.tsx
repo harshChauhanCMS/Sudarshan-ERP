@@ -17,6 +17,8 @@ import {
 import {
   INVOICE_STATUS_LABELS,
   canPoBeInvoiced,
+  normalizeInvoiceStatus,
+  poReceiptState,
   type InvoiceStatus,
 } from "@/lib/procurement-workflow";
 import { useInvoices } from "@/hooks/use-invoices";
@@ -45,11 +47,18 @@ function VerifyNewInvoiceContent() {
 
   const { invoices } = useInvoices();
 
-  /** Any issued purchase order that has not been invoiced yet. */
+  /**
+   * Any open purchase order with nothing already waiting to be checked. An
+   * order that was partly received stays here, so the balance can be invoiced.
+   */
   const invoiceablePos = useMemo(() => {
-    const taken = new Set(invoices.map((i) => i.po));
+    const pending = new Set(
+      invoices
+        .filter((i) => normalizeInvoiceStatus(i.status) === "pending_verification")
+        .map((i) => i.po),
+    );
     return DATA.PURCHASE_ORDERS.filter(
-      (p) => canPoBeInvoiced(p.status) && !taken.has(p.id),
+      (p) => canPoBeInvoiced(p.status) && !pending.has(p.id),
     );
   }, [DATA.PURCHASE_ORDERS, invoices]);
 
@@ -65,13 +74,19 @@ function VerifyNewInvoiceContent() {
     }
     setSaving(true);
     try {
-      const { invoice, receipt } = await verifyPoInvoice(po.id, payload);
+      const { invoice, receipt, grn } = await verifyPoInvoice(po.id, payload);
       message.success(
         `Invoice ${invoice.vendorInvoiceNo || invoice.id} recorded against ${po.id} and marked ${
           INVOICE_STATUS_LABELS[invoice.status as InvoiceStatus] ?? invoice.status
         }.`,
         6,
       );
+      if (grn) {
+        message.success(
+          `Goods receipt ${grn.grnNo} raised for ${grn.receivedQty} ${grn.unit} against ${grn.poId}.`,
+          7,
+        );
+      }
       if (receipt) {
         message.success(
           `${receipt.qty} ${receipt.unit} of ${receipt.name} received — stock ${receipt.previousStock} → ${receipt.newStock}.`,
@@ -129,16 +144,24 @@ function VerifyNewInvoiceContent() {
           onChange={setPoId}
           placeholder="Pick the purchase order this invoice is against"
           disabled={saving}
-          options={invoiceablePos.map((p) => ({
-            value: p.id,
-            label: `${p.id} · ${p.vendor} · ${fmtINRFull(Number(p.total) || 0)}`,
-          }))}
+          options={invoiceablePos.map((p) => {
+            const state = poReceiptState(p.quantity, p.receivedQty);
+            const balance =
+              state.receivedQty > 0
+                ? ` · ${state.remainingQty} ${p.unit ?? ""} still to receive`
+                : "";
+            return {
+              value: p.id,
+              label: `${p.id} · ${p.vendor} · ${fmtINRFull(Number(p.total) || 0)}${balance}`,
+            };
+          })}
           notFoundContent="No purchase orders are waiting for an invoice"
         />
       </div>
       <p className="invoice-verify-page__picker-hint">
-        The invoice number is generated from this purchase order when you
-        continue — nothing is recorded before that.
+        {po && Number(po.receivedQty) > 0
+          ? `${poReceiptState(po.quantity, po.receivedQty).remainingQty} ${po.unit ?? ""} of ${po.id} is still to be received. Record the invoice covering it — nothing is saved until you continue.`
+          : "The invoice number is generated from this purchase order when you continue — nothing is recorded before that."}
       </p>
     </div>
   );

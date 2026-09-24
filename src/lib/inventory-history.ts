@@ -12,6 +12,8 @@ import type { Invoice, PurchaseOrder, Vendor } from "@/lib/entity-types";
 
 export type InventoryReceipt = {
   invoiceId: string;
+  /** The goods receipt this stock came in on. */
+  grnNo: string;
   /** The vendor's own invoice number, as typed in during verification. */
   invoiceNo: string;
   /** ISO timestamp of when the stock was added. */
@@ -48,6 +50,7 @@ export function buildInventoryReceipts(
       const vendorName = (po?.vendor || inv.vendor || "").trim();
       return {
         invoiceId: inv.id,
+        grnNo: inv.grnNo || "",
         invoiceNo: inv.vendorInvoiceNo || "",
         receivedAt: inv.inventoryUpdatedAt || inv.verifiedAt || inv.invDate || "",
         qty: Number(inv.inventoryQty ?? inv.quantityReceived ?? 0) || 0,

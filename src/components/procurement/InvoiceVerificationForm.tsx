@@ -23,7 +23,7 @@ const CONFIRM_ACTION: Record<string, { ok: string; danger: boolean; effect: stri
   verified: {
     ok: "Verify anyway",
     danger: true,
-    effect: "Verifying receives the quantity into inventory and closes the purchase order.",
+    effect: "Verifying raises a goods receipt and adds the quantity to inventory.",
   },
   failed: {
     ok: "Mark failed",
@@ -43,7 +43,8 @@ const CONFIRM_ACTION: Record<string, { ok: string; danger: boolean; effect: stri
 };
 
 const STATUS_HINT: Record<string, string> = {
-  verified: "Receives the quantity into inventory and closes the purchase order.",
+  verified:
+    "Raises a goods receipt and adds the received quantity to inventory. The order stays open until you close it.",
   failed: "Notifies the vendor with the reason so they can correct and resend.",
   resent_to_vendor: "Sends it back for correction — the note goes to the vendor.",
   pending_verification: "Parks it back on the queue to check later.",
@@ -246,15 +247,28 @@ export default function InvoiceVerificationForm({
     setError(null);
 
     const differing = checks.filter((c) => c.matches === false);
+    const receiving = numberOrUndefined(form.values.quantityReceived) ?? 0;
+    const unit = form.values.unit.trim() || po?.unit || "";
+    const ordered = Number(po?.quantity) || 0;
+    const alreadyReceived = Number(po?.receivedQty) || 0;
+    // What this receipt leaves outstanding on the order.
+    const remainingAfter =
+      Math.round(Math.max(0, ordered - alreadyReceived - receiving) * 100) / 100;
 
     // Whatever the outcome, the differences against the purchase order are put
     // in front of the verifier before it is recorded — and can be accepted.
     if (differing.length > 0) {
       const action = CONFIRM_ACTION[form.values.status] ?? CONFIRM_ACTION.verified;
       Modal.confirm({
-        title: `${differing.length} detail${differing.length === 1 ? "" : "s"} do not match ${po?.id}`,
+        title:
+          form.values.status === "verified"
+            ? `Receive ${receiving} ${unit} — ${differing.length} detail${differing.length === 1 ? "" : "s"} do not match ${po?.id}`
+            : `${differing.length} detail${differing.length === 1 ? "" : "s"} do not match ${po?.id}`,
         width: 560,
-        okText: action.ok,
+        okText:
+          form.values.status === "verified"
+            ? `Yes, receive ${receiving} ${unit}`.trim()
+            : action.ok,
         okButtonProps: { danger: action.danger },
         cancelText: "Go back",
         content: (
@@ -277,7 +291,28 @@ export default function InvoiceVerificationForm({
                 ))}
               </tbody>
             </table>
-            <p>{action.effect}</p>
+            {form.values.status === "verified" ? (
+              <>
+                <p className="invoice-mismatch-confirm__consent">
+                  Update inventory with <strong>{receiving} {unit}</strong> and
+                  record a goods receipt for that quantity?
+                </p>
+                {remainingAfter > 0 ? (
+                  <p>
+                    {po?.id} stays open with <strong>{remainingAfter} {unit}</strong>{" "}
+                    still to come, so the balance can be invoiced and verified
+                    later.
+                  </p>
+                ) : (
+                  <p>
+                    That completes the ordered quantity. {po?.id} stays open
+                    until you close it.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p>{action.effect}</p>
+            )}
           </div>
         ),
         onOk: () => onSubmit(payload()),

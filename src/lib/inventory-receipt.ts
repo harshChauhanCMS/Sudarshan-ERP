@@ -47,6 +47,8 @@ export type ReceiptSource = {
   poId?: string;
   /** The vendor's own invoice number, as typed in during verification. */
   invoiceNo?: string;
+  /** The goods receipt this stock movement belongs to. */
+  grnNo?: string;
   at?: Date;
 };
 
@@ -71,6 +73,7 @@ export async function receiveStock(
     lastReceivedQty: quantity,
     lastReceivedPo: source.poId ?? "",
     lastReceivedInvoiceNo: source.invoiceNo ?? "",
+    lastReceivedGrn: source.grnNo ?? "",
   };
 
   const raw = await getRawMaterialByCode(code);

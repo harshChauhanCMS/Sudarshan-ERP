@@ -105,6 +105,9 @@ export type Invoice = {
   verifiedByName?: string;
   /** Free-text note the verifier left with the status they picked. */
   verificationNote?: string;
+  /** The goods receipt raised when this invoice was verified. */
+  grnNo?: string;
+  grnAt?: string;
   /** Set once a verified invoice has been received into inventory. */
   inventoryUpdated?: boolean;
   inventoryUpdatedAt?: string;
@@ -168,8 +171,19 @@ export type PurchaseOrder = {
   vendorRespondedAt?: string;
   /** Vendor's reason when they decline, or their acknowledgement note. */
   vendorResponseNote?: string;
-  /** Internal id of the invoice raised against this PO. */
+  /** Internal id of the most recent invoice raised against this PO. */
   invoiceId?: string;
+  /** Cumulative quantity received across every GRN against this order. */
+  receivedQty?: number;
+  /** Ordered minus received — what the vendor still owes. */
+  remainingQty?: number;
+  /** Goods receipt numbers raised against this order, in order. */
+  grnNos?: string[];
+  /** When the last receipt against this order was recorded. */
+  lastReceivedAt?: string;
+  /** Set when a person closes the order — receiving never closes it. */
+  closedAt?: string;
+  closedBy?: string;
 };
 
 export type RawMaterial = {
@@ -179,6 +193,7 @@ export type RawMaterial = {
   lastReceivedQty?: number;
   lastReceivedPo?: string;
   lastReceivedInvoiceNo?: string;
+  lastReceivedGrn?: string;
   name: string;
   grade: string;
   stock: number;

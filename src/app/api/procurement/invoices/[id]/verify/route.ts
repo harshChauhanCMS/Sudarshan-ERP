@@ -26,12 +26,12 @@ export async function PATCH(
   const body = await request.json().catch(() => ({}));
 
   try {
-    const { invoice } = await verifyInvoice(id, body?.note, {
+    const { invoice, grn } = await verifyInvoice(id, body?.note, {
       email: user.email,
       name: user.name,
     });
     void notifyInvoiceDecision(invoice, "verified", user.email);
-    return ok({ updated: true, invoice });
+    return ok({ updated: true, invoice, grn });
   } catch (e) {
     if (e instanceof WorkflowError) return fail(e.message, e.status);
     return fail(e instanceof Error ? e.message : "Verify failed", 500);

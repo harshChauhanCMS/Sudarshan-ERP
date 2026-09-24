@@ -100,6 +100,7 @@ const RawMaterialSchema = new Schema(
     lastReceivedQty: { type: Number },
     lastReceivedPo: { type: String, trim: true, default: "" },
     lastReceivedInvoiceNo: { type: String, trim: true, default: "" },
+    lastReceivedGrn: { type: String, trim: true, default: "" },
   },
   { timestamps: true },
 );

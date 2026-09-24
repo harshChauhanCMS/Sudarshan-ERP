@@ -14,6 +14,10 @@ import { notifyInvoiceDecision } from "@/lib/po-approval-notifications";
  *
  * Body: { status, vendorInvoiceNo?, invDate?, invAmt?, subtotal?, taxAmount?,
  *         quantityReceived?, unit?, receivedDate?, challanNo?, note? }
+ *
+ * Verifying raises the goods receipt (GRN) that moves the stock. Calling it
+ * again on an already-verified invoice returns that same receipt — it never
+ * raises a second one.
  */
 export async function PATCH(
   request: Request,
@@ -31,7 +35,7 @@ export async function PATCH(
   if (!body || typeof body !== "object") return fail("Invalid request body", 400);
 
   try {
-    const { invoice, receipt } = await recordManualVerification(id, body, {
+    const { invoice, receipt, grn } = await recordManualVerification(id, body, {
       email: user.email,
       name: user.name,
     });
@@ -42,7 +46,7 @@ export async function PATCH(
         user.email,
       );
     }
-    return ok({ updated: true, invoice, receipt });
+    return ok({ updated: true, invoice, receipt, grn });
   } catch (e) {
     if (e instanceof WorkflowError) return fail(e.message, e.status);
     return fail(e instanceof Error ? e.message : "Verification failed", 500);
